@@ -1,0 +1,28 @@
+<RCC>
+    <qresource prefix="/">
+        <file>Resources/arrow-left.png</file>
+        <file>Resources/search.png</file>
+        <file>Resources/pushpin.png</file>
+        <file>Resources/database.png</file>
+        <file>Resources/question.png</file>
+        <file>Resources/204-link.png</file>
+        <file>Resources/cog.png</file>
+        <file>Resources/stop.png</file>
+        <file>Resources/cut.png</file>
+        <file>Resources/copy.png</file>
+        <file>Resources/paste.png</file>
+        <file>Resources/rename.png</file>
+        <file>Resources/breaklink.png</file>
+        <file>Resources/addchildnode.png</file>
+        <file>Resources/addnode.png</file>
+        <file>Resources/deletenode.png</file>
+        <file>Resources/movedown.png</file>
+        <file>Resources/moveleft.png</file>
+        <file>Resources/moveright.png</file>
+        <file>Resources/moveup.png</file>
+        <file>Resources/arrow-right.png</file>
+        <file>Resources/arrow-up.png</file>
+        <file>Resources/spinner.png</file>
+        <file>Resources/border.png</file>
+    </qresource>
+</RCC>
