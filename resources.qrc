@@ -8,10 +8,6 @@
         <file>Resources/204-link.png</file>
         <file>Resources/cog.png</file>
         <file>Resources/stop.png</file>
-        <file>Resources/cut.png</file>
-        <file>Resources/copy.png</file>
-        <file>Resources/paste.png</file>
-        <file>Resources/rename.png</file>
         <file>Resources/breaklink.png</file>
         <file>Resources/addchildnode.png</file>
         <file>Resources/addnode.png</file>
