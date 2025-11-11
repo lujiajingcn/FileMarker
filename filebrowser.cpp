@@ -23,6 +23,7 @@ FileBrowser::FileBrowser(QWidget *parent) :
     setWindowStyleSheet();
 
     connect(m_modelFiles, &QFileSystemModel::directoryLoaded, this, &FileBrowser::onDirectoryLoaded);
+    connect(ui->wFileNavigation, &FormFileNavigation::sendNavigationClicked, this, &FileBrowser::onTvNavigationClicked);
 
     ui->plainTextEdit->setMaximumBlockCount(100);
 }
@@ -49,26 +50,26 @@ void FileBrowser::onDeleteLabels()
 
 void FileBrowser::initNavigation()
 {
-    m_tvNavigation = ui->tvNavigation;
-    m_modelNavigation = new QFileSystemModel;
-    m_tvNavigation->setModel(m_modelNavigation);
+//    m_tvNavigation = ui->tvNavigation;
+//    m_modelNavigation = new QFileSystemModel;
+//    m_tvNavigation->setModel(m_modelNavigation);
 
-    m_modelNavigation->setRootPath("");
+//    m_modelNavigation->setRootPath("");
 
-    // QFileSystemModel 默认有四列信息：Name、Size、Type、Date Modified，
-    // 我们只需要Name，其余三列隐藏。
-    m_tvNavigation->setColumnHidden(1, true);
-    m_tvNavigation->setColumnHidden(2, true);
-    m_tvNavigation->setColumnHidden(3, true);
+//    // QFileSystemModel 默认有四列信息：Name、Size、Type、Date Modified，
+//    // 我们只需要Name，其余三列隐藏。
+//    m_tvNavigation->setColumnHidden(1, true);
+//    m_tvNavigation->setColumnHidden(2, true);
+//    m_tvNavigation->setColumnHidden(3, true);
 
-    // 只显示文件夹
-    m_modelNavigation->setFilter(QDir::Dirs | QDir::NoDotAndDotDot);
+//    // 只显示文件夹
+//    m_modelNavigation->setFilter(QDir::Dirs | QDir::NoDotAndDotDot);
 
-    // 文件夹根据名称升序排序
-    m_tvNavigation->setRootIndex(m_modelNavigation->index(""));
-    m_tvNavigation->header()->setSortIndicator(0,Qt::AscendingOrder);
-    m_tvNavigation->setSortingEnabled(true);
-    m_tvNavigation->sortByColumn(0, Qt::AscendingOrder);
+//    // 文件夹根据名称升序排序
+//    m_tvNavigation->setRootIndex(m_modelNavigation->index(""));
+//    m_tvNavigation->header()->setSortIndicator(0,Qt::AscendingOrder);
+//    m_tvNavigation->setSortingEnabled(true);
+//    m_tvNavigation->sortByColumn(0, Qt::AscendingOrder);
 }
 
 void FileBrowser::initFileList()
@@ -177,7 +178,7 @@ void FileBrowser::onGotoFilePath()
     m_tvFiles->setCurrentIndex(m_modelFiles->index(sFilePath));
 }
 
-void FileBrowser::on_tvNavigation_clicked(const QModelIndex &index)
+void FileBrowser::onTvNavigationClicked(const QModelIndex &index)
 {
     if(ui->stackedWidget->currentWidget() == ui->pageProcessInfo)
     {

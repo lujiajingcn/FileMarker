@@ -68,7 +68,7 @@ public slots:
     void onGotoFilePath();
 
     // 点击左侧导航栏中节点，将该节点下的文件夹及文件显示在右侧文件列表
-    void on_tvNavigation_clicked(const QModelIndex &index);
+    void onTvNavigationClicked(const QModelIndex &index);
 
     // 双击文件列表中的文件夹，进入该文件夹
     void on_tvFiles_doubleClicked(const QModelIndex &index);
