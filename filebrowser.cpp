@@ -53,7 +53,7 @@ void FileBrowser::initNavigation()
     m_modelNavigation = new QFileSystemModel;
     m_tvNavigation->setModel(m_modelNavigation);
 
-    m_modelNavigation->setRootPath(QDir::rootPath());
+    m_modelNavigation->setRootPath("");
 
     // QFileSystemModel 默认有四列信息：Name、Size、Type、Date Modified，
     // 我们只需要Name，其余三列隐藏。
@@ -65,6 +65,7 @@ void FileBrowser::initNavigation()
     m_modelNavigation->setFilter(QDir::Dirs | QDir::NoDotAndDotDot);
 
     // 文件夹根据名称升序排序
+    m_tvNavigation->setRootIndex(m_modelNavigation->index(""));
     m_tvNavigation->header()->setSortIndicator(0,Qt::AscendingOrder);
     m_tvNavigation->setSortingEnabled(true);
     m_tvNavigation->sortByColumn(0, Qt::AscendingOrder);
@@ -77,8 +78,8 @@ void FileBrowser::initFileList()
     m_modelFiles = new MyQFileSystemModel;
     m_tvFiles->setModel(m_modelFiles);
 
-    m_modelFiles->setRootPath("My Computer");
-    m_tvFiles->setRootIndex(m_modelFiles->index("My Computer"));
+    m_modelFiles->setRootPath("");
+    m_tvFiles->setRootIndex(m_modelFiles->index(""));
     m_tvFiles->setSortingEnabled(true);
     m_tvFiles->header()->setSortIndicator(0, Qt::AscendingOrder);
 
