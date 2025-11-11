@@ -52,7 +52,7 @@
      <x>0</x>
      <y>0</y>
      <width>976</width>
-     <height>25</height>
+     <height>22</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuFileManage">
@@ -135,7 +135,7 @@
      <normaloff>:/Resources/search.png</normaloff>:/Resources/search.png</iconset>
    </property>
    <property name="text">
-    <string>根据标签查找文件</string>
+    <string>查找文件</string>
    </property>
    <property name="toolTip">
     <string>根据标签查找文件</string>
@@ -147,7 +147,7 @@
      <normaloff>:/Resources/204-link.png</normaloff>:/Resources/204-link.png</iconset>
    </property>
    <property name="text">
-    <string>为文件关联标签</string>
+    <string>添加标签</string>
    </property>
    <property name="toolTip">
     <string>为文件关联标签</string>
@@ -159,7 +159,7 @@
      <normaloff>:/Resources/database.png</normaloff>:/Resources/database.png</iconset>
    </property>
    <property name="text">
-    <string>遍历选中的文件夹</string>
+    <string>遍历文件</string>
    </property>
    <property name="toolTip">
     <string>遍历选中的文件夹</string>

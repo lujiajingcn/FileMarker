@@ -102,7 +102,7 @@ IntroductionWidget::IntroductionWidget(QWidget *parent)
          tr("<ul>"
             "<li>工具栏中的按钮用于管理标签，可以根据标签之间的关联来构建成树形结构，或者简单的列表形式。</li>"
             "<li>操作包括：新建标签，新建子标签，删除标签，上移标签，下移标签，左移标签，右移标签</li>"
-            "<li>建立好的标签结构会保持到xml文件，下次启动时自动读取展示。</li>"
+            "<li>建立好的标签结构会保存到xml文件，下次启动时自动读取展示。</li>"
             "<li>可以点击选中一个标签，也可以按住Ctrl或者Shift来选中多个标签。</li>"
             "<li>为文件关联标签时，会用到当前选中的标签。</li>"
             "</ul>")},
@@ -110,26 +110,38 @@ IntroductionWidget::IntroductionWidget(QWidget *parent)
          tr("文件浏览"),
          tr("模拟Windows的文件管理器，用于查看文件位置。"),
          tr("<ul>"
-            "<li>分为两个部分，左侧的导航栏，右侧的文件显示区。</li>"
+            "<li>分为两个部分，左侧的导航栏和右侧的文件显示区。</li>"
             "<li>可以点击选中一个文件或者文件夹，也可以按住Ctrl或者Shift来选中多个文件或文件夹。</li>"
-            "<li>文件浏览区选中文件，标签管理区选中标签，就可以通过工具栏的关联按钮来为文件添加标签。</li>"
+            "<li>文件显示区选中文件，标签管理区选中标签，就可以通过工具栏的关联按钮来为文件添加标签。</li>"
             "<li>对于已经有标签的文件，再次添加标签会自动删除掉之前的标签。</li>"
             "<li>选中文件右键，可以删除该文件的标签。</li>"
             "</ul>")},
         {QLatin1String("mainToolBar"),
          tr("工具栏"),
-         tr(""),
-         {}},
-        {QLatin1String("menuBar"),
-         tr("菜单"),
-         tr(""),
-         {}},
-        {QLatin1String("statusBar"), tr("状态栏"), tr(""), {}},
+         tr("根据文件浏览区选中的文件和标签区选中的标签进行不同操作"),
+         tr("<p style=\"margin-top: 30px\">各个按钮的说明如下：<table>"
+             "<tr><td style=\"padding-right: 20px\">添加标签:</td><td>根据标签区选中的标签为文件查看区选中的文件添加标签。</td></tr>"
+             "<tr><td>删除标签:</td><td>删除选中的文件的标签。</td></tr>"
+             "<tr><td>查找文件:</td><td>根据选中的标签，以及菜单栏中的查找条件，在选中的文件夹中查找文件。</td></tr>"
+             "<tr><td>遍历文件:</td><td>遍历选中的文件夹，将结果存入缓存数据库，在文件没有改动的情况下，下次可以从缓存数据库查询。</td></tr>"
+             "<tr><td>界面介绍:</td><td>界面各个部件和按钮的介绍。</tr>"
+             "</table></p>")},
+//        {QLatin1String("menuBar"),
+//         tr("菜单"),
+//         tr(""),
+//         {}},
+        {QLatin1String("menuFileSearchCondition"),
+         tr("查询条件"),
+         tr("用于根据标签查找文件时"),
+         tr("<ul>"
+             "<li>设置多个标签之间的逻辑关系，目前只支持与或操作，</li>"
+             "<li>设置查找方式，从缓存数据库查找还是从磁盘查找。</li>"
+             "</ul>")},
+//        {QLatin1String("statusBar"), tr("状态栏"), tr(""), {}},
         {{},
          tr("结束"),
-         tr(" "
-                "源码：<a style=\"color: #41CD52\" "
-                "href=\"https://github.com/lujiajingcn/FileMarker\">FileMarker</a>."),
+         tr("源码：<a style=\"color: #41CD52\" "
+            "href=\"https://github.com/lujiajingcn/FileMarker\">FileMarker</a>"),
          {}}};
     setStep(0);
     resizeToParent();
@@ -154,95 +166,7 @@ bool IntroductionWidget::eventFilter(QObject *obj, QEvent *ev)
 }
 
 const int SPOTLIGHTMARGIN = 18;
-const int POINTER_SIZE = 30;
 const int POINTER_WIDTH = 3;
-
-static int margin(const QRect &small, const QRect &big, Qt::Alignment side)
-{
-    switch (side) {
-    case Qt::AlignRight:
-        return qMax(0, big.right() - small.right());
-    case Qt::AlignTop:
-        return qMax(0, small.top() - big.top());
-    case Qt::AlignBottom:
-        return qMax(0, big.bottom() - small.bottom());
-    case Qt::AlignLeft:
-        return qMax(0, small.x() - big.x());
-    default:
-        return 0;
-    }
-}
-
-static int oppositeMargin(const QRect &small, const QRect &big, Qt::Alignment side)
-{
-    switch (side) {
-    case Qt::AlignRight:
-        return margin(small, big, Qt::AlignLeft);
-    case Qt::AlignTop:
-        return margin(small, big, Qt::AlignBottom);
-    case Qt::AlignBottom:
-        return margin(small, big, Qt::AlignTop);
-    case Qt::AlignLeft:
-        return margin(small, big, Qt::AlignRight);
-    default:
-        return 100000;
-    }
-}
-
-static const QVector<QPolygonF> pointerPolygon(const QRect &anchorRect, const QRect &fullRect)
-{
-    // Put the arrow opposite to the smallest margin,
-    // with priority right, top, bottom, left.
-    // Not very sophisticated but sufficient for current use cases.
-    QVector<Qt::Alignment> alignments{Qt::AlignRight, Qt::AlignTop, Qt::AlignBottom, Qt::AlignLeft};
-//    Utils::sort(alignments, [anchorRect, fullRect](Qt::Alignment a, Qt::Alignment b) {
-//        return oppositeMargin(anchorRect, fullRect, a) < oppositeMargin(anchorRect, fullRect, b);
-//    });
-    const auto alignIt = std::find_if(alignments.cbegin(),
-                                      alignments.cend(),
-                                      [anchorRect, fullRect](Qt::Alignment align) {
-                                          return margin(anchorRect, fullRect, align) > POINTER_SIZE;
-                                      });
-    if (alignIt == alignments.cend())
-        return {{}}; // no side with sufficient space found
-    const qreal arrowHeadWidth = POINTER_SIZE/3.;
-    if (*alignIt == Qt::AlignRight) {
-        const qreal middleY = anchorRect.center().y();
-        const qreal startX = anchorRect.right() + POINTER_SIZE;
-        const qreal endX = anchorRect.right() + POINTER_WIDTH;
-        return {{QVector<QPointF>{{startX, middleY}, {endX, middleY}}},
-                QVector<QPointF>{{endX + arrowHeadWidth, middleY - arrowHeadWidth},
-                                 {endX, middleY},
-                                 {endX + arrowHeadWidth, middleY + arrowHeadWidth}}};
-    }
-    if (*alignIt == Qt::AlignTop) {
-        const qreal middleX = anchorRect.center().x();
-        const qreal startY = anchorRect.y() - POINTER_SIZE;
-        const qreal endY = anchorRect.y() - POINTER_WIDTH;
-        return {{QVector<QPointF>{{middleX, startY}, {middleX, endY}}},
-                QVector<QPointF>{{middleX - arrowHeadWidth, endY - arrowHeadWidth},
-                                 {middleX, endY},
-                                 {middleX + arrowHeadWidth, endY - arrowHeadWidth}}};
-    }
-    if (*alignIt == Qt::AlignBottom) {
-        const qreal middleX = anchorRect.center().x();
-        const qreal startY = anchorRect.y() + POINTER_WIDTH;
-        const qreal endY = anchorRect.y() + POINTER_SIZE;
-        return {{QVector<QPointF>{{middleX, startY}, {middleX, endY}}},
-                QVector<QPointF>{{middleX - arrowHeadWidth, endY + arrowHeadWidth},
-                                 {middleX, endY},
-                                 {middleX + arrowHeadWidth, endY + arrowHeadWidth}}};
-    }
-
-    // Qt::AlignLeft
-    const qreal middleY = anchorRect.center().y();
-    const qreal startX = anchorRect.x() - POINTER_WIDTH;
-    const qreal endX = anchorRect.x() - POINTER_SIZE;
-    return {{QVector<QPointF>{{startX, middleY}, {endX, middleY}}},
-            QVector<QPointF>{{endX - arrowHeadWidth, middleY - arrowHeadWidth},
-                             {endX, middleY},
-                             {endX - arrowHeadWidth, middleY + arrowHeadWidth}}};
-}
 
 void IntroductionWidget::paintEvent(QPaintEvent *)
 {
@@ -301,8 +225,9 @@ void IntroductionWidget::paintEvent(QPaintEvent *)
                       Qt::RoundCap,
                       Qt::MiterJoin));
         p.setRenderHint(QPainter::Antialiasing);
-        for (const QPolygonF &poly : pointerPolygon(spotlightRect, rect()))
-            p.drawPolyline(poly);
+        //指向工具栏和菜单栏时，箭头显示错误，去掉箭头
+//        for (const QPolygonF &poly : pointerPolygon(spotlightRect, rect()))
+//            p.drawPolyline(poly);
     } else {
         p.fillRect(rect(), backgroundColor);
     }
@@ -363,9 +288,18 @@ void IntroductionWidget::setStep(uint index)
         {
             return;
         }
+        if(anchorObjectName == "menuFileSearchCondition")
+        {
+            QWidget * w = parentWidget()->findChild<QWidget *>("menuBar");
+            QWidget * wMenuFileSearchCondition = w->findChild<QWidget *>("menuFileSearchCondition");
+            wMenuFileSearchCondition->setGeometry(200, 0, 50, 20);
+            m_stepPointerAnchor.clear();
+            m_stepPointerAnchor = wMenuFileSearchCondition;
+        }
     } else {
         m_stepPointerAnchor.clear();
     }
+    calTextGeometry();
     update();
 }
 
@@ -379,3 +313,37 @@ void IntroductionWidget::resizeToParent()
     m_textWidget->setGeometry(QRect(width()/4, height()/4, width()/2, height()/2));
 }
 
+// 在本工程中，文件查看区域较大，占据了界面的中心区域，所以使得显示在中心位置的说明文字显示不清晰
+// 应该将说明文字显示在待说明区域之外
+void IntroductionWidget::calTextGeometry()
+{
+    if(parentWidget() == nullptr)
+    {
+        return;
+    }
+    setGeometry(QRect(QPoint(0, 0), parentWidget()->size()));
+
+    QRect textRect = QRect(width()/4, height()/4, width()/2, height()/2);
+
+    if(m_stepPointerAnchor != nullptr)
+    {
+        QRect anChorRect = m_stepPointerAnchor->geometry();
+        const QString anchorObjectName = m_items.at(m_step).pointerAnchorObjectName;
+        if(anchorObjectName == "dwLabels")
+        {
+            textRect.setX((width() - anChorRect.width())/4);
+            textRect.setY(height()/4);
+            textRect.setWidth((width() - anChorRect.width())/2);
+            textRect.setHeight(height()/2);
+        }
+        else if(anchorObjectName == "centralWidget")
+        {
+            textRect.setX(anChorRect.width());
+            textRect.setY(0);
+            textRect.setWidth(width() - anChorRect.width());
+            textRect.setHeight(height());
+        }
+    }
+
+     m_textWidget->setGeometry(textRect);
+}

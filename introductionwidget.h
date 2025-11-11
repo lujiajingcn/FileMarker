@@ -30,6 +30,8 @@ protected:
     void keyPressEvent(QKeyEvent *ke) override;
     void mouseReleaseEvent(QMouseEvent *me) override;
 
+    void calTextGeometry();
+
 private:
     void finish();
     void step();

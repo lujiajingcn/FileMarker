@@ -257,7 +257,7 @@ void MainWindow::onRecvTraverseResult(QMap<QString, QMap<QString, QStringList>> 
     m_fileBrowser->showFilesWidget();
 }
 
-//https://github.com/qt-creator/qt-creator/blob/master/src/plugins/welcome/introductionwidget.cpp
+// 参考了qt creator的 UI Tour功能，原始代码为 https://github.com/qt-creator/qt-creator/blob/qds/4.5/src/plugins/welcome/introductionwidget.cpp
 void MainWindow::on_actionHelp_triggered()
 {
     w = new IntroductionWidget(this);
