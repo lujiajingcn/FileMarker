@@ -1,3 +1,11 @@
+/****************************************************************************
+**
+** 文件列表类
+**
+** 用来显示文件列表，包括详情显示和缩略图显示
+**
+****************************************************************************/
+
 #ifndef FORMPAGEFILES_H
 #define FORMPAGEFILES_H
 
@@ -16,6 +24,12 @@ namespace Ui {
 class FormPageFiles;
 }
 
+enum FILEPAGE
+{
+    DETAIL,
+    THUMBNAIL
+};
+
 class FormPageFiles : public QWidget
 {
     Q_OBJECT
@@ -24,10 +38,11 @@ public:
     explicit FormPageFiles(QWidget *parent = nullptr);
     ~FormPageFiles();
 
+    // 初始化详情显示的文件列表
+    void initDetailFileList();
 
-    // 初始化文件列表
-    void initFileList();
-
+    // 初始化缩略图显示的文件列表
+    void initThumbnailFileList();
 
     void curDirChanged(QString sCurDir);
 
@@ -35,13 +50,10 @@ public:
 
     QStringList getSelDirs();
 
-
     bool event(QEvent *event);
     void updateToolButtons();
 
-
     void setAction(QAction *actionDeleteLabels);
-
 
 public slots:
 
@@ -62,7 +74,6 @@ private slots:
     /** https://stackoverflow.com/questions/24716271/qt-qfilesystemmodel-how-to-get-files-in-folder-noob */
     void onDirectoryLoaded(const QString &sDir);
 
-
     void on_backButton_clicked();
 
     void on_forwardButton_clicked();
@@ -70,13 +81,16 @@ private slots:
     void on_toParentButton_clicked();
 
     void onDeleteLabels();
+    void on_tbDetail_clicked();
+
+    void on_tbThumbnail_clicked();
+
 private:
 
-    QTreeView               *m_tvFiles;             // 文件列表，由于QListView不能显示表头，故用QTreeView实现列表功能。
+    QTreeView               *m_tvFiles;             // 详情显示文件列表，由于QListView不能显示表头，故用QTreeView实现列表功能。
+    QListView               *m_lstFiles;            // 缩略图显示文件列表
     MyQFileSystemModel      *m_modelFiles;
-
     QAction                 *m_actionDeleteLabels;
-
     QStack<QString>         m_skBackward;           // 访问过的路径，用于后退功能
     QStack<QString>         m_skForward;            // 访问过的路径，用于前进功能
     QString                 m_sCurPath;             // 当前正在访问的路径

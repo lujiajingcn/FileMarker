@@ -43,6 +43,7 @@ SOURCES += \
         sqliteoperation.cpp \
         threadsearch.cpp \
         threadtraversedirs.cpp \
+        thumbnailiconprovider.cpp \
         utility.cpp \
         xmloperation.cpp
 
@@ -63,6 +64,7 @@ HEADERS += \
         sqliteoperation.h \
         threadsearch.h \
         threadtraversedirs.h \
+        thumbnailiconprovider.h \
         utility.h \
         welcometr.h \
         xmloperation.h

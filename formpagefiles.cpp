@@ -4,6 +4,7 @@
 #include <QMenu>
 
 #include "adsoperation.h"
+#include "thumbnailiconprovider.h"
 
 FormPageFiles::FormPageFiles(QWidget *parent) :
     QWidget(parent),
@@ -11,11 +12,15 @@ FormPageFiles::FormPageFiles(QWidget *parent) :
 {
     ui->setupUi(this);
 
-    initFileList();
+    m_modelFiles = new MyQFileSystemModel;
+    // 设置根路径（例如当前目录）
+    m_modelFiles->setRootPath("");
+
+    initDetailFileList();
+    initThumbnailFileList();
 
     // todo 后续将已经访问过的路径都添加上
     ui->lookInCombo->setEditText(m_sCurPath);
-
 
     connect(m_modelFiles, &QFileSystemModel::directoryLoaded, this, &FormPageFiles::onDirectoryLoaded);
 }
@@ -41,14 +46,13 @@ void FormPageFiles::onDeleteLabels()
     }
 }
 
-void FormPageFiles::initFileList()
+void FormPageFiles::initDetailFileList()
 {
     m_tvFiles = ui->tvFiles;
-    m_tvFiles->setSelectionMode(QAbstractItemView::ExtendedSelection); // 设置可以选中多行
-    m_modelFiles = new MyQFileSystemModel;
+     // 设置可以选中多行
+    m_tvFiles->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_tvFiles->setModel(m_modelFiles);
 
-    m_modelFiles->setRootPath("");
     m_tvFiles->setRootIndex(m_modelFiles->index(""));
     m_tvFiles->setSortingEnabled(true);
     m_tvFiles->header()->setSortIndicator(0, Qt::AscendingOrder);
@@ -70,6 +74,28 @@ void FormPageFiles::initFileList()
     m_sCurPath = "我的电脑";
 }
 
+void FormPageFiles::initThumbnailFileList()
+{
+    m_lstFiles = ui->listView;
+
+    // 创建并设置自定义图标提供器
+    ThumbnailIconProvider *iconProvider = new ThumbnailIconProvider();
+    m_modelFiles->setIconProvider(iconProvider);
+
+    // 创建列表视图
+    m_lstFiles->setModel(m_modelFiles);
+
+    // 设置视图属性以显示缩略图
+    m_lstFiles->setViewMode(QListView::IconMode);    // 图标模式
+    m_lstFiles->setIconSize(QSize(128, 128));        // 设置图标大小
+    m_lstFiles->setGridSize(QSize(140, 140));        // 设置网格大小，为图标留出空间
+    m_lstFiles->setResizeMode(QListView::Adjust);    // 自动调整布局
+    m_lstFiles->setMovement(QListView::Static);      // 禁止拖动
+    m_lstFiles->setSelectionMode(QAbstractItemView::SingleSelection);
+
+    // 设置根索引为当前目录
+    m_lstFiles->setRootIndex(m_modelFiles->index(""));
+}
 
 void FormPageFiles::curDirChanged(QString sCurDir)
 {
@@ -138,7 +164,6 @@ QStringList FormPageFiles::getSelDirs()
     return qLSelDirs;
 }
 
-
 void FormPageFiles::on_tvFiles_doubleClicked(const QModelIndex &index)
 {
     QFileInfo fileInfo = m_modelFiles->fileInfo(index);
@@ -176,7 +201,6 @@ void FormPageFiles::onDirectoryLoaded(const QString &sDir)
         sFilePath = sFilePath.replace("//","/");
     }
 }
-
 
 void FormPageFiles::on_backButton_clicked()
 {
@@ -235,4 +259,15 @@ void FormPageFiles::onTvNavigationClicked(const QModelIndex &index)
     QString path = index.data(QFileSystemModel::FilePathRole).toString();
     m_tvFiles->setRootIndex(m_modelFiles->index(path));
     curDirChanged(path);
+}
+
+void FormPageFiles::on_tbDetail_clicked()
+{
+    ui->stackedWidget->setCurrentIndex(FILEPAGE::DETAIL);
+}
+
+void FormPageFiles::on_tbThumbnail_clicked()
+{
+    m_lstFiles->setRootIndex(m_modelFiles->index(m_sCurPath));
+    ui->stackedWidget->setCurrentIndex(FILEPAGE::THUMBNAIL);
 }
