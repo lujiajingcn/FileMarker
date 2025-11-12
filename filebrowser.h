@@ -57,13 +57,14 @@ public:
 signals:
     void sendStop();
     void sendProgress(QString sProcessedFilePath);
+    void sendShowFiltedFiles(QStringList qLFilteredFiles);
 
 public slots:
     void showFilteredFile(QStringList qLFilteredFiles);
 
     void recvProcessInfo(QString sProcessedFilePath);
 
-    void onGotoFilePath();
+    void onGotoFilePath(QString sFilePath);
 
     // 点击左侧导航栏中节点，将该节点下的文件夹及文件显示在右侧文件列表
     void onTvNavigationClicked(const QModelIndex &index);
@@ -74,8 +75,6 @@ public slots:
     // 文件列表的右键菜单
     void on_tvFiles_customContextMenuRequested(const QPoint &pos);
 
-    // 过滤后的文件列表的右键菜单
-    void on_tvFilteredFiles_customContextMenuRequested(const QPoint &pos);
 
 public slots:
     void on_btnRefresh_clicked();
@@ -99,12 +98,7 @@ private:
     QTreeView               *m_tvFiles;             // 文件列表，由于QListView不能显示表头，故用QTreeView实现列表功能。
     MyQFileSystemModel      *m_modelFiles;
 
-    QTreeView               *m_tvFilteredFiles;     // 根据标签筛选出的的文件列表
-    QStandardItemModel      *m_modelFilteredFiles;
-
     QAction                 *m_actionDeleteLabels;
-
-    QAction                 *m_gotoFilePath;        // 筛选过的文件列表的右键菜单操作
 
     QStack<QString>         m_skBackward;           // 访问过的路径，用于后退功能
     QStack<QString>         m_skForward;            // 访问过的路径，用于前进功能

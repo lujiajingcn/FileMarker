@@ -49,7 +49,7 @@
         <widget class="FormFileNavigation" name="wFileNavigation" native="true"/>
         <widget class="QStackedWidget" name="stackedWidget">
          <property name="currentIndex">
-          <number>2</number>
+          <number>1</number>
          </property>
          <widget class="QWidget" name="pageFiles">
           <layout class="QGridLayout" name="gridLayout_3">
@@ -322,7 +322,7 @@
            </item>
           </layout>
          </widget>
-         <widget class="QWidget" name="pageFilteredFiles">
+         <widget class="FormPageFilterdFiles" name="pageFilteredFiles">
           <layout class="QGridLayout" name="gridLayout">
            <property name="leftMargin">
             <number>0</number>
@@ -339,16 +339,6 @@
            <property name="spacing">
             <number>0</number>
            </property>
-           <item row="0" column="0">
-            <widget class="QTreeView" name="tvFilteredFiles">
-             <property name="contextMenuPolicy">
-              <enum>Qt::CustomContextMenu</enum>
-             </property>
-             <property name="headerHidden">
-              <bool>true</bool>
-             </property>
-            </widget>
-           </item>
           </layout>
          </widget>
          <widget class="FormPageProgressInfo" name="pageProgressInfo">
@@ -373,6 +363,12 @@
    <class>FormPageProgressInfo</class>
    <extends>QWidget</extends>
    <header>formpageprogressinfo.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>FormPageFilterdFiles</class>
+   <extends>QWidget</extends>
+   <header>formpagefilterdfiles.h</header>
    <container>1</container>
   </customwidget>
  </customwidgets>

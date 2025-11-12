@@ -24,6 +24,8 @@ FileBrowser::FileBrowser(QWidget *parent) :
     connect(m_modelFiles, &QFileSystemModel::directoryLoaded, this, &FileBrowser::onDirectoryLoaded);
     connect(ui->wFileNavigation, &FormFileNavigation::sendNavigationClicked, this, &FileBrowser::onTvNavigationClicked);
     connect(this, &FileBrowser::sendProgress, ui->pageProgressInfo, &FormPageProgressInfo::onRecvProgress);
+    connect(this, &FileBrowser::sendShowFiltedFiles, ui->pageFilteredFiles, &FormPageFilterdFiles::onShowFiltedFiles);
+    connect(ui->pageFilteredFiles, &FormPageFilterdFiles::sendGotoFile, this, &FileBrowser::onGotoFilePath);
 }
 
 FileBrowser::~FileBrowser()
@@ -77,12 +79,7 @@ void FileBrowser::initFileList()
 
 void FileBrowser::initFilteredFileList()
 {
-    m_tvFilteredFiles = ui->tvFilteredFiles;
-    m_modelFilteredFiles = new QStandardItemModel;
-    m_tvFilteredFiles->setModel(m_modelFilteredFiles);
 
-    m_gotoFilePath = new QAction("打开文件所在位置", this);
-    connect(m_gotoFilePath, SIGNAL(triggered(bool)), this, SLOT(onGotoFilePath()));
 }
 
 void FileBrowser::curDirChanged(QString sCurDir)
@@ -142,10 +139,9 @@ void FileBrowser::getFilesInCurDir(QVector<QString> &vtFilePath)
 
 }
 
-void FileBrowser::onGotoFilePath()
+void FileBrowser::onGotoFilePath(QString sFilePath)
 {
-    int nCurRow = ui->tvFilteredFiles->currentIndex().row();
-    QString sFilePath = m_modelFilteredFiles->item(nCurRow)->text();
+
     QString sFileDir = sFilePath.left(sFilePath.lastIndexOf("/"));
     m_tvFiles->setRootIndex(m_modelFiles->index(sFileDir));
     ui->stackedWidget->setCurrentWidget(ui->pageFiles);
@@ -225,13 +221,7 @@ void FileBrowser::showFilesWidget()
 void FileBrowser::showFilteredFile(QStringList qLFilteredFiles)
 {
     ui->stackedWidget->setCurrentWidget(ui->pageFilteredFiles);
-
-    m_modelFilteredFiles->removeRows(0, m_modelFilteredFiles->rowCount());
-    foreach(QString sFiltededFile, qLFilteredFiles)
-    {
-        QStandardItem* item = new QStandardItem(sFiltededFile);
-        m_modelFilteredFiles->appendRow(item);
-    }
+    emit sendShowFiltedFiles(qLFilteredFiles);
 }
 
 void FileBrowser::recvProcessInfo(QString sProcessedFilePath)
@@ -263,12 +253,6 @@ void FileBrowser::on_tvFiles_customContextMenuRequested(const QPoint &pos)
     menu.exec(QCursor::pos());
 }
 
-void FileBrowser::on_tvFilteredFiles_customContextMenuRequested(const QPoint &position)
-{
-    QMenu menu(ui->tvFilteredFiles);
-    menu.addAction(m_gotoFilePath);
-    menu.exec(QCursor::pos());
-}
 
 void FileBrowser::onDirectoryLoaded(const QString &sDir)
 {
