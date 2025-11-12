@@ -24,9 +24,6 @@ public:
     explicit FileBrowser(QWidget *parent = nullptr);
     ~FileBrowser();
 
-    // 初始化左侧导航栏
-    void initNavigation();
-
     // 初始化文件列表
     void initFileList();
 
@@ -97,8 +94,6 @@ private slots:
 
     void onDeleteLabels();
 private:
-    QTreeView               *m_tvNavigation;        // 左侧导航栏
-    QFileSystemModel        *m_modelNavigation;
 
     QTreeView               *m_tvFiles;             // 文件列表，由于QListView不能显示表头，故用QTreeView实现列表功能。
     MyQFileSystemModel      *m_modelFiles;

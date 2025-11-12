@@ -33,7 +33,6 @@ SOURCES += \
         filebrowser.cpp \
         formfilenavigation.cpp \
         formlabels.cpp \
-        formtest.cpp \
         introductionwidget.cpp \
         main.cpp \
         mainwindow.cpp \
@@ -52,7 +51,6 @@ HEADERS += \
         filebrowser.h \
         formfilenavigation.h \
         formlabels.h \
-        formtest.h \
         introductionwidget.h \
         mainwindow.h \
         myqfilesystemmodel.h \
@@ -69,7 +67,6 @@ FORMS += \
         filebrowser.ui \
         formfilenavigation.ui \
         formlabels.ui \
-        formtest.ui \
         mainwindow.ui
 
 INCLUDEPATH += libxml
