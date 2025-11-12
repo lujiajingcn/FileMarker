@@ -8,6 +8,7 @@
 #include <QTextStream>
 #include <QDateTime>
 #include <QMutex>
+#include <QDir>
 
 #include "adsoperation.h"
 #include "common.h"
@@ -55,7 +56,7 @@ MainWindow::MainWindow(QWidget *parent) :
     m_fileBrowser = ui->wFileBrowser;
     m_fileBrowser->setAction(ui->actionDelLabels);
     connect(m_fileBrowser, &FileBrowser::sendStop, this, &MainWindow::recvStop);
-    connect(this, &MainWindow::sendRefresh, m_fileBrowser, &FileBrowser::on_btnRefresh_clicked);
+    connect(this, &MainWindow::sendRefresh, m_fileBrowser, &FileBrowser::onRecvRefresh);
 
     m_formLabels = new FormLabels(this);
     m_formLabels->addToolButtonsToMenu(ui->menuLabelManage);

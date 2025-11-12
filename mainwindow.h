@@ -8,6 +8,7 @@
 #include "threadsearch.h"
 #include "threadtraversedirs.h"
 #include "introductionwidget.h"
+#include "sqliteoperation.h"
 
 namespace Ui {
 class MainWindow;

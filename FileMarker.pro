@@ -33,6 +33,7 @@ SOURCES += \
         filebrowser.cpp \
         formfilenavigation.cpp \
         formlabels.cpp \
+        formpagefiles.cpp \
         formpagefilterdfiles.cpp \
         formpageprogressinfo.cpp \
         introductionwidget.cpp \
@@ -53,6 +54,7 @@ HEADERS += \
         filebrowser.h \
         formfilenavigation.h \
         formlabels.h \
+        formpagefiles.h \
         formpagefilterdfiles.h \
         formpageprogressinfo.h \
         introductionwidget.h \
@@ -71,6 +73,7 @@ FORMS += \
         filebrowser.ui \
         formfilenavigation.ui \
         formlabels.ui \
+        formpagefiles.ui \
         formpagefilterdfiles.ui \
         formpageprogressinfo.ui \
         mainwindow.ui
