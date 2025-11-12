@@ -23,8 +23,7 @@ FileBrowser::FileBrowser(QWidget *parent) :
 
     connect(m_modelFiles, &QFileSystemModel::directoryLoaded, this, &FileBrowser::onDirectoryLoaded);
     connect(ui->wFileNavigation, &FormFileNavigation::sendNavigationClicked, this, &FileBrowser::onTvNavigationClicked);
-
-    ui->plainTextEdit->setMaximumBlockCount(100);
+    connect(this, &FileBrowser::sendProgress, ui->pageProgressInfo, &FormPageProgressInfo::onRecvProgress);
 }
 
 FileBrowser::~FileBrowser()
@@ -155,7 +154,7 @@ void FileBrowser::onGotoFilePath()
 
 void FileBrowser::onTvNavigationClicked(const QModelIndex &index)
 {
-    if(ui->stackedWidget->currentWidget() == ui->pageProcessInfo)
+    if(ui->stackedWidget->currentWidget() == ui->pageProgressInfo)
     {
         return;
     }
@@ -215,7 +214,7 @@ QStringList FileBrowser::getSelDirs()
 
 void FileBrowser::showProcessPage()
 {
-    ui->stackedWidget->setCurrentWidget(ui->pageProcessInfo);
+    ui->stackedWidget->setCurrentWidget(ui->pageProgressInfo);
 }
 
 void FileBrowser::showFilesWidget()
@@ -237,8 +236,7 @@ void FileBrowser::showFilteredFile(QStringList qLFilteredFiles)
 
 void FileBrowser::recvProcessInfo(QString sProcessedFilePath)
 {
-    ui->plainTextEdit->appendPlainText(sProcessedFilePath);
-    ui->plainTextEdit->moveCursor(QTextCursor::End);
+    emit sendProgress(sProcessedFilePath);
 }
 
 void FileBrowser::on_tvFiles_doubleClicked(const QModelIndex &index)

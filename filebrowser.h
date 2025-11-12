@@ -56,6 +56,7 @@ public:
 
 signals:
     void sendStop();
+    void sendProgress(QString sProcessedFilePath);
 
 public slots:
     void showFilteredFile(QStringList qLFilteredFiles);
