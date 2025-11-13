@@ -3,10 +3,10 @@
 
 #include <QString>
 
-#define LOGICAND "与"
-#define LOGICOR "或"
+#define LOGIC_AND "与"
+#define LOGIC_OR "或"
 
-#define ADSTAIL ":$DATA"
+#define ADS_TAIL ":$DATA"
 
 enum labelLogic{
     AND,

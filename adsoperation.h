@@ -11,7 +11,7 @@ public:
 public :
     void setStop(bool bIsStop);
     static void readADS(const QString &sFilePath, const QString& sStreamName);
-    static void writeADS(const QString &sFilePath, const QString& sStreamName, const QString& sData, bool isDeleteOldAds = true);
+    static void writeADS(const QString &sFilePath, const QString& sStreamName, const QString& sData, bool isDeleteOldAds = false);
     static void deleteADS(const QString &sFilePath);
     static QStringList listADS(const QString &sFilePath);
     static QStringList listADSFileName(const QString &sFilePath);

@@ -59,9 +59,9 @@ bool Utility::isContains(const QStringList &list1, const QStringList &list2)
 
 bool Utility::isADSNameValue(QString &sADSName)
 {
-    if(sADSName.endsWith(ADSTAIL))
+    if(sADSName.endsWith(ADS_TAIL))
     {
-        sADSName.chop(strlen(ADSTAIL));
+        sADSName.chop(strlen(ADS_TAIL));
     }
     if(sADSName.isEmpty())
     {

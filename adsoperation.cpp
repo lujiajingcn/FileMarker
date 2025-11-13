@@ -1,8 +1,9 @@
 #include "adsoperation.h"
-#include <Windows.h>
+#include <windows.h>
 #include <QDebug>
 #include <QDir>
 #include "common.h"
+#include "utility.h"
 
 ADSOperation::ADSOperation()
 {
@@ -117,17 +118,12 @@ QStringList ADSOperation::listADSFileName(const QString &sFilePath)
 
     do {
         QString streamName = QString::fromWCharArray(findData.cStreamName);
-        if (streamName != "::$DATA" && streamName.startsWith(L":")) {
-            streamName = streamName.mid(1); // Remove the leading ":"
-
-            QString sTail = ":$DATA";
-            if(streamName.endsWith(sTail))
-            {
-                streamName.chop(sTail.count());
-            }
-
+        streamName = streamName.mid(1); // Remove the leading ":"
+        if(Utility::isADSNameValue(streamName))
+        {
             qLLabes << streamName;
         }
+
     } while (FindNextStreamW(hFind, &findData));
 
     FindClose(hFind);
