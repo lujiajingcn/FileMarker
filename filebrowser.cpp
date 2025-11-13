@@ -18,6 +18,7 @@ FileBrowser::FileBrowser(QWidget *parent) :
     // 点击左侧导航栏中节点时，无论右侧是显示的根据标签查询后的结果界面还是正在查询的界面（触发停止查询操作），都统一跳转到文件列表界面
     connect(this, &FileBrowser::sendNavigationClicked, ui->pageFiles, &FormPageFiles::onTvNavigationClicked);
 
+    connect(this, &FileBrowser::sendGotoFile, ui->pageFiles, &FormPageFiles::recvGotoFile);
 
     connect(this, &FileBrowser::sendProgress, ui->pageProgressInfo, &FormPageProgressInfo::onRecvProgress);
     connect(this, &FileBrowser::sendShowFiltedFiles, ui->pageFilteredFiles, &FormPageFilterdFiles::onShowFiltedFiles);
