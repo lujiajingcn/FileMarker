@@ -1,10 +1,38 @@
 #include "utility.h"
 
 #include <QUuid>
+#include <QDateTime>
 
 Utility::Utility()
 {
 
+}
+
+QTextStream Utility::tsLogInfo;
+QMutex Utility::mutex;
+
+void Utility::myMessageHandler(QtMsgType mType, const QMessageLogContext&, const QString& sMsg)
+{
+    mutex.lock();
+    QString sFormatCurTime = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss");
+    switch (mType) {
+    case QtDebugMsg:
+        tsLogInfo << QString("%1    Debug       %2").arg(sFormatCurTime).arg(sMsg) << endl;
+        break;
+    case QtInfoMsg:
+        tsLogInfo << QString("%1    Info        %2").arg(sFormatCurTime).arg(sMsg) << endl;
+        break;
+    case QtWarningMsg:
+        tsLogInfo << QString("%1    Warning     %2").arg(sFormatCurTime).arg(sMsg) << endl;
+        break;
+    case QtCriticalMsg:
+        tsLogInfo << QString("%1    Critical    %2").arg(sFormatCurTime).arg(sMsg) << endl;
+        break;
+    case QtFatalMsg:
+        tsLogInfo << QString("%1    Fatal       %2").arg(sFormatCurTime).arg(sMsg) << endl;
+        abort();
+    }
+    mutex.unlock();
 }
 
 // 根据xpath找到指定的节点集合。

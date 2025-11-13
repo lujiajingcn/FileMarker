@@ -6,6 +6,8 @@ DlgAuthor::DlgAuthor(QWidget *parent) :
     ui(new Ui::DlgAuthor)
 {
     ui->setupUi(this);
+
+    setWindowFlags(Qt::Dialog | Qt::CustomizeWindowHint | Qt::WindowTitleHint | Qt::WindowCloseButtonHint);
 }
 
 DlgAuthor::~DlgAuthor()

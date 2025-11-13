@@ -4,6 +4,8 @@
 #include <QString>
 #include <QStringList>
 #include <QSet>
+#include <QTextStream>
+#include <QMutex>
 
 #include <libxml/parser.h>
 #include <libxml/tree.h>
@@ -15,6 +17,11 @@ class Utility
 {
 public:
     Utility();
+
+    static QTextStream tsLogInfo;
+    static QMutex mutex;
+
+    static void myMessageHandler(QtMsgType mType, const QMessageLogContext&, const QString& sMsg);
 
     static xmlXPathObjectPtr searchByXPath(xmlDocPtr doc, const xmlChar *xpath);
     static QString createUuid();

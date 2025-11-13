@@ -5,41 +5,12 @@
 #include <QTextCodec>
 #include <QDebug>
 #include <QFile>
-#include <QTextStream>
-#include <QDateTime>
-#include <QMutex>
 #include <QDir>
 
 #include "adsoperation.h"
 #include "common.h"
 #include "dlgauthor.h"
-
-static QTextStream tsLogInfo;
-static QMutex mutex;
-
-void myMessageHandler(QtMsgType mType, const QMessageLogContext&, const QString& sMsg)
-{
-    mutex.lock();
-    QString sFormatCurTime = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss");
-    switch (mType) {
-    case QtDebugMsg:
-        tsLogInfo << QString("%1    Debug: %2").arg(sFormatCurTime).arg(sMsg) << endl;
-        break;
-    case QtInfoMsg:
-        tsLogInfo << QString("%1    Info: %2").arg(sFormatCurTime).arg(sMsg) << endl;
-        break;
-    case QtWarningMsg:
-        tsLogInfo << QString("%1    Warning: %2").arg(sFormatCurTime).arg(sMsg) << endl;
-        break;
-    case QtCriticalMsg:
-        tsLogInfo << QString("%1    Critical: %2").arg(sFormatCurTime).arg(sMsg) << endl;
-        break;
-    case QtFatalMsg:
-        tsLogInfo << QString("%1    Fatal: %2").arg(sFormatCurTime).arg(sMsg) << endl;
-        abort();
-    }
-    mutex.unlock();
-}
+#include "utility.h"
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -72,8 +43,8 @@ void MainWindow::initLogMessageHanlder()
 {
     m_logFile.setFileName(g_sAppDir + "/" + LOG_FILE);
     m_logFile.open(QIODevice::WriteOnly | QIODevice::Append);
-    tsLogInfo.setDevice(&m_logFile);
-    qInstallMessageHandler(myMessageHandler);
+    Utility::tsLogInfo.setDevice(&m_logFile);
+    qInstallMessageHandler(Utility::myMessageHandler);
 }
 
 void MainWindow::readSearchConfig()
