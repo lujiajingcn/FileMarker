@@ -2,6 +2,7 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
+#include <QSet>
 
 #include "filebrowser.h"
 #include "formlabels.h"

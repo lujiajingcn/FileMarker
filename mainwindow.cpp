@@ -11,6 +11,7 @@
 #include "common.h"
 #include "dlgauthor.h"
 #include "utility.h"
+#include "formcurdirlabels.h"
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -218,6 +219,8 @@ void MainWindow::on_actionTraverseSelDirs_triggered()
     m_threadTraverseDirs->setSelDirs(qLSelDirs);
     qRegisterMetaType<QMap<QString, QMap<QString, QStringList>>>("QMap<QString, QMap<QString, QStringList>>");
     connect(m_threadTraverseDirs, &ThreadTraverseDirs::sigResult, this, &MainWindow::onRecvTraverseResult);
+    connect(m_threadTraverseDirs, &ThreadTraverseDirs::sendDirAndLabel, ui->dwcCurDirLabels, &FormCurDirLabels::onRecvDirAndLabels);
+
     connect(m_threadTraverseDirs, &ThreadTraverseDirs::sendProcessInfo, m_fileBrowser, &FileBrowser::recvProcessInfo);
     m_threadTraverseDirs->start();
 }

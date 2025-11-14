@@ -31,6 +31,7 @@ SOURCES += \
         dlgauthor.cpp \
         dlglabel.cpp \
         filebrowser.cpp \
+        formcurdirlabels.cpp \
         formfilenavigation.cpp \
         formlabels.cpp \
         formpagefiles.cpp \
@@ -53,6 +54,7 @@ HEADERS += \
         dlgauthor.h \
         dlglabel.h \
         filebrowser.h \
+        formcurdirlabels.h \
         formfilenavigation.h \
         formlabels.h \
         formpagefiles.h \
@@ -73,6 +75,7 @@ FORMS += \
         dlgauthor.ui \
         dlglabel.ui \
         filebrowser.ui \
+        formcurdirlabels.ui \
         formfilenavigation.ui \
         formlabels.ui \
         formpagefiles.ui \
