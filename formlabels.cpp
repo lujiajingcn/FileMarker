@@ -27,6 +27,8 @@ FormLabels::FormLabels(QWidget *parent) :
 
     setToolButtonDefaultAction();
     initLabels();
+
+    connect(m_modelAllLabels, &QStandardItemModel::itemChanged, this, &FormLabels::onItemChanged);
 }
 
 FormLabels::~FormLabels()
@@ -86,34 +88,37 @@ QStringList FormLabels::getSelLabels()
     return qLLabels;
 }
 
+void FormLabels::addItem(QStandardItem *parentItem)
+{
+    QStandardItem *newItem = new QStandardItem(NEW_LABEL_NAME);
+    if(nullptr == parentItem)
+    {
+        m_modelAllLabels->appendRow(newItem);
+    }
+    else
+    {
+        parentItem->appendRow(newItem);
+    }
+    m_tvAllLabels->setCurrentIndex(newItem->index());
+}
+
 void FormLabels::on_actionAdd_triggered()
 {
     QModelIndex curIdx = m_tvAllLabels->currentIndex();
     if(!curIdx.isValid())
     {
-        int nCurRow = curIdx.row();
-        QStandardItem *newItem = new QStandardItem(NEW_LABEL_NAME);
-        m_modelAllLabels->insertRow(nCurRow + 1, newItem);
-        QModelIndex index = m_modelAllLabels->index(nCurRow + 1, 0, QModelIndex());
-        m_tvAllLabels->setCurrentIndex(index);
+        addItem();
     }
     else
     {
-        QStandardItem *curItem = m_modelAllLabels->itemFromIndex(curIdx);
-        QStandardItem *parentItem = curItem->parent();
+        QStandardItem *parentItem = m_modelAllLabels->itemFromIndex(curIdx)->parent();
         if(parentItem == nullptr)
         {
-            int nCurRow = curIdx.row();
-            QStandardItem *newItem = new QStandardItem(NEW_LABEL_NAME);
-            m_modelAllLabels->insertRow(nCurRow + 1, newItem);
-            QModelIndex index = m_modelAllLabels->index(nCurRow + 1, 0, QModelIndex());
-            m_tvAllLabels->setCurrentIndex(index);
+            addItem();
         }
         else
         {
-            QStandardItem *newItem = new QStandardItem(NEW_LABEL_NAME);
-            parentItem->appendRow(newItem);
-            m_tvAllLabels->setCurrentIndex(newItem->index());
+            addItem(parentItem);
         }
     }
 }
@@ -123,13 +128,11 @@ void FormLabels::on_actionAddChild_triggered()
     QModelIndex curIdx = m_tvAllLabels->currentIndex();
     if(!curIdx.isValid())
     {
-        QMessageBox::information(this, "提示", "未选中节点！");
+        QMessageBox::information(this, "提示", "未选中父节点！");
         return;
     }
     QStandardItem *curItem = m_modelAllLabels->itemFromIndex(curIdx);
-    QStandardItem *newItem = new QStandardItem(NEW_LABEL_NAME);
-    curItem->appendRow(newItem);
-    m_tvAllLabels->setCurrentIndex(newItem->index());
+    addItem(curItem);
 }
 
 void FormLabels::on_actionDelete_triggered()
@@ -329,6 +332,21 @@ void FormLabels::on_actionMoveRight_triggered()
     m_tvAllLabels->setCurrentIndex(index);
 
 }
+
+// todo 这个判断是在节点的文本内容已经修改结束时执行，如果标签重复，则应该叫节点内容改回旧值。
+void FormLabels::onItemChanged(QStandardItem *item)
+{
+    QString sLabel = item->text();
+    if(m_setLabels.contains(sLabel))
+    {
+        QMessageBox::information(this, "提示", QString("标签【%1】已经存在").arg(sLabel));
+    }
+    else
+    {
+        m_setLabels.insert(sLabel);
+    }
+}
+
 
 void FormLabels::saveLabelToXmlFile()
 {

@@ -1,11 +1,17 @@
+/**
+** 【标签管理类】
+**
+** 标签可以按照按照分类形成树形结构，也可以简单的以列表形式显示。
+**
+**/
+
 #ifndef FORMALLLABELS_H
 #define FORMALLLABELS_H
 
 #include <QWidget>
-
-#include <QWidget>
 #include <QTreeView>
 #include <QStandardItemModel>
+
 #include "xmloperation.h"
 
 namespace Ui {
@@ -37,6 +43,8 @@ protected:
     void traverseReadLabel(QStandardItem *item, QList<LabelInfo> &lstLabelInfo);
     void saveLabelToXmlFile();
 
+    void addItem(QStandardItem *parentItem = nullptr);
+
 private slots:
     void on_actionAdd_triggered();
 
@@ -52,11 +60,15 @@ private slots:
 
     void on_actionMoveRight_triggered();
 
-private:
-    QTreeView               *m_tvAllLabels;
-    QStandardItemModel      *m_modelAllLabels;
+    void onItemChanged(QStandardItem *item); // 用于检查新标签是否已经存在
+
 private:
     Ui::FormLabels *ui;
+
+    QTreeView               *m_tvAllLabels;
+    QStandardItemModel      *m_modelAllLabels;
+
+    QSet<QString>           m_setLabels;
 };
 
 #endif // FORMALLLABELS_H
