@@ -55,10 +55,14 @@ public:
 
     void setAction(QAction *actionDeleteLabels);
 
-public slots:
+protected:
+    // 双击文件夹则进入该文件夹，双击文件则打开该文件。
+    void onDoubleClicked(const QModelIndex &index);
 
-    // 双击文件列表中的文件夹，进入该文件夹
-    void on_tvFiles_doubleClicked(const QModelIndex &index);
+    // 每次当前目录变化时，详情显示的窗口和列表显示的窗口都要重新设置跟索引
+    void bothSetRootIndex(const QModelIndex &index);
+
+public slots:
 
     // 文件列表的右键菜单
     void on_tvFiles_customContextMenuRequested(const QPoint &pos);
@@ -81,9 +85,18 @@ private slots:
     void on_toParentButton_clicked();
 
     void onDeleteLabels();
+
     void on_tbDetail_clicked();
 
     void on_tbThumbnail_clicked();
+
+    void on_tvFiles_doubleClicked(const QModelIndex &index);
+
+    void on_listView_doubleClicked(const QModelIndex &index);
+
+    void onTvFilesSelectChanged(const QItemSelection &selected, const QItemSelection &deselected);
+
+    void onLstFilesSelectChanged(const QItemSelection &selected, const QItemSelection &deselected);
 
 private:
 

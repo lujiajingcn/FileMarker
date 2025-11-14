@@ -2,6 +2,8 @@
 #include "ui_formpagefiles.h"
 
 #include <QMenu>
+#include <QDesktopServices>
+#include <QUrl>
 
 #include "adsoperation.h"
 #include "thumbnailiconprovider.h"
@@ -23,6 +25,9 @@ FormPageFiles::FormPageFiles(QWidget *parent) :
     ui->lookInCombo->setEditText(m_sCurPath);
 
     connect(m_modelFiles, &QFileSystemModel::directoryLoaded, this, &FormPageFiles::onDirectoryLoaded);
+
+    connect(m_tvFiles->selectionModel(), &QItemSelectionModel::selectionChanged, this, &FormPageFiles::onTvFilesSelectChanged);
+    connect(m_lstFiles->selectionModel(), &QItemSelectionModel::selectionChanged, this, &FormPageFiles::onLstFilesSelectChanged);
 }
 
 FormPageFiles::~FormPageFiles()
@@ -91,7 +96,7 @@ void FormPageFiles::initThumbnailFileList()
     m_lstFiles->setGridSize(QSize(140, 140));        // 设置网格大小，为图标留出空间
     m_lstFiles->setResizeMode(QListView::Adjust);    // 自动调整布局
     m_lstFiles->setMovement(QListView::Static);      // 禁止拖动
-    m_lstFiles->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_lstFiles->setSelectionMode(QAbstractItemView::ExtendedSelection);
 
     // 设置根索引为当前目录
     m_lstFiles->setRootIndex(m_modelFiles->index(""));
@@ -166,19 +171,7 @@ QStringList FormPageFiles::getSelDirs()
 
 void FormPageFiles::on_tvFiles_doubleClicked(const QModelIndex &index)
 {
-    QFileInfo fileInfo = m_modelFiles->fileInfo(index);
-    if(fileInfo.isDir())
-    {
-        // 如果双击的是文件夹，则将该文件夹内的列表显示。
-        QString path = index.data(QFileSystemModel::FilePathRole).toString();
-        m_tvFiles->setRootIndex(m_modelFiles->index(path));
-        curDirChanged(path);
-    }
-    else if(fileInfo.isFile())
-    {
-        // todo
-        // 如果双击的是文件,则直接打开文件。
-    }
+    onDoubleClicked(index);
 }
 
 void FormPageFiles::on_tvFiles_customContextMenuRequested(const QPoint &pos)
@@ -206,7 +199,7 @@ void FormPageFiles::on_backButton_clicked()
 {
     m_skForward.push_back(m_sCurPath);
     QString sDir = m_skBackward.pop();
-    m_tvFiles->setRootIndex(m_modelFiles->index(sDir));
+    bothSetRootIndex(m_modelFiles->index(sDir));
     ui->lookInCombo->setEditText(sDir);
     m_sCurPath = sDir;
 }
@@ -215,7 +208,7 @@ void FormPageFiles::on_forwardButton_clicked()
 {
     m_skBackward.push_back(m_sCurPath);
     QString sDir = m_skForward.pop();
-    m_tvFiles->setRootIndex(m_modelFiles->index(sDir));
+    bothSetRootIndex(m_modelFiles->index(sDir));
     ui->lookInCombo->setEditText(sDir);
     m_sCurPath = sDir;
 }
@@ -235,7 +228,7 @@ void FormPageFiles::on_toParentButton_clicked()
         dir.cdUp();
         sNewDirectory = dir.absolutePath();
     }
-    m_tvFiles->setRootIndex(m_modelFiles->index(sNewDirectory));
+    bothSetRootIndex(m_modelFiles->index(sNewDirectory));
     m_skBackward.push_back(sFilePath);
     m_sCurPath = sNewDirectory;
 }
@@ -258,6 +251,7 @@ void FormPageFiles::onTvNavigationClicked(const QModelIndex &index)
 {
     QString path = index.data(QFileSystemModel::FilePathRole).toString();
     m_tvFiles->setRootIndex(m_modelFiles->index(path));
+    ui->stackedWidget->setCurrentIndex(FILEPAGE::DETAIL);
     curDirChanged(path);
 }
 
@@ -268,6 +262,63 @@ void FormPageFiles::on_tbDetail_clicked()
 
 void FormPageFiles::on_tbThumbnail_clicked()
 {
-    m_lstFiles->setRootIndex(m_modelFiles->index(m_sCurPath));
     ui->stackedWidget->setCurrentIndex(FILEPAGE::THUMBNAIL);
+}
+
+void FormPageFiles::on_listView_doubleClicked(const QModelIndex &index)
+{
+    onDoubleClicked(index);
+}
+
+void FormPageFiles::onDoubleClicked(const QModelIndex &index)
+{
+    QFileInfo fileInfo = m_modelFiles->fileInfo(index);
+    QString path = index.data(QFileSystemModel::FilePathRole).toString();
+    if(fileInfo.isDir())
+    {
+        bothSetRootIndex(m_modelFiles->index(path));
+        curDirChanged(path);
+    }
+    else if(fileInfo.isFile())
+    {
+        QUrl url = QUrl::fromLocalFile(path);
+        QDesktopServices::openUrl(url);
+    }
+}
+
+void FormPageFiles::bothSetRootIndex(const QModelIndex &index)
+{
+    m_tvFiles->setRootIndex(index);
+    m_lstFiles->setRootIndex(index);
+}
+
+void FormPageFiles::onTvFilesSelectChanged(const QItemSelection &selected, const QItemSelection &deselected)
+{
+    Q_UNUSED(deselected)
+
+    QModelIndexList indexes = selected.indexes();
+    QItemSelection selection;
+    foreach (const QModelIndex &index, indexes)
+    {
+        // 添加多个不连续的索引到选择中
+        selection.select(index, index);  // 单个索引
+    }
+
+//    m_lstFiles->selectionModel()->clearSelection();// todo 添加该语句崩溃
+    m_lstFiles->selectionModel()->select(selection, QItemSelectionModel::Select);
+}
+
+void FormPageFiles::onLstFilesSelectChanged(const QItemSelection &selected, const QItemSelection &deselected)
+{
+    Q_UNUSED(deselected)
+
+    QModelIndexList indexes = selected.indexes();
+    QItemSelection selection;
+    foreach (const QModelIndex &index, indexes)
+    {
+        // 添加多个不连续的索引到选择中
+        selection.select(index, index);  // 单个索引
+    }
+//    m_tvFiles->selectionModel()->clearSelection(); // todo 添加该语句崩溃
+    m_tvFiles->selectionModel()->select(selection, QItemSelectionModel::Select);
 }
