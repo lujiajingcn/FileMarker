@@ -62,6 +62,8 @@ protected:
     // 每次当前目录变化时，详情显示的窗口和列表显示的窗口都要重新设置跟索引
     void bothSetRootIndex(const QModelIndex &index);
 
+    void onCustomContextMenuRequested(const QPoint &pos);
+
 public slots:
 
     // 文件列表的右键菜单
@@ -97,6 +99,8 @@ private slots:
     void onTvFilesSelectChanged(const QItemSelection &selected, const QItemSelection &deselected);
 
     void onLstFilesSelectChanged(const QItemSelection &selected, const QItemSelection &deselected);
+
+    void on_listView_customContextMenuRequested(const QPoint &pos);
 
 private:
 

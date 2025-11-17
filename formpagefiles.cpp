@@ -97,6 +97,7 @@ void FormPageFiles::initThumbnailFileList()
     m_lstFiles->setResizeMode(QListView::Adjust);    // 自动调整布局
     m_lstFiles->setMovement(QListView::Static);      // 禁止拖动
     m_lstFiles->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    m_lstFiles->setContextMenuPolicy(Qt::CustomContextMenu);
 
     // 设置根索引为当前目录
     m_lstFiles->setRootIndex(m_modelFiles->index(""));
@@ -174,13 +175,25 @@ void FormPageFiles::on_tvFiles_doubleClicked(const QModelIndex &index)
     onDoubleClicked(index);
 }
 
-void FormPageFiles::on_tvFiles_customContextMenuRequested(const QPoint &pos)
+void FormPageFiles::onCustomContextMenuRequested(const QPoint &pos)
 {
     QMenu menu(m_tvFiles);
-    menu.addAction(m_actionDeleteLabels);
+    QAction *actionDetail = new QAction("详细信息");
+    QAction *actionThumbnail = new QAction("缩略图");
+    connect(actionDetail, &QAction::triggered, this, &FormPageFiles::on_tbDetail_clicked);
+    connect(actionThumbnail, &QAction::triggered, this, &FormPageFiles::on_tbThumbnail_clicked);
+    QMenu menuShowType("查看");
+    menuShowType.addAction(actionDetail);
+    menuShowType.addAction(actionThumbnail);
+//    menu.addAction(m_actionDeleteLabels);
+    menu.addMenu(&menuShowType);
     menu.exec(QCursor::pos());
 }
 
+void FormPageFiles::on_tvFiles_customContextMenuRequested(const QPoint &pos)
+{
+    onCustomContextMenuRequested(pos);
+}
 
 void FormPageFiles::onDirectoryLoaded(const QString &sDir)
 {
@@ -321,4 +334,9 @@ void FormPageFiles::onLstFilesSelectChanged(const QItemSelection &selected, cons
     }
 //    m_tvFiles->selectionModel()->clearSelection(); // todo 添加该语句崩溃
     m_tvFiles->selectionModel()->select(selection, QItemSelectionModel::Select);
+}
+
+void FormPageFiles::on_listView_customContextMenuRequested(const QPoint &pos)
+{
+    onCustomContextMenuRequested(pos);
 }
