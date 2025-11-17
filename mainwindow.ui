@@ -82,16 +82,6 @@
      <string>标签管理</string>
     </property>
    </widget>
-   <widget class="QMenu" name="menuFileSearchCondition">
-    <property name="title">
-     <string>查找条件</string>
-    </property>
-    <addaction name="actionFromCache"/>
-    <addaction name="actionFromDisk"/>
-    <addaction name="separator"/>
-    <addaction name="actionLabelLogicAnd"/>
-    <addaction name="actionLabelLogicOr"/>
-   </widget>
    <widget class="QMenu" name="menuHelp">
     <property name="title">
      <string>帮助</string>
@@ -105,11 +95,11 @@
     </property>
     <addaction name="actionSearchFilesbyLabels"/>
     <addaction name="actionTraverseSelDirs"/>
+    <addaction name="actionSearchConfig"/>
    </widget>
    <addaction name="menuFileManage"/>
    <addaction name="menuLabelManage"/>
    <addaction name="menuFileSearch"/>
-   <addaction name="menuFileSearchCondition"/>
    <addaction name="menuHelp"/>
   </widget>
   <widget class="QToolBar" name="mainToolBar">
@@ -201,28 +191,6 @@
     <string>帮助</string>
    </property>
   </action>
-  <action name="actionFromCache">
-   <property name="checkable">
-    <bool>true</bool>
-   </property>
-   <property name="checked">
-    <bool>true</bool>
-   </property>
-   <property name="text">
-    <string>优先从缓存数据库查找</string>
-   </property>
-  </action>
-  <action name="actionLabelLogicAnd">
-   <property name="checkable">
-    <bool>true</bool>
-   </property>
-   <property name="checked">
-    <bool>true</bool>
-   </property>
-   <property name="text">
-    <string>标签的逻辑关系为与</string>
-   </property>
-  </action>
   <action name="actionDelLabels">
    <property name="icon">
     <iconset resource="resources.qrc">
@@ -232,25 +200,18 @@
     <string>删除标签</string>
    </property>
   </action>
-  <action name="actionFromDisk">
-   <property name="checkable">
-    <bool>true</bool>
-   </property>
-   <property name="text">
-    <string>直接从磁盘查找</string>
-   </property>
-  </action>
-  <action name="actionLabelLogicOr">
-   <property name="checkable">
-    <bool>true</bool>
-   </property>
-   <property name="text">
-    <string>标签的逻辑关系为或</string>
-   </property>
-  </action>
   <action name="actionAuthor">
    <property name="text">
     <string>作者信息</string>
+   </property>
+  </action>
+  <action name="actionSearchConfig">
+   <property name="icon">
+    <iconset resource="resources.qrc">
+     <normaloff>:/Resources/cog.png</normaloff>:/Resources/cog.png</iconset>
+   </property>
+   <property name="text">
+    <string>设置查找条件</string>
    </property>
   </action>
  </widget>

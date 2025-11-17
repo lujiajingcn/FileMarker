@@ -28,8 +28,10 @@ CONFIG += c++11
 SOURCES += \
         adsoperation.cpp \
         common.cpp \
+        configoperation.cpp \
         dlgauthor.cpp \
         dlglabel.cpp \
+        dlgsearchconfig.cpp \
         filebrowser.cpp \
         formcurdirlabels.cpp \
         formfilenavigation.cpp \
@@ -51,8 +53,10 @@ SOURCES += \
 HEADERS += \
         adsoperation.h \
         common.h \
+        configoperation.h \
         dlgauthor.h \
         dlglabel.h \
+        dlgsearchconfig.h \
         filebrowser.h \
         formcurdirlabels.h \
         formfilenavigation.h \
@@ -74,6 +78,7 @@ HEADERS += \
 FORMS += \
         dlgauthor.ui \
         dlglabel.ui \
+        dlgsearchconfig.ui \
         filebrowser.ui \
         formcurdirlabels.ui \
         formfilenavigation.ui \

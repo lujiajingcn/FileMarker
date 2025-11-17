@@ -1,8 +1,6 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 #include <QMessageBox>
-#include <QSettings>
-#include <QTextCodec>
 #include <QDebug>
 #include <QFile>
 #include <QDir>
@@ -12,6 +10,8 @@
 #include "dlgauthor.h"
 #include "utility.h"
 #include "formcurdirlabels.h"
+#include "dlgsearchconfig.h"
+#include "configoperation.h"
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -36,8 +36,6 @@ MainWindow::MainWindow(QWidget *parent) :
 
     m_threadSearch = nullptr;
     m_threadTraverseDirs = nullptr;
-
-    readSearchConfig();
 }
 
 void MainWindow::initLogMessageHanlder()
@@ -48,63 +46,6 @@ void MainWindow::initLogMessageHanlder()
     qInstallMessageHandler(Utility::myMessageHandler);
 }
 
-void MainWindow::readSearchConfig()
-{
-    QString sConfigFilePath = g_sAppDir + "/" + SEARCH_CONFIG_FILE;
-    QDir dir(sConfigFilePath);
-    if(!dir.exists())
-    {
-        qWarning().noquote()<<QString("配置文件%1不存在！").arg(SEARCH_CONFIG_FILE);
-        return;
-    }
-    QSettings settings(sConfigFilePath, QSettings::Format::IniFormat);
-    if(settings.status() != QSettings::NoError)
-    {
-        qWarning().noquote()<<QString("打开配置文件%1失败！").arg(SEARCH_CONFIG_FILE);
-        return;
-    }
-    settings.setIniCodec(QTextCodec::codecForName("UTF-8"));
-    bool bIsSearchFormCache = settings.value("searchfromcache").toBool();
-    if(bIsSearchFormCache)
-    {
-        ui->actionFromCache->setChecked(true);
-        ui->actionFromDisk->setChecked(false);
-    }
-    else
-    {
-        ui->actionFromCache->setChecked(false);
-        ui->actionFromDisk->setChecked(true);
-    }
-    int nLabelLogic = settings.value("labellogic").toInt();
-    if(nLabelLogic == labelLogic::AND)
-    {
-        ui->actionLabelLogicAnd->setChecked(true);
-        ui->actionLabelLogicOr->setChecked(false);
-    }
-    else if(nLabelLogic == labelLogic::OR)
-    {
-        ui->actionLabelLogicAnd->setChecked(false);
-        ui->actionLabelLogicOr->setChecked(true);
-    }
-}
-
-void MainWindow::writeSearchConfig()
-{
-    QSettings settings(g_sAppDir + "/" + SEARCH_CONFIG_FILE, QSettings::Format::IniFormat);
-    if(settings.status() != QSettings::NoError)
-    {
-        qWarning().noquote()<<QString("写入配置文件%1失败").arg(SEARCH_CONFIG_FILE);
-        return;
-    }
-    settings.setIniCodec(QTextCodec::codecForName("UTF-8"));
-    settings.setValue("searchfromcache", ui->actionFromCache->isChecked());
-    int nLabelLogic = labelLogic::AND;
-    if(ui->actionLabelLogicOr->isChecked())
-    {
-        nLabelLogic = labelLogic::OR;
-    }
-    settings.setValue("labellogic", nLabelLogic);
-}
 
 void MainWindow::recvStop()
 {
@@ -113,7 +54,6 @@ void MainWindow::recvStop()
 
 MainWindow::~MainWindow()
 {
-    writeSearchConfig();
     delete ui;
 }
 
@@ -173,16 +113,13 @@ void MainWindow::on_actionSearchFilesbyLabels_triggered()
         return;
     }
 
+    SearchConfig sc = ConfigOperation::readSearchConfig(g_sAppDir + "/" + SEARCH_CONFIG_FILE);
     int nLabelLogic = labelLogic::AND;
-    if(ui->actionLabelLogicOr->isChecked())
-    {
-        nLabelLogic = labelLogic::OR;
-    }
 
-    if(ui->actionFromCache->isChecked())
+    if(sc.bFromCache)
     {
         QStringList qLFilePaths, qLNotHitedDirs;
-        m_sqlOperation->searchFilesByLabels(qLSelDirs, qLSelLabels, nLabelLogic, qLFilePaths, qLNotHitedDirs);
+        m_sqlOperation->searchFilesByLabels(qLSelDirs, qLSelLabels, sc.logic, qLFilePaths, qLNotHitedDirs);
         if(qLNotHitedDirs.count() == 0) // 查找的文件夹全部在缓存数据库中存在，则显示查找结果后结束。
         {
             m_fileBrowser->showFilteredFile(qLFilePaths);
@@ -239,56 +176,14 @@ void MainWindow::on_actionHelp_triggered()
     w->show();
 }
 
-void MainWindow::on_actionFromCache_changed()
-{
-    if(ui->actionFromCache->isChecked())
-    {
-        ui->actionFromDisk->setChecked(false);
-    }
-    else
-    {
-        ui->actionFromDisk->setChecked(true);
-    }
-}
-
-void MainWindow::on_actionFromDisk_changed()
-{
-    if(ui->actionFromDisk->isChecked())
-    {
-        ui->actionFromCache->setChecked(false);
-    }
-    else
-    {
-        ui->actionFromCache->setChecked(true);
-    }
-}
-
-void MainWindow::on_actionLabelLogicAnd_changed()
-{
-    if(ui->actionLabelLogicAnd->isChecked())
-    {
-        ui->actionLabelLogicOr->setChecked(false);
-    }
-    else
-    {
-        ui->actionLabelLogicOr->setChecked(true);
-    }
-}
-
-void MainWindow::on_actionLabelLogicOr_changed()
-{
-    if(ui->actionLabelLogicOr->isChecked())
-    {
-        ui->actionLabelLogicAnd->setChecked(false);
-    }
-    else
-    {
-        ui->actionLabelLogicAnd->setChecked(true);
-    }
-}
-
 void MainWindow::on_actionAuthor_triggered()
 {
     DlgAuthor dlgAuthor(this);
     dlgAuthor.exec();
+}
+
+void MainWindow::on_actionSearchConfig_triggered()
+{
+    DlgSearchConfig dlg(this, g_sAppDir + "/" + SEARCH_CONFIG_FILE);
+    dlg.exec();
 }

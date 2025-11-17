@@ -42,18 +42,12 @@ private slots:
 
     void recvStop();
 
-    /** 查找操作的两对互斥条件的状态变化 */
-    void on_actionFromCache_changed();
-    void on_actionFromDisk_changed();
-    void on_actionLabelLogicAnd_changed();
-    void on_actionLabelLogicOr_changed();
-
     void on_actionAuthor_triggered();
+
+    void on_actionSearchConfig_triggered();
 
 protected:
     void initLogMessageHanlder();
-    void readSearchConfig();
-    void writeSearchConfig();
 
 private:
     SqliteOperation         *m_sqlOperation;        // 操作sqlite数据库
