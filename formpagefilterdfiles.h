@@ -1,3 +1,8 @@
+/**
+** 【查询结果】
+**
+**/
+
 #ifndef FORMPAGEFILTERDFILES_H
 #define FORMPAGEFILTERDFILES_H
 
@@ -22,7 +27,7 @@ signals:
     void sendGotoFile(QString sFilePath);
 
 public slots:
-    void onShowFiltedFiles(QStringList qLFilteredFiles);
+    void onShowFilteredFiles(QStringList qLFilteredFiles);
     void onGotoFilePath();
 
 private slots:

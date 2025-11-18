@@ -16,7 +16,7 @@ FormPageFilterdFiles::FormPageFilterdFiles(QWidget *parent) :
     connect(m_gotoFilePath, SIGNAL(triggered(bool)), this, SLOT(onGotoFilePath()));
 }
 
-void FormPageFilterdFiles::onShowFiltedFiles(QStringList qLFilteredFiles)
+void FormPageFilterdFiles::onShowFilteredFiles(QStringList qLFilteredFiles)
 {
     m_modelFilteredFiles->removeRows(0, m_modelFilteredFiles->rowCount());
     foreach(QString sFiltededFile, qLFilteredFiles)

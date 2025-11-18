@@ -1,3 +1,7 @@
+/**
+** 【查询过程】
+**
+**/
 #ifndef FORMPAGEPROGRESSINFO_H
 #define FORMPAGEPROGRESSINFO_H
 
@@ -15,8 +19,14 @@ public:
     explicit FormPageProgressInfo(QWidget *parent = nullptr);
     ~FormPageProgressInfo();
 
+signals:
+    void sendStop();
+
 public slots:
     void onRecvProgress(QString sProcessedFilePath);
+
+private slots:
+    void on_btnStop_clicked();
 
 private:
     Ui::FormPageProgressInfo *ui;

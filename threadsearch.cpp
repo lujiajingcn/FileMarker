@@ -1,7 +1,7 @@
 #include "threadsearch.h"
 #include "adsoperation.h"
 #include <QDir>
-#include <Windows.h>
+#include <windows.h>
 #include "common.h"
 #include <QDebug>
 #include <QCoreApplication>

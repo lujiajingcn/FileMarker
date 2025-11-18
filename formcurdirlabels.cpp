@@ -31,3 +31,15 @@ void FormCurDirLabels::onRecvDirAndLabels(QMap<QString, QSet<QString>> mapDirAnd
         }
     }
 }
+
+void FormCurDirLabels::on_treeView_clicked(const QModelIndex &index)
+{
+    QStringList qLLabels;
+    QItemSelectionModel *selectionModel = ui->treeView->selectionModel();
+    QModelIndexList selectedIndexes = selectionModel->selectedIndexes();
+    foreach (const QModelIndex &index, selectedIndexes)
+    {
+        qLLabels<<m_modelLabels->itemFromIndex(index)->text();
+    }
+    sendSelLabels(qLLabels);
+}

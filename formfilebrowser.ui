@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>FileBrowser</class>
- <widget class="QWidget" name="FileBrowser">
+ <class>FormFileBrowser</class>
+ <widget class="QWidget" name="FormFileBrowser">
   <property name="geometry">
    <rect>
     <x>0</x>

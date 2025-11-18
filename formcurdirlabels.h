@@ -1,5 +1,5 @@
 /**
-** 【当前目录文件的标签类】
+** 【当前目录标签】
 **
 ** 用于显示当前目录中的所有文件所添加的标签总和，在文件列表窗口中，打开新的目录时更新。
 **
@@ -24,8 +24,14 @@ public:
     explicit FormCurDirLabels(QWidget *parent = nullptr);
     ~FormCurDirLabels();
 
+signals:
+    void sendSelLabels(QStringList qLSelLabels);
+
 public slots:
     void onRecvDirAndLabels(QMap<QString, QSet<QString>> mapDirAndLabels);
+
+private slots:
+    void on_treeView_clicked(const QModelIndex &index);
 
 private:
     Ui::FormCurDirLabels *ui;

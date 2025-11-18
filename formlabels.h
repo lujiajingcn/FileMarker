@@ -1,5 +1,5 @@
 /**
-** 【标签管理类】
+** 【标签管理】
 **
 ** 标签可以按照按照分类形成树形结构，也可以简单的以列表形式显示。
 **
@@ -38,6 +38,9 @@ public:
     // 刷新全部标签列表
     void updateAllLabelList(QVector<QString> vtAllLabels);
 
+signals:
+    void sendSelLabels(QStringList qLSelLabels);
+
 protected:
     void traverseWriteLabel(QStandardItem *item, const QList<LabelInfo> &lstLabelInfo);
     void traverseReadLabel(QStandardItem *item, QList<LabelInfo> &lstLabelInfo);
@@ -61,6 +64,8 @@ private slots:
     void on_actionMoveRight_triggered();
 
     void onItemChanged(QStandardItem *item); // 用于检查新标签是否已经存在
+
+    void on_treeView_clicked(const QModelIndex &index);
 
 private:
     Ui::FormLabels *ui;

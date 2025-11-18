@@ -402,3 +402,14 @@ void FormLabels::updateAllLabelList(QVector<QString> vtAllLabels)
     }
 }
 
+void FormLabels::on_treeView_clicked(const QModelIndex &index)
+{
+    QStringList qLLabels;
+    QItemSelectionModel *selectionModel = m_tvAllLabels->selectionModel();
+    QModelIndexList selectedIndexes = selectionModel->selectedIndexes();
+    foreach (const QModelIndex &index, selectedIndexes)
+    {
+        qLLabels<<m_modelAllLabels->itemFromIndex(index)->text();
+    }
+    sendSelLabels(qLLabels);
+}

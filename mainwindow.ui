@@ -53,7 +53,7 @@
          <number>0</number>
         </property>
         <item row="0" column="0">
-         <widget class="FileBrowser" name="wFileBrowser" native="true"/>
+         <widget class="FormFileBrowser" name="wFileBrowser" native="true"/>
         </item>
        </layout>
       </widget>
@@ -132,7 +132,7 @@
    <attribute name="dockWidgetArea">
     <number>2</number>
    </attribute>
-   <widget class="QWidget" name="dockWidgetContents"/>
+   <widget class="FormLabels" name="dwcLabels"/>
   </widget>
   <widget class="QDockWidget" name="dwCurDirLabels">
    <property name="windowTitle">
@@ -218,15 +218,21 @@
  <layoutdefault spacing="6" margin="11"/>
  <customwidgets>
   <customwidget>
-   <class>FileBrowser</class>
-   <extends>QWidget</extends>
-   <header>filebrowser.h</header>
-   <container>1</container>
-  </customwidget>
-  <customwidget>
    <class>FormCurDirLabels</class>
    <extends>QWidget</extends>
    <header>formcurdirlabels.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>FormLabels</class>
+   <extends>QWidget</extends>
+   <header>formlabels.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>FormFileBrowser</class>
+   <extends>QWidget</extends>
+   <header>formfilebrowser.h</header>
    <container>1</container>
   </customwidget>
  </customwidgets>

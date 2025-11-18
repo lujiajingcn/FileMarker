@@ -20,3 +20,8 @@ void FormPageProgressInfo::onRecvProgress(QString sProcessedFilePath)
     ui->plainTextEdit->appendPlainText(sProcessedFilePath);
     ui->plainTextEdit->moveCursor(QTextCursor::End);
 }
+
+void FormPageProgressInfo::on_btnStop_clicked()
+{
+    emit sendStop();
+}
