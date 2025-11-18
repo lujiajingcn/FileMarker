@@ -3,7 +3,8 @@
 #include "adsoperation.h"
 #include <QStack>
 
-MyQFileSystemModel::MyQFileSystemModel()
+MyQFileSystemModel::MyQFileSystemModel(QObject *parent) :
+    QFileSystemModel(parent)
 {
 }
 
@@ -85,5 +86,24 @@ QVariant MyQFileSystemModel::data(const QModelIndex & index, int role) const
 
 bool MyQFileSystemModel::setData(const QModelIndex &index, const QVariant &value, int role)
 {
+    if (index.column() == 4 && role == Qt::EditRole)
+    {
+        QString sLabels = value.toString();
+        emit sendLabels(sLabels);
+        return true;
+    }
     return QFileSystemModel::setData(index, value, role);
+}
+
+// 让第4列【标签】可编辑
+Qt::ItemFlags MyQFileSystemModel::flags(const QModelIndex &index) const
+{
+    Qt::ItemFlags f = QFileSystemModel::flags(index);
+    if (!index.isValid())
+        return f;
+
+    if (index.column() == 4)
+        f |= Qt::ItemIsEditable;
+
+    return f;
 }

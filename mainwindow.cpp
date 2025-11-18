@@ -14,6 +14,9 @@ MainWindow::MainWindow(QWidget *parent) :
 
     initLogMessageHanlder();
 
+    // 将【标签管理】窗口的工具栏操作添加到主窗口的菜单中
+    ui->dwcLabels->addToolButtonsToMenu(ui->menuLabelManage);
+
     // 将菜单栏中的动作放到【文件管理】中实现
     ui->wFileBrowser->setActions(ui->actionAddLabels, ui->actionDelLabels, ui->actionSearchFilesbyLabels, ui->actionTraverseSelDirs, ui->actionSearchConfig);
 
@@ -25,6 +28,11 @@ MainWindow::MainWindow(QWidget *parent) :
 
     // 遍历选中文件夹，检索出其中文件的所有标签，显示在【当前目录标签】
     connect(ui->wFileBrowser, &FormFileBrowser::sendDirAndLabels, ui->dwcCurDirLabels, &FormCurDirLabels::onRecvDirAndLabels);
+
+    // 手动编辑【标签】列内容后，将编辑后的内容传递给【标签管理】
+    // 编辑后的标签由英文逗号分隔，形如 照片,故宫,2025
+    // todo 传递路径过长，应该是结构不合理，后续改进
+    connect(ui->wFileBrowser, &FormFileBrowser::sendLabels, ui->dwcLabels, &FormLabels::onRecvLabels);
 }
 
 MainWindow::~MainWindow()

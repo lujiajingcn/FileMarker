@@ -22,9 +22,10 @@ FormPageFiles::FormPageFiles(QWidget *parent) :
     initThumbnailFileList();
 
     // todo 后续将已经访问过的路径都添加上
-    ui->lookInCombo->setEditText(m_sCurPath);
+    ui->lookInCombo->setEditText(m_sCurDir);
 
     connect(m_modelFiles, &QFileSystemModel::directoryLoaded, this, &FormPageFiles::onDirectoryLoaded);
+    connect(m_modelFiles, &MyQFileSystemModel::sendLabels, this, &FormPageFiles::onRecvLabels);
 
     connect(m_tvFiles->selectionModel(), &QItemSelectionModel::selectionChanged, this, &FormPageFiles::onTvFilesSelectChanged);
     connect(m_lstFiles->selectionModel(), &QItemSelectionModel::selectionChanged, this, &FormPageFiles::onLstFilesSelectChanged);
@@ -35,11 +36,15 @@ FormPageFiles::~FormPageFiles()
     delete ui;
 }
 
-
 void FormPageFiles::setAction(QAction *actionDeleteLabels)
 {
     m_actionDeleteLabels = actionDeleteLabels;
     connect(m_actionDeleteLabels, &QAction::triggered, this, &FormPageFiles::onDeleteLabels);
+}
+
+QString FormPageFiles::getCurDir()
+{
+    return m_sCurDir;
 }
 
 void FormPageFiles::onDeleteLabels()
@@ -76,7 +81,7 @@ void FormPageFiles::initDetailFileList()
     treeHeader->resizeSection(4, fm.horizontalAdvance(QLatin1String("10/29/81 02:02PM")));
     treeHeader->setContextMenuPolicy(Qt::ActionsContextMenu);
 
-    m_sCurPath = "我的电脑";
+    m_sCurDir = "我的电脑";
 }
 
 void FormPageFiles::initThumbnailFileList()
@@ -106,9 +111,9 @@ void FormPageFiles::initThumbnailFileList()
 void FormPageFiles::curDirChanged(QString sCurDir)
 {
     ui->lookInCombo->setEditText(sCurDir);
-    m_skBackward.push_back(m_sCurPath);
+    m_skBackward.push_back(m_sCurDir);
     m_skForward.clear();
-    m_sCurPath = sCurDir;
+    m_sCurDir = sCurDir;
 }
 
 bool FormPageFiles::event(QEvent *event)
@@ -210,20 +215,20 @@ void FormPageFiles::onDirectoryLoaded(const QString &sDir)
 
 void FormPageFiles::on_backButton_clicked()
 {
-    m_skForward.push_back(m_sCurPath);
+    m_skForward.push_back(m_sCurDir);
     QString sDir = m_skBackward.pop();
     bothSetRootIndex(m_modelFiles->index(sDir));
     ui->lookInCombo->setEditText(sDir);
-    m_sCurPath = sDir;
+    m_sCurDir = sDir;
 }
 
 void FormPageFiles::on_forwardButton_clicked()
 {
-    m_skBackward.push_back(m_sCurPath);
+    m_skBackward.push_back(m_sCurDir);
     QString sDir = m_skForward.pop();
     bothSetRootIndex(m_modelFiles->index(sDir));
     ui->lookInCombo->setEditText(sDir);
-    m_sCurPath = sDir;
+    m_sCurDir = sDir;
 }
 
 void FormPageFiles::on_toParentButton_clicked()
@@ -243,12 +248,12 @@ void FormPageFiles::on_toParentButton_clicked()
     }
     bothSetRootIndex(m_modelFiles->index(sNewDirectory));
     m_skBackward.push_back(sFilePath);
-    m_sCurPath = sNewDirectory;
+    m_sCurDir = sNewDirectory;
 }
 
 void FormPageFiles::on_btnRefresh_clicked()
 {
-    QModelIndex curIndex = m_modelFiles->index(m_sCurPath);
+    QModelIndex curIndex = m_modelFiles->index(m_sCurDir);
     m_modelFiles->setRootPath("");
     m_tvFiles->setRootIndex(curIndex);
 }
@@ -339,4 +344,9 @@ void FormPageFiles::onLstFilesSelectChanged(const QItemSelection &selected, cons
 void FormPageFiles::on_listView_customContextMenuRequested(const QPoint &pos)
 {
     onCustomContextMenuRequested(pos);
+}
+
+void FormPageFiles::onRecvLabels(QString sLabels)
+{
+    emit sendLabels(sLabels);
 }

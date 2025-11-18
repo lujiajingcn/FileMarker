@@ -41,6 +41,7 @@ signals:
     void sendGotoFile(QString sFilePath);
     void sendNavigationClicked(const QModelIndex &index);
     void sendDirAndLabels(QMap<QString, QSet<QString>> mapDirAndLabel);
+    void sendLabels(QString sLabels);
 
 public:
     void showProcessPage();
@@ -76,6 +77,8 @@ private slots:
     void onRecvDirAndLabels(QMap<QString, QSet<QString>> mapDirAndLabel);
 
     void onRecvStopSearch();
+
+    void onRecvLabels(QString sLabels);
 
 private:
     Ui::FormFileBrowser *ui;

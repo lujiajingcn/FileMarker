@@ -32,6 +32,8 @@ FormFileBrowser::FormFileBrowser(QWidget *parent) :
     connect(this, &FormFileBrowser::sendShowFilteredFiles, ui->pageFilteredFiles, &FormPageFilterdFiles::onShowFilteredFiles);
     connect(this, &FormFileBrowser::sendRefresh, ui->pageFiles, &FormPageFiles::on_btnRefresh_clicked);
     connect(ui->pageProgressInfo, &FormPageProgressInfo::sendStop, this, &FormFileBrowser::onRecvStopSearch);
+
+    connect(ui->pageFiles, &FormPageFiles::sendLabels, this, &FormFileBrowser::onRecvLabels);
 }
 
 FormFileBrowser::~FormFileBrowser()
@@ -172,8 +174,8 @@ void FormFileBrowser::onActionSearchFilesbyLabelsTriggered()
     QStringList qLSelDirs = getSelDirs();
     if(qLSelDirs.count() == 0)
     {
-        QMessageBox::information(this, "提示", "未选中文件夹！");
-        return;
+        QString sCurDir = ui->pageFiles->getCurDir();
+        qLSelDirs.append(sCurDir);
     }
 
     if(m_qLSelLabels.count() == 0)
@@ -217,8 +219,8 @@ void FormFileBrowser::onActionTraverseSelDirsTriggered()
     QStringList qLSelDirs = getSelDirs();
     if(qLSelDirs.count() == 0)
     {
-        QMessageBox::information(this, "提示", "未选中文件夹！");
-        return;
+        QString sCurDir = ui->pageFiles->getCurDir();
+        qLSelDirs.append(sCurDir);
     }
     showProcessPage();
     m_threadTraverseDirs = new ThreadTraverseDirs(this);
@@ -253,4 +255,29 @@ void FormFileBrowser::onRecvDirAndLabels(QMap<QString, QSet<QString>> mapDirAndL
 void FormFileBrowser::onRecvStopSearch()
 {
     m_threadSearch->stopThread();
+}
+
+void FormFileBrowser::onRecvLabels(QString sLabels)
+{
+    QStringList qLFilePaths = getSelFilePath();
+    if(qLFilePaths.count() == 0)
+    {
+        QMessageBox::information(this, "提示", "未选中文件或文件夹！");
+        return;
+    }
+
+    QStringList qLLabels = sLabels.split(",");
+    foreach(const QString &sFilePath, qLFilePaths)
+    {
+        ADSOperation::deleteADS(sFilePath);
+        foreach(const QString &sSelLabel, qLLabels)
+        {
+            ADSOperation::writeADS(sFilePath, sSelLabel, "");
+        }
+    }
+
+    emit sendRefresh();
+
+    if(!sLabels.isEmpty())
+        emit sendLabels(sLabels);
 }

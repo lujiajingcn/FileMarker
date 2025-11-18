@@ -48,6 +48,9 @@ protected:
 
     void addItem(QStandardItem *parentItem = nullptr);
 
+public slots:
+    void onRecvLabels(QString sLabels);
+
 private slots:
     void on_actionAdd_triggered();
 

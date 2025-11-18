@@ -73,6 +73,7 @@ void FormLabels::initLabels()
             traverseWriteLabel(item, (*cItr).lstChild);
         }
         m_modelAllLabels->appendRow(item);
+        m_setLabels.insert(sName);
     }
 }
 
@@ -412,4 +413,18 @@ void FormLabels::on_treeView_clicked(const QModelIndex &index)
         qLLabels<<m_modelAllLabels->itemFromIndex(index)->text();
     }
     sendSelLabels(qLLabels);
+}
+
+void FormLabels::onRecvLabels(QString sLabels)
+{
+    QStringList qLLabels = sLabels.split(",");
+    foreach (QString sLabel , qLLabels)
+    {
+        if(!m_setLabels.contains(sLabel))
+        {
+            QStandardItem *newItem = new QStandardItem(sLabel);
+            m_modelAllLabels->appendRow(newItem);
+            m_setLabels.insert(sLabel);
+        }
+    }
 }

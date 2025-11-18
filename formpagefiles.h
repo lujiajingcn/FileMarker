@@ -55,6 +55,12 @@ public:
 
     void setAction(QAction *actionDeleteLabels);
 
+    QString getCurDir();
+
+signals:
+
+    void sendLabels(QString sLabels);
+
 protected:
     // 双击文件夹则进入该文件夹，双击文件则打开该文件。
     void onDoubleClicked(const QModelIndex &index);
@@ -102,6 +108,8 @@ private slots:
 
     void on_listView_customContextMenuRequested(const QPoint &pos);
 
+    void onRecvLabels(QString sLabels);
+
 private:
 
     QTreeView               *m_tvFiles;             // 详情显示文件列表，由于QListView不能显示表头，故用QTreeView实现列表功能。
@@ -110,7 +118,7 @@ private:
     QAction                 *m_actionDeleteLabels;
     QStack<QString>         m_skBackward;           // 访问过的路径，用于后退功能
     QStack<QString>         m_skForward;            // 访问过的路径，用于前进功能
-    QString                 m_sCurPath;             // 当前正在访问的路径
+    QString                 m_sCurDir;             // 当前正在访问的路径
 
 private:
     Ui::FormPageFiles *ui;
