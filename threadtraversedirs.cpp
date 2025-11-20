@@ -61,10 +61,6 @@ void ThreadTraverseDirs::searchDirectory(const QString& sDirPath, QMap<QString, 
             return;
         }
         QString sFilePath = fileInfo.absoluteFilePath();
-        if(sFilePath == "D:/filemarker_test_files/WorkSpace/Applications_Qt/xpdf_build_win/源码/xpdf-4.04/xpdf-4.04/xpdf/pdftohtml.cc")
-        {
-            int a = 0;
-        }
         findADSName(sFilePath, mapFilePathAndLabel, setLabels);
         emit sendProcessInfo(sFilePath);
         QCoreApplication::processEvents();

@@ -11,10 +11,18 @@
 #include "sqliteoperation.h"
 #include "threadsearch.h"
 #include "threadtraversedirs.h"
+#include "threadaddlabelbyai.h"
 
 namespace Ui {
 class FormFileBrowser;
 }
+
+enum RUNNINGTHREAD
+{
+    SEARCHFILE,
+    TRAVERSEDIR,
+    AIADDTAG
+};
 
 class FormFileBrowser : public QWidget
 {
@@ -27,7 +35,7 @@ public:
     // 设置样式，大部分样式已经在filebrowser.ui中设置完成，在此进行少量样式设置
     void setWindowStyleSheet();
 
-    void setActions(QAction *aAddLabel, QAction *aDelLabel, QAction *aSearch, QAction *aTraverse, QAction *aSearchConfig);
+    void setActions(QAction *aAddLabelByAI, QAction *aAddLabel, QAction *aDelLabel, QAction *aSearch, QAction *aTraverse, QAction *aSearchConfig);
 
     QStringList getSelFilePath();
 
@@ -44,7 +52,7 @@ signals:
     void sendLabels(QString sLabels);
 
 public:
-    void showProcessPage();
+    void showProcessPage(RUNNINGTHREAD rt);
     void showFilesWidget();
 
 public slots:
@@ -58,8 +66,13 @@ public slots:
 
     void onRecvSelLabels(QStringList qLSelLabels);
 
+    void onRecvAddLabelByAIFinish();
+
 private slots:
     void on_btnStop_clicked();
+
+    /** 调用aAI大模型来自动分析文件，为文件生成标签*/
+    void onActionAddLabelByAITriggered();
 
     /** 为文件关联标签 */
     void onActionAddLabelsTriggered();
@@ -83,6 +96,7 @@ private slots:
 private:
     Ui::FormFileBrowser *ui;
 
+    QAction             *m_aAddLabelByAI;
     QAction             *m_aAddLabel;
     QAction             *m_aDelLabel;
     QAction             *m_aSearch;
@@ -94,6 +108,9 @@ private:
     SqliteOperation     *m_sqlOperation;        // 操作sqlite数据库
     ThreadSearch        *m_threadSearch;        // 处理根据标签查找文件的线程
     ThreadTraverseDirs  *m_threadTraverseDirs;  // 遍历选中文件夹中全部文件的线程
+    ThreadAddLabelByAI  *m_threadAddLabelByAI;
+
+    int                 m_nThread;              // 用来记录当前运行的线程：根据标签查找文件、遍历文件夹、AI自动生成标签。
 };
 
 #endif // FILEBROWSER_H

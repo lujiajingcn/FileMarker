@@ -3,6 +3,7 @@
 
 #include <QMessageBox>
 
+
 #include "adsoperation.h"
 #include "configoperation.h"
 #include "dlgsearchconfig.h"
@@ -18,6 +19,7 @@ FormFileBrowser::FormFileBrowser(QWidget *parent) :
     m_sqlOperation = new SqliteOperation;
     m_threadSearch = nullptr;
     m_threadTraverseDirs = nullptr;
+    m_threadAddLabelByAI = nullptr;
 
     // 点击左侧【文件导航】中节点，将该节点下的文件夹及文件显示在右侧【文件列表】
     connect(ui->wFileNavigation, &FormFileNavigation::sendNavigationClicked, this, &FormFileBrowser::onTvNavigationClicked);
@@ -55,14 +57,16 @@ void FormFileBrowser::setWindowStyleSheet()
     ui->stackedWidget->setCurrentWidget(ui->pageFiles);
 }
 
-void FormFileBrowser::setActions(QAction *aAddLabel, QAction *aDelLabel, QAction *aSearch, QAction *aTraverse, QAction *aSearchConfig)
+void FormFileBrowser::setActions(QAction *aAddLabelByAI, QAction *aAddLabel, QAction *aDelLabel, QAction *aSearch, QAction *aTraverse, QAction *aSearchConfig)
 {
+    m_aAddLabelByAI = aAddLabelByAI;
     m_aAddLabel = aAddLabel;
     m_aDelLabel = aDelLabel;
     m_aSearch = aSearch;
     m_aTraverse = aTraverse;
     m_aSearchConfig = aSearchConfig;
 
+    connect(m_aAddLabelByAI, &QAction::triggered, this, &FormFileBrowser::onActionAddLabelByAITriggered);
     connect(m_aAddLabel, &QAction::triggered, this, &FormFileBrowser::onActionAddLabelsTriggered);
     connect(m_aSearch, &QAction::triggered, this, &FormFileBrowser::onActionSearchFilesbyLabelsTriggered);
     connect(m_aTraverse, &QAction::triggered, this, &FormFileBrowser::onActionTraverseSelDirsTriggered);
@@ -79,9 +83,10 @@ QStringList FormFileBrowser::getSelDirs()
     return ui->pageFiles->getSelDirs();
 }
 
-void FormFileBrowser::showProcessPage()
+void FormFileBrowser::showProcessPage(RUNNINGTHREAD rt)
 {
     ui->stackedWidget->setCurrentWidget(ui->pageProgressInfo);
+    m_nThread = rt;
 }
 
 void FormFileBrowser::showFilesWidget()
@@ -127,6 +132,27 @@ void FormFileBrowser::recvProcessInfo(QString sProcessedFilePath)
 void FormFileBrowser::on_btnStop_clicked()
 {
     emit sendStop();
+}
+
+void FormFileBrowser::onActionAddLabelByAITriggered()
+{
+    showProcessPage(RUNNINGTHREAD::AIADDTAG);
+
+    QStringList qLSelDirs = getSelDirs();
+
+    m_threadAddLabelByAI = new ThreadAddLabelByAI(this);
+
+    connect(m_threadAddLabelByAI, &ThreadAddLabelByAI::sendProcessInfo, this, &FormFileBrowser::recvProcessInfo);
+    connect(m_threadAddLabelByAI, &ThreadAddLabelByAI::sendFinish, this, &FormFileBrowser::onRecvAddLabelByAIFinish);
+
+    m_threadAddLabelByAI->setDirs(qLSelDirs);
+
+    m_threadAddLabelByAI->start();
+}
+
+void FormFileBrowser::onRecvAddLabelByAIFinish()
+{
+    showFilesWidget();
 }
 
 /**
@@ -202,7 +228,7 @@ void FormFileBrowser::onActionSearchFilesbyLabelsTriggered()
         }
     }
 
-    showProcessPage();// 从磁盘查找比较耗时，切换到处理进度页面
+    showProcessPage(RUNNINGTHREAD::SEARCHFILE);// 从磁盘查找比较耗时，切换到处理进度页面
     m_threadSearch = new ThreadSearch(this); // todo 每次都要创建吗
     m_threadSearch->setPara(qLSelDirs, m_qLSelLabels, nLabelLogic);
     connect(m_threadSearch, &ThreadSearch::sigResult, this, &FormFileBrowser::showFilteredFile);
@@ -222,7 +248,7 @@ void FormFileBrowser::onActionTraverseSelDirsTriggered()
         QString sCurDir = ui->pageFiles->getCurDir();
         qLSelDirs.append(sCurDir);
     }
-    showProcessPage();
+    showProcessPage(RUNNINGTHREAD::TRAVERSEDIR);
     m_threadTraverseDirs = new ThreadTraverseDirs(this);
     m_threadTraverseDirs->setSelDirs(qLSelDirs);
     qRegisterMetaType<QMap<QString, QMap<QString, QStringList>>>("QMap<QString, QMap<QString, QStringList>>");
@@ -254,7 +280,20 @@ void FormFileBrowser::onRecvDirAndLabels(QMap<QString, QSet<QString>> mapDirAndL
 
 void FormFileBrowser::onRecvStopSearch()
 {
-    m_threadSearch->stopThread();
+    switch (m_nThread)
+    {
+    case SEARCHFILE:
+        m_threadSearch->stopThread();
+        break;
+    case AIADDTAG:
+        m_threadAddLabelByAI->stopThread();
+        break;
+    case TRAVERSEDIR:
+        m_threadTraverseDirs->recvStop();
+        break;
+    default:
+        break;
+    }
 }
 
 void FormFileBrowser::onRecvLabels(QString sLabels)

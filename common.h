@@ -22,6 +22,6 @@ extern QString g_sAppDir;
 
 #define SEARCH_CONFIG_FILE "config.ini"
 #define LABEL_FILE "labels.xml"
-#define LOG_FILE "FilemMrker.log"
+#define LOG_FILE "FileMarker.log"
 
 #endif // COMMON_H

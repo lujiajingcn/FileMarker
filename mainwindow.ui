@@ -74,6 +74,7 @@
     <property name="title">
      <string>文件管理</string>
     </property>
+    <addaction name="actionAddLabelbyAI"/>
     <addaction name="actionAddLabels"/>
     <addaction name="actionDelLabels"/>
    </widget>
@@ -118,6 +119,7 @@
    <attribute name="toolBarBreak">
     <bool>false</bool>
    </attribute>
+   <addaction name="actionAddLabelbyAI"/>
    <addaction name="actionAddLabels"/>
    <addaction name="actionDelLabels"/>
    <addaction name="actionSearchFilesbyLabels"/>
@@ -212,6 +214,15 @@
    </property>
    <property name="text">
     <string>设置查找条件</string>
+   </property>
+  </action>
+  <action name="actionAddLabelbyAI">
+   <property name="icon">
+    <iconset resource="resources.qrc">
+     <normaloff>:/Resources/ai.png</normaloff>:/Resources/ai.png</iconset>
+   </property>
+   <property name="text">
+    <string>AI自动生成标签</string>
    </property>
   </action>
  </widget>

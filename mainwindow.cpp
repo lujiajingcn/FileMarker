@@ -18,7 +18,7 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->dwcLabels->addToolButtonsToMenu(ui->menuLabelManage);
 
     // 将菜单栏中的动作放到【文件管理】中实现
-    ui->wFileBrowser->setActions(ui->actionAddLabels, ui->actionDelLabels, ui->actionSearchFilesbyLabels, ui->actionTraverseSelDirs, ui->actionSearchConfig);
+    ui->wFileBrowser->setActions(ui->actionAddLabelbyAI, ui->actionAddLabels, ui->actionDelLabels, ui->actionSearchFilesbyLabels, ui->actionTraverseSelDirs, ui->actionSearchConfig);
 
     // 【标签管理】中选中的标签，同步到【文件管理】中
     connect(ui->dwcLabels, &FormLabels::sendSelLabels, ui->wFileBrowser, &FormFileBrowser::onRecvSelLabels);

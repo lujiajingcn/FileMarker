@@ -44,9 +44,11 @@ SOURCES += \
         mainwindow.cpp \
         myqfilesystemmodel.cpp \
         sqliteoperation.cpp \
+        threadaddlabelbyai.cpp \
         threadsearch.cpp \
         threadtraversedirs.cpp \
         thumbnailiconprovider.cpp \
+        traversedirectory.cpp \
         utility.cpp \
         xmloperation.cpp
 
@@ -68,9 +70,11 @@ HEADERS += \
         mainwindow.h \
         myqfilesystemmodel.h \
         sqliteoperation.h \
+        threadaddlabelbyai.h \
         threadsearch.h \
         threadtraversedirs.h \
         thumbnailiconprovider.h \
+        traversedirectory.h \
         utility.h \
         welcometr.h \
         xmloperation.h

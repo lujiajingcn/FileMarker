@@ -20,5 +20,6 @@
         <file>Resources/arrow-up.png</file>
         <file>Resources/spinner.png</file>
         <file>Resources/border.png</file>
+        <file>Resources/ai.png</file>
     </qresource>
 </RCC>
