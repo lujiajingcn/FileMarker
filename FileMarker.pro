@@ -76,7 +76,6 @@ HEADERS += \
         thumbnailiconprovider.h \
         traversedirectory.h \
         utility.h \
-        welcometr.h \
         xmloperation.h
 
 FORMS += \
