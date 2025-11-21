@@ -71,6 +71,8 @@ void FormFileBrowser::setActions(QAction *aAddLabelByAI, QAction *aAddLabel, QAc
     connect(m_aSearch, &QAction::triggered, this, &FormFileBrowser::onActionSearchFilesbyLabelsTriggered);
     connect(m_aTraverse, &QAction::triggered, this, &FormFileBrowser::onActionTraverseSelDirsTriggered);
     connect(m_aSearchConfig, &QAction::triggered, this, &FormFileBrowser::onActionSearchConfigTriggered);
+
+    ui->pageFiles->setAction(aDelLabel);
 }
 
 QStringList FormFileBrowser::getSelFilePath()
@@ -144,6 +146,7 @@ void FormFileBrowser::onActionAddLabelByAITriggered()
 
     connect(m_threadAddLabelByAI, &ThreadAddLabelByAI::sendProcessInfo, this, &FormFileBrowser::recvProcessInfo);
     connect(m_threadAddLabelByAI, &ThreadAddLabelByAI::sendFinish, this, &FormFileBrowser::onRecvAddLabelByAIFinish);
+    connect(m_threadAddLabelByAI, &ThreadAddLabelByAI::sendLabels, this, &FormFileBrowser::onRecvLabelsGeneratedByAI);
 
     m_threadAddLabelByAI->setDirs(qLSelDirs);
 
@@ -153,6 +156,11 @@ void FormFileBrowser::onActionAddLabelByAITriggered()
 void FormFileBrowser::onRecvAddLabelByAIFinish()
 {
     showFilesWidget();
+}
+
+void FormFileBrowser::onRecvLabelsGeneratedByAI(QString sLabels)
+{
+    emit sendLabelsGeneratedByAI(sLabels);
 }
 
 /**

@@ -51,6 +51,8 @@ protected:
 public slots:
     void onRecvLabels(QString sLabels);
 
+    void onRecvLabelsGeneratedByAI(QString sLabels);
+
 private slots:
     void on_actionAdd_triggered();
 

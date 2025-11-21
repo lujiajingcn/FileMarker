@@ -40,12 +40,52 @@ def extract_text(file_path):
 
 def tag_text_qwen(text: str):
     prompt = f"""
-请为下面的文件内容生成 3 个标签，标签要简短、概括核心内容，并用英文逗号分隔：
+请为下面的文件内容生成3个中文标签，标签要简短、概括核心内容，并用,分隔：
 {text[:4000]}
 """
 
     payload = {
         "model": "qwen2.5:7b",
+        "prompt": prompt
+    }
+
+    # Ollama 生成是多行 JSON，每行一个对象，因此 stream=True
+    r = requests.post("http://localhost:11434/api/generate", json=payload, stream=True)
+
+    full_resp = ""
+
+    # 逐行读取模型生成的 response 字段
+    for line in r.iter_lines():
+        if not line:
+            continue
+
+        try:
+            obj = json.loads(line.decode("utf-8"))
+        except:
+            continue  # 不是 JSON 的行跳过
+
+        # Ollama 每个 JSON 都可能带 "response" 字段
+        if "response" in obj:
+            full_resp += obj["response"]
+
+    # 清理格式，转换为列表
+    tags = [tag.strip() for tag in full_resp.split(",") if tag.strip()]
+    return tags
+
+def tag_image_qwen(text: str):
+    ext = file_path.lower()
+
+    # 文本文件
+    if not ext.endswith(".png", ".jpg", ".jpeg"):
+        return ""
+
+    prompt = f"""
+请为下面的文件生成3个中文标签，标签要简短、概括核心内容，并用,分隔：
+{text[:4000]}
+"""
+
+    payload = {
+        "model": "qwen2.5vl:7b",
         "prompt": prompt
     }
 
@@ -79,7 +119,8 @@ def main():
         tags = tag_text_qwen(text)
         print(json.dumps({"file": fp, "tags":tags}))
     else:
-        print("跳过（无法解析）：", fp)
+        tags = tag_image_qwen(fp)
+        print(json.dumps({"file": fp, "tags":tags}))
 
 if __name__ == "__main__":
     main()

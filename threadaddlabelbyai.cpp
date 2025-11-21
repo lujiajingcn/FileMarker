@@ -48,8 +48,6 @@ bool ThreadAddLabelByAI::addTag(const QFileInfo& info)
 
     QString sFilePath = info.filePath();
 
-    emit sendProcessInfo(sFilePath);
-
     QString sScript = g_sAppDir + "/extract_and_tag.py";
     QProcess proc;
     QStringList args;
@@ -85,6 +83,8 @@ bool ThreadAddLabelByAI::addTag(const QFileInfo& info)
         doc = QJsonDocument::fromJson(s.toUtf8(), &perr);
     }
 
+    QStringList qLLabels;
+    QString sLabels;
     if (perr.error == QJsonParseError::NoError && doc.isObject())
     {
         QJsonObject obj = doc.object();
@@ -94,6 +94,12 @@ bool ThreadAddLabelByAI::addTag(const QFileInfo& info)
             for (auto v : arr)
             {
                 ADSOperation::writeADS(sFilePath, v.toString(), "");
+                qLLabels.append(v.toString());
+            }
+            sLabels = qLLabels.join(",");
+            if(!sLabels.isEmpty())
+            {
+                emit sendLabels(sLabels);
             }
         }
         if (obj.contains("summary"))
@@ -101,6 +107,9 @@ bool ThreadAddLabelByAI::addTag(const QFileInfo& info)
             QString sSummary = obj.value("summary").toString();
         }
     }
+
+    QString sProcessInfo = QString("%1      %2").arg(sFilePath).arg(sLabels);
+    emit sendProcessInfo(sProcessInfo);
 
     return true;
 }

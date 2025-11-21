@@ -428,3 +428,35 @@ void FormLabels::onRecvLabels(QString sLabels)
         }
     }
 }
+
+void FormLabels::onRecvLabelsGeneratedByAI(QString sLabels)
+{
+    bool bAlreadyHaveItem = false;
+    QStandardItem *itemLabelsGeneratedByAI = nullptr;
+    int nRowCount = m_modelAllLabels->rowCount();
+    for(int i = 0; i < nRowCount; i++)
+    {
+        QString sLabelName = m_modelAllLabels->item(i)->text();
+        if(QString::compare(sLabelName, LABEL_NAME_AI) == 0)
+        {
+            itemLabelsGeneratedByAI = m_modelAllLabels->item(i);
+            bAlreadyHaveItem = true;
+        }
+    }
+    if(!bAlreadyHaveItem)
+    {
+        itemLabelsGeneratedByAI = new QStandardItem(LABEL_NAME_AI);
+        m_modelAllLabels->appendRow(itemLabelsGeneratedByAI);
+    }
+
+    QStringList qLLabels = sLabels.split(",");
+    foreach (QString sLabel , qLLabels)
+    {
+        if(!m_setLabels.contains(sLabel))
+        {
+            QStandardItem *newItem = new QStandardItem(sLabel);
+            itemLabelsGeneratedByAI->appendRow(newItem);
+            m_setLabels.insert(sLabel);
+        }
+    }
+}

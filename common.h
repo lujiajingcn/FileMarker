@@ -24,4 +24,6 @@ extern QString g_sAppDir;
 #define LABEL_FILE "labels.xml"
 #define LOG_FILE "FileMarker.log"
 
+#define LABEL_NAME_AI "AI自动生成的标签"
+
 #endif // COMMON_H

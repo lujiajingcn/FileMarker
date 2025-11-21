@@ -50,6 +50,7 @@ signals:
     void sendNavigationClicked(const QModelIndex &index);
     void sendDirAndLabels(QMap<QString, QSet<QString>> mapDirAndLabel);
     void sendLabels(QString sLabels);
+    void sendLabelsGeneratedByAI(QString sLabels);
 
 public:
     void showProcessPage(RUNNINGTHREAD rt);
@@ -67,6 +68,8 @@ public slots:
     void onRecvSelLabels(QStringList qLSelLabels);
 
     void onRecvAddLabelByAIFinish();
+
+    void onRecvLabelsGeneratedByAI(QString sLabels);
 
 private slots:
     void on_btnStop_clicked();

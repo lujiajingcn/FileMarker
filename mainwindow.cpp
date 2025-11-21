@@ -33,6 +33,9 @@ MainWindow::MainWindow(QWidget *parent) :
     // 编辑后的标签由英文逗号分隔，形如 照片,故宫,2025
     // todo 传递路径过长，应该是结构不合理，后续改进
     connect(ui->wFileBrowser, &FormFileBrowser::sendLabels, ui->dwcLabels, &FormLabels::onRecvLabels);
+
+    // AI根据文件信息自动生成的标签，添加到【标签管理】中的“AI自动生成标签”
+    connect(ui->wFileBrowser, &FormFileBrowser::sendLabelsGeneratedByAI, ui->dwcLabels, &FormLabels::onRecvLabelsGeneratedByAI);
 }
 
 MainWindow::~MainWindow()

@@ -29,6 +29,7 @@ signals:
 //    void sendResult(const FileResult& res);
     void sendFinish();
     void sendProcessInfo(QString sProcessedFilePath);
+    void sendLabels(QString sLabels);
 
 protected:
     void run();
