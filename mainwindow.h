@@ -26,10 +26,8 @@ private slots:
 
     void on_actionAuthor_triggered();
 
-
 private:
     QFile                   m_logFile;
-//    IntroductionWidget      *wIntroduction;
 
     Ui::MainWindow *ui;
 };
