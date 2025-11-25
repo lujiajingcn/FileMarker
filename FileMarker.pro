@@ -32,6 +32,7 @@ SOURCES += \
         dlgauthor.cpp \
         dlglabel.cpp \
         dlgsearchconfig.cpp \
+        editablefiledelegate.cpp \
         formcurdirlabels.cpp \
         formfilebrowser.cpp \
         formfilenavigation.cpp \
@@ -59,6 +60,7 @@ HEADERS += \
         dlgauthor.h \
         dlglabel.h \
         dlgsearchconfig.h \
+        editablefiledelegate.h \
         formcurdirlabels.h \
         formfilebrowser.h \
         formfilenavigation.h \

@@ -55,10 +55,32 @@ void ADSOperation::writeADS(const QString &sFilePath, const QString &sStreamName
     if (hFile != INVALID_HANDLE_VALUE)
     {
         DWORD bytesWritten;
-        if (WriteFile(hFile, sData.toUtf8().constData(), sData.toUtf8().length(), &bytesWritten, NULL))
+        if (WriteFile(hFile, sData.toUtf8().constData(), sData.toUtf8().length(), &bytesWritten, NULL) == FALSE)
         {
-            QString sErrorMsg = QString("写入文件%1附属的ads失败").arg(sFullFileName);
-            qCritical("%s", sErrorMsg.toStdString().c_str());
+            DWORD dwError = GetLastError();
+            LPWSTR lpMsgBuf = NULL;
+            DWORD dwChars = FormatMessageW(
+                    FORMAT_MESSAGE_ALLOCATE_BUFFER |
+                    FORMAT_MESSAGE_FROM_SYSTEM |
+                    FORMAT_MESSAGE_IGNORE_INSERTS,
+                    NULL,
+                    dwError,
+                    MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+                    (LPWSTR)&lpMsgBuf, // 注意这里接收的是 LPWSTR
+                    0,
+                    NULL
+                );
+            if (dwChars > 0 && lpMsgBuf != NULL) {
+                        // 打印错误代码和错误描述
+                printf("WriteFile failed! Error Code: %lu\n", dwError);
+                printf("Error Description: %s\n", lpMsgBuf);
+
+                QString sErrorMsg = QString("写入文件%1附属的ads失败，错误码：%1,错误描述：%2").arg(dwError).arg(QString::fromWCharArray(lpMsgBuf));
+                qCritical("%s", sErrorMsg.toStdString().c_str());
+
+                // 释放 FormatMessage 分配的内存
+                LocalFree(lpMsgBuf);
+            }
         }
         CloseHandle(hFile);
     }

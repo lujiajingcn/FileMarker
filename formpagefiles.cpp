@@ -7,6 +7,7 @@
 
 #include "adsoperation.h"
 #include "thumbnailiconprovider.h"
+#include "editablefiledelegate.h"
 
 FormPageFiles::FormPageFiles(QWidget *parent) :
     QWidget(parent),
@@ -26,9 +27,6 @@ FormPageFiles::FormPageFiles(QWidget *parent) :
 
     connect(m_modelFiles, &QFileSystemModel::directoryLoaded, this, &FormPageFiles::onDirectoryLoaded);
     connect(m_modelFiles, &MyQFileSystemModel::sendLabels, this, &FormPageFiles::onRecvLabels);
-
-    connect(m_tvFiles->selectionModel(), &QItemSelectionModel::selectionChanged, this, &FormPageFiles::onTvFilesSelectChanged);
-    connect(m_lstFiles->selectionModel(), &QItemSelectionModel::selectionChanged, this, &FormPageFiles::onLstFilesSelectChanged);
 }
 
 FormPageFiles::~FormPageFiles()
@@ -54,6 +52,7 @@ void FormPageFiles::onDeleteLabels()
     {
         ADSOperation::deleteADS(sSelFilePath);
     }
+    on_btnRefresh_clicked();
 }
 
 void FormPageFiles::initDetailFileList()
@@ -92,17 +91,30 @@ void FormPageFiles::initThumbnailFileList()
     ThumbnailIconProvider *iconProvider = new ThumbnailIconProvider();
     m_modelFiles->setIconProvider(iconProvider);
 
+    m_modelFiles->setReadOnly(false);
+
     // 创建列表视图
     m_lstFiles->setModel(m_modelFiles);
 
+    // QTreeView和QListView共享同一个选择模型
+    QItemSelectionModel *selectionModel = m_tvFiles->selectionModel();
+    m_lstFiles->setSelectionModel(selectionModel);
+
     // 设置视图属性以显示缩略图
     m_lstFiles->setViewMode(QListView::IconMode);    // 图标模式
-    m_lstFiles->setIconSize(QSize(128, 128));        // 设置图标大小
-    m_lstFiles->setGridSize(QSize(140, 140));        // 设置网格大小，为图标留出空间
+    m_lstFiles->setIconSize(QSize(ICON_SIZE, ICON_SIZE));        // 设置图标大小
+    m_lstFiles->setGridSize(QSize(GRID_SIZE, GRID_SIZE));        // 设置网格大小，为图标留出空间
     m_lstFiles->setResizeMode(QListView::Adjust);    // 自动调整布局
     m_lstFiles->setMovement(QListView::Static);      // 禁止拖动
     m_lstFiles->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_lstFiles->setContextMenuPolicy(Qt::CustomContextMenu);
+
+    m_lstFiles->setEditTriggers(QAbstractItemView::DoubleClicked | QAbstractItemView::EditKeyPressed);
+
+    EditableDelegate *delegate = new EditableDelegate(this);
+    m_lstFiles->setItemDelegate(delegate);
+
+    connect(delegate, &EditableDelegate::sendDblClick, this, &FormPageFiles::recvDblClick);
 
     // 设置根索引为当前目录
     m_lstFiles->setRootIndex(m_modelFiles->index(""));
@@ -149,7 +161,7 @@ void FormPageFiles::updateToolButtons()
 QStringList FormPageFiles::getSelFilePath()
 {
     QStringList selFilePath;
-    QModelIndexList selected = m_tvFiles->selectionModel()->selectedRows();
+    QModelIndexList selected = m_tvFiles->selectionModel()->selectedIndexes();
     QString sSelect;
     for (QModelIndexList::const_iterator cit = selected.begin(); cit != selected.end(); ++cit)
     {
@@ -256,6 +268,7 @@ void FormPageFiles::on_btnRefresh_clicked()
     QModelIndex curIndex = m_modelFiles->index(m_sCurDir);
     m_modelFiles->setRootPath("");
     m_tvFiles->setRootIndex(curIndex);
+    m_lstFiles->viewport()->update();
 }
 
 void FormPageFiles::recvGotoFile(QString sFilePath)
@@ -283,10 +296,10 @@ void FormPageFiles::on_tbThumbnail_clicked()
     ui->stackedWidget->setCurrentIndex(FILEPAGE::THUMBNAIL);
 }
 
-void FormPageFiles::on_listView_doubleClicked(const QModelIndex &index)
-{
-    onDoubleClicked(index);
-}
+//void FormPageFiles::on_listView_doubleClicked(const QModelIndex &index)
+//{
+//    onDoubleClicked(index);
+//}
 
 void FormPageFiles::onDoubleClicked(const QModelIndex &index)
 {
@@ -310,37 +323,6 @@ void FormPageFiles::bothSetRootIndex(const QModelIndex &index)
     m_lstFiles->setRootIndex(index);
 }
 
-void FormPageFiles::onTvFilesSelectChanged(const QItemSelection &selected, const QItemSelection &deselected)
-{
-    Q_UNUSED(deselected)
-
-    QModelIndexList indexes = selected.indexes();
-    QItemSelection selection;
-    foreach (const QModelIndex &index, indexes)
-    {
-        // 添加多个不连续的索引到选择中
-        selection.select(index, index);  // 单个索引
-    }
-
-//    m_lstFiles->selectionModel()->clearSelection();// todo 添加该语句崩溃
-    m_lstFiles->selectionModel()->select(selection, QItemSelectionModel::Select);
-}
-
-void FormPageFiles::onLstFilesSelectChanged(const QItemSelection &selected, const QItemSelection &deselected)
-{
-    Q_UNUSED(deselected)
-
-    QModelIndexList indexes = selected.indexes();
-    QItemSelection selection;
-    foreach (const QModelIndex &index, indexes)
-    {
-        // 添加多个不连续的索引到选择中
-        selection.select(index, index);  // 单个索引
-    }
-//    m_tvFiles->selectionModel()->clearSelection(); // todo 添加该语句崩溃
-    m_tvFiles->selectionModel()->select(selection, QItemSelectionModel::Select);
-}
-
 void FormPageFiles::on_listView_customContextMenuRequested(const QPoint &pos)
 {
     onCustomContextMenuRequested(pos);
@@ -349,4 +331,9 @@ void FormPageFiles::on_listView_customContextMenuRequested(const QPoint &pos)
 void FormPageFiles::onRecvLabels(QString sLabels)
 {
     emit sendLabels(sLabels);
+}
+
+void FormPageFiles::recvDblClick(const QModelIndex &index)
+{
+    onDoubleClicked(index);
 }

@@ -100,15 +100,11 @@ private slots:
 
     void on_tvFiles_doubleClicked(const QModelIndex &index);
 
-    void on_listView_doubleClicked(const QModelIndex &index);
-
-    void onTvFilesSelectChanged(const QItemSelection &selected, const QItemSelection &deselected);
-
-    void onLstFilesSelectChanged(const QItemSelection &selected, const QItemSelection &deselected);
-
     void on_listView_customContextMenuRequested(const QPoint &pos);
 
     void onRecvLabels(QString sLabels);
+
+    void recvDblClick(const QModelIndex &index);
 
 private:
 

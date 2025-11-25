@@ -26,4 +26,7 @@ extern QString g_sAppDir;
 
 #define LABEL_NAME_AI "AI自动生成的标签"
 
+#define ICON_SIZE 128   // 以缩略图方式显示文件时的图标大小
+#define GRID_SIZE 200   // 以缩略图方式显示文件时的格子大小
+
 #endif // COMMON_H
