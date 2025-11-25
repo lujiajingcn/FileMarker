@@ -185,6 +185,10 @@ QStringList FormPageFiles::getSelDirs()
             qLSelDirs << sFilePath;
         }
     }
+    if(qLSelDirs.isEmpty())
+    {
+        qLSelDirs << m_sCurDir;
+    }
     return qLSelDirs;
 }
 
