@@ -71,12 +71,13 @@ void FormPageFiles::initDetailFileList()
 
     // 设置表头
     // 拷贝自Qt源码的Src\qtbase\src\widgets\dialogs\qfiledialg.cpp
+    // 根据实际数据稍作修改，增加了列的宽度
     QHeaderView *treeHeader = m_tvFiles->header();
     QFontMetrics fm(m_tvFiles->font());
     treeHeader->resizeSection(0, fm.horizontalAdvance(QLatin1String("wwwwwwwwwwwwwwwwwwwwwwwwww")));
-    treeHeader->resizeSection(1, fm.horizontalAdvance(QLatin1String("128.88 GB")));
-    treeHeader->resizeSection(2, fm.horizontalAdvance(QLatin1String("mp3Folder")));
-    treeHeader->resizeSection(3, fm.horizontalAdvance(QLatin1String("10/29/81 02:02PM")));
+    treeHeader->resizeSection(1, fm.horizontalAdvance(QLatin1String("128.88 GB")) + 15);
+    treeHeader->resizeSection(2, fm.horizontalAdvance(QLatin1String("mp3Folder")) + 35);
+    treeHeader->resizeSection(3, fm.horizontalAdvance(QLatin1String("10/29/81 02:02PM")) + 5);
     treeHeader->resizeSection(4, fm.horizontalAdvance(QLatin1String("10/29/81 02:02PM")));
     treeHeader->setContextMenuPolicy(Qt::ActionsContextMenu);
 

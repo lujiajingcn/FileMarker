@@ -27,6 +27,9 @@ FormFileNavigation::FormFileNavigation(QWidget *parent) :
     m_tvNavigation->header()->setSortIndicator(0,Qt::AscendingOrder);
     m_tvNavigation->setSortingEnabled(true);
     m_tvNavigation->sortByColumn(0, Qt::AscendingOrder);
+
+    // 隐藏表头
+    m_tvNavigation->header()->hide();
 }
 
 FormFileNavigation::~FormFileNavigation()
