@@ -219,7 +219,6 @@ void FormFileBrowser::onActionSearchFilesbyLabelsTriggered()
     }
 
     SearchConfig sc = ConfigOperation::readSearchConfig(g_sAppDir + "/" + SEARCH_CONFIG_FILE);
-    int nLabelLogic = labelLogic::AND;
 
     if(sc.bFromCache)
     {
@@ -238,7 +237,7 @@ void FormFileBrowser::onActionSearchFilesbyLabelsTriggered()
 
     showProcessPage(RUNNINGTHREAD::SEARCHFILE);// 从磁盘查找比较耗时，切换到处理进度页面
     m_threadSearch = new ThreadSearch(this); // todo 每次都要创建吗
-    m_threadSearch->setPara(qLSelDirs, m_qLSelLabels, nLabelLogic);
+    m_threadSearch->setPara(qLSelDirs, m_qLSelLabels, sc.logic);
     connect(m_threadSearch, &ThreadSearch::sigResult, this, &FormFileBrowser::showFilteredFile);
     connect(m_threadSearch, &ThreadSearch::sendProcessInfo, this, &FormFileBrowser::recvProcessInfo);
     m_threadSearch->start();

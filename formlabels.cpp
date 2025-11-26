@@ -446,6 +446,7 @@ void FormLabels::onRecvLabelsGeneratedByAI(QString sLabels)
     if(!bAlreadyHaveItem)
     {
         itemLabelsGeneratedByAI = new QStandardItem(LABEL_NAME_AI);
+        itemLabelsGeneratedByAI->setEditable(false);
         m_modelAllLabels->appendRow(itemLabelsGeneratedByAI);
     }
 

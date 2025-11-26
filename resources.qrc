@@ -8,7 +8,6 @@
         <file>Resources/204-link.png</file>
         <file>Resources/cog.png</file>
         <file>Resources/stop.png</file>
-        <file>Resources/breaklink.png</file>
         <file>Resources/addchildnode.png</file>
         <file>Resources/addnode.png</file>
         <file>Resources/deletenode.png</file>
@@ -21,5 +20,6 @@
         <file>Resources/spinner.png</file>
         <file>Resources/border.png</file>
         <file>Resources/ai.png</file>
+        <file>Resources/breaklink.png</file>
     </qresource>
 </RCC>
