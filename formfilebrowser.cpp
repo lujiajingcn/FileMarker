@@ -98,6 +98,7 @@ void FormFileBrowser::showFilesWidget()
 
 void FormFileBrowser::showFilteredFile(QStringList qLFilteredFiles)
 {
+    setActionState(SEARCH_FINISH);
     ui->stackedWidget->setCurrentWidget(ui->pageFilteredFiles);
     emit sendShowFilteredFiles(qLFilteredFiles);
 }
@@ -138,6 +139,7 @@ void FormFileBrowser::on_btnStop_clicked()
 
 void FormFileBrowser::onActionAddLabelByAITriggered()
 {
+    setActionState(ADDTAGBYAI_START);
     showProcessPage(RUNNINGTHREAD::AIADDTAG);
 
     QStringList qLSelDirs = getSelDirs();
@@ -156,6 +158,7 @@ void FormFileBrowser::onActionAddLabelByAITriggered()
 void FormFileBrowser::onRecvAddLabelByAIFinish()
 {
     showFilesWidget();
+    setActionState(ADDTAGBYAI_FINISH);
 }
 
 void FormFileBrowser::onRecvLabelsGeneratedByAI(QString sLabels)
@@ -206,34 +209,30 @@ void FormFileBrowser::onActionAddLabelsTriggered()
 void FormFileBrowser::onActionSearchFilesbyLabelsTriggered()
 {
     QStringList qLSelDirs = getSelDirs();
-    if(qLSelDirs.count() == 0)
-    {
+    if(qLSelDirs.count() == 0){
         QString sCurDir = ui->pageFiles->getCurDir();
         qLSelDirs.append(sCurDir);
     }
 
-    if(m_qLSelLabels.count() == 0)
-    {
+    if(m_qLSelLabels.count() == 0){
         QMessageBox::information(this, "提示", "未选中标签！");
         return;
     }
 
     SearchConfig sc = ConfigOperation::readSearchConfig(g_sAppDir + "/" + SEARCH_CONFIG_FILE);
 
-    if(sc.bFromCache)
-    {
+    if(sc.bFromCache){
         QStringList qLFilePaths, qLNotHitedDirs;
         m_sqlOperation->searchFilesByLabels(qLSelDirs, m_qLSelLabels, sc.logic, qLFilePaths, qLNotHitedDirs);
-        if(qLNotHitedDirs.count() == 0) // 查找的文件夹全部在缓存数据库中存在，则显示查找结果后结束。
-        {
+        if(qLNotHitedDirs.count() == 0) { // 查找的文件夹全部在缓存数据库中存在，则显示查找结果后结束。
             showFilteredFile(qLFilePaths);
             return;
-        }
-        else // 查找的文件夹有部分未在缓存数据库中，不在的文件夹从磁盘查找
-        {
+        } else { // 查找的文件夹有部分未在缓存数据库中，不在的文件夹从磁盘查找
             qLSelDirs = qLNotHitedDirs;
         }
     }
+
+    setActionState(SEARCH_START);
 
     showProcessPage(RUNNINGTHREAD::SEARCHFILE);// 从磁盘查找比较耗时，切换到处理进度页面
     m_threadSearch = new ThreadSearch(this); // todo 每次都要创建吗
@@ -249,19 +248,22 @@ void FormFileBrowser::onActionSearchFilesbyLabelsTriggered()
  */
 void FormFileBrowser::onActionTraverseSelDirsTriggered()
 {
-    QStringList qLSelDirs = getSelDirs();
-    if(qLSelDirs.count() == 0)
-    {
-        QString sCurDir = ui->pageFiles->getCurDir();
-        qLSelDirs.append(sCurDir);
+    setActionState(TRAVERSER_START);
+
+    QStringList selDirs = getSelDirs();
+    if(selDirs.count() == 0){
+        QString curDir = ui->pageFiles->getCurDir();
+        selDirs.append(curDir);
     }
+
     showProcessPage(RUNNINGTHREAD::TRAVERSEDIR);
+
     m_threadTraverseDirs = new ThreadTraverseDirs(this);
-    m_threadTraverseDirs->setSelDirs(qLSelDirs);
+    m_threadTraverseDirs->setSelDirs(selDirs);
     qRegisterMetaType<QMap<QString, QMap<QString, QStringList>>>("QMap<QString, QMap<QString, QStringList>>");
-    connect(m_threadTraverseDirs, &ThreadTraverseDirs::sigResult, this, &FormFileBrowser::onRecvTraverseResult);
-    connect(this, &FormFileBrowser::sendStop, m_threadTraverseDirs, &ThreadTraverseDirs::recvStop);
-    connect(m_threadTraverseDirs, &ThreadTraverseDirs::sendDirAndLabel, this, &FormFileBrowser::onRecvDirAndLabels);
+    connect(m_threadTraverseDirs, &ThreadTraverseDirs::sendResult, this, &FormFileBrowser::onRecvTraverseResult);
+    connect(this, &FormFileBrowser::sendStop, m_threadTraverseDirs, &ThreadTraverseDirs::stopThread);
+    connect(m_threadTraverseDirs, &ThreadTraverseDirs::sendDirAndTags, this, &FormFileBrowser::onRecvDirAndTags);
 
     connect(m_threadTraverseDirs, &ThreadTraverseDirs::sendProcessInfo, this, &FormFileBrowser::recvProcessInfo);
     m_threadTraverseDirs->start();
@@ -272,6 +274,7 @@ void FormFileBrowser::onRecvTraverseResult(QMap<QString, QMap<QString, QStringLi
     m_sqlOperation->clearTable(TABLE_NAME_FILEPATH_LABEL);
     m_sqlOperation->insertRecord(mapDirAndmapHostFilesAndLabel);
     showFilesWidget();
+    setActionState(TRAVERER_FINISH);
 }
 
 void FormFileBrowser::onActionSearchConfigTriggered()
@@ -280,7 +283,7 @@ void FormFileBrowser::onActionSearchConfigTriggered()
     dlg.exec();
 }
 
-void FormFileBrowser::onRecvDirAndLabels(QMap<QString, QSet<QString>> mapDirAndLabel)
+void FormFileBrowser::onRecvDirAndTags(QMap<QString, QSet<QString>> mapDirAndLabel)
 {
     emit sendDirAndLabels(mapDirAndLabel);
 }
@@ -296,7 +299,7 @@ void FormFileBrowser::onRecvStopSearch()
         m_threadAddLabelByAI->stopThread();
         break;
     case TRAVERSEDIR:
-        m_threadTraverseDirs->recvStop();
+        m_threadTraverseDirs->stopThread();
         break;
     default:
         break;
@@ -326,4 +329,25 @@ void FormFileBrowser::onRecvLabels(QString sLabels)
 
     if(!sLabels.isEmpty())
         emit sendLabels(sLabels);
+}
+
+// 设置菜单和工具栏中动作的状态（可用/不可用）
+void FormFileBrowser::setActionState(OPERATION op)
+{
+    switch (op) {
+    case ADDTAGBYAI_START:
+    case SEARCH_START:
+    case TRAVERSER_START:
+        m_aAddLabelByAI->setEnabled(false);
+        m_aSearch->setEnabled(false);
+        m_aTraverse->setEnabled(false);
+        break;
+    case ADDTAGBYAI_FINISH:
+    case SEARCH_FINISH:
+    case TRAVERER_FINISH:
+        m_aAddLabelByAI->setEnabled(true);
+        m_aSearch->setEnabled(true);
+        m_aTraverse->setEnabled(true);
+        break;
+    }
 }

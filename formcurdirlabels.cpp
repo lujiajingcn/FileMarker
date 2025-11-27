@@ -20,7 +20,12 @@ void FormCurDirLabels::onRecvDirAndLabels(QMap<QString, QSet<QString>> mapDirAnd
 {
     for (QMap<QString, QSet<QString>>::const_iterator cItr = mapDirAndLabels.begin(); cItr != mapDirAndLabels.end(); cItr++)
     {
-        QStandardItem *itemDir = new QStandardItem(cItr.key());
+        QString dir = cItr.key();
+        QStandardItem *item = getItem(dir);
+        if(nullptr != item)
+            m_modelLabels->removeRow(item->row());
+
+        QStandardItem *itemDir = new QStandardItem(dir);
         m_modelLabels->appendRow(itemDir);
 
         QSet<QString> setLabels = cItr.value();
@@ -42,4 +47,15 @@ void FormCurDirLabels::on_treeView_clicked(const QModelIndex &index)
         qLLabels<<m_modelLabels->itemFromIndex(index)->text();
     }
     sendSelLabels(qLLabels);
+}
+
+QStandardItem *FormCurDirLabels::getItem(QString text)
+{
+    int rowCount = m_modelLabels->rowCount();
+    for(int i = 0; i < rowCount; i++){
+        QString itemText = m_modelLabels->item(i)->text();
+        if(QString::compare(text, itemText) == 0)
+            return m_modelLabels->item(i);
+    }
+    return nullptr;
 }

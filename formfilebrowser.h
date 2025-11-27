@@ -24,6 +24,16 @@ enum RUNNINGTHREAD
     AIADDTAG
 };
 
+enum OPERATION
+{
+    ADDTAGBYAI_START,
+    ADDTAGBYAI_FINISH,
+    SEARCH_START,
+    SEARCH_FINISH,
+    TRAVERSER_START,
+    TRAVERER_FINISH
+};
+
 class FormFileBrowser : public QWidget
 {
     Q_OBJECT
@@ -90,11 +100,14 @@ private slots:
 
     void onActionSearchConfigTriggered();
 
-    void onRecvDirAndLabels(QMap<QString, QSet<QString>> mapDirAndLabel);
+    void onRecvDirAndTags(QMap<QString, QSet<QString>> mapDirAndLabel);
 
     void onRecvStopSearch();
 
     void onRecvLabels(QString sLabels);
+
+protected:
+    void setActionState(OPERATION op);
 
 private:
     Ui::FormFileBrowser *ui;

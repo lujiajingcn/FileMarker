@@ -13,29 +13,30 @@
 #include <QMap>
 #include <QSet>
 
+#include "common.h"
+
 class ThreadTraverseDirs : public QThread
 {
     Q_OBJECT
 public:
     explicit ThreadTraverseDirs(QObject *parent = nullptr);
-    void setSelDirs(QStringList qLSelDirs);
-    void recvStop();
+
+    void setSelDirs(QStringList selDirs);
+    void stopThread();
 
 protected:
     void run();
 
-    void searchDirectory(const QString& sDirPath, QMap<QString, QStringList> &mapFilePathAndLabel, QSet<QString> &setLabels);
-    void findADSName(const QString &sFilePath, QMap<QString, QStringList> &mapFilePathAndLabel, QSet<QString> &setLabels);
+    void searchDirectory(const QString& sDirPath, FILE_TAGS &fileTags, QSet<QString> &setTags);
 
 signals:
-    void sigState(bool bIsStop);
-    void sigResult(QMap<QString, QMap<QString, QStringList>> mapDirAndmapHostFilesAndLabel);
-    void sendDirAndLabel(QMap<QString, QSet<QString>> mapDirAndLabel);
+    void sendResult(QMap<QString, FILE_TAGS> dirAndFileTags);
+    void sendDirAndTags(QMap<QString, QSet<QString>> dirAndTags);
     void sendProcessInfo(QString sProcessedFilePath);
 
 private:
-    bool m_bIsStop;
-    QStringList m_qLSelDirs;
+    bool        m_isStop;
+    QStringList m_selDirs;
 };
 
 #endif // THREADTRAVERSEDIRS_H

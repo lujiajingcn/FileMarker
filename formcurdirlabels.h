@@ -34,10 +34,12 @@ private slots:
     void on_treeView_clicked(const QModelIndex &index);
 
 private:
+    // 在最顶层找到指定内容的节点
+    QStandardItem *getItem(QString text);
+
     Ui::FormCurDirLabels *ui;
 
     QStandardItemModel      *m_modelLabels;
-
 };
 
 #endif // FORMCURDIRLABELS_H

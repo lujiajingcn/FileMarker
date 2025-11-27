@@ -29,4 +29,6 @@ extern QString g_sAppDir;
 #define ICON_SIZE 128   // 以缩略图方式显示文件时的图标大小
 #define GRID_SIZE 200   // 以缩略图方式显示文件时的格子大小
 
+typedef QMap<QString, QStringList> FILE_TAGS;   // 文件和该文件的标签
+
 #endif // COMMON_H

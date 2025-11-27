@@ -1,102 +1,74 @@
 #include "threadtraversedirs.h"
 #include "adsoperation.h"
 #include <QDir>
-#include <windows.h>
-#include "common.h"
-#include <QDebug>
 #include <QCoreApplication>
-#include "utility.h"
 
 ThreadTraverseDirs::ThreadTraverseDirs(QObject *parent) : QThread(parent)
 {
     qRegisterMetaType<QMap<QString, QSet<QString>>>();
 
-    m_bIsStop = false;
+    m_isStop = false;
+
     connect(this, &ThreadTraverseDirs::finished, this, &QObject::deleteLater);
 }
 
-void ThreadTraverseDirs::recvStop()
+void ThreadTraverseDirs::stopThread()
 {
-    m_bIsStop = true;
+    m_isStop = true;
 }
 
-void ThreadTraverseDirs::setSelDirs(QStringList qLSelDirs)
+void ThreadTraverseDirs::setSelDirs(QStringList selDirs)
 {
-    m_qLSelDirs = qLSelDirs;
+    m_selDirs = selDirs;
 }
 
 void ThreadTraverseDirs::run()
 {
-    QMap<QString, QMap<QString, QStringList>> mapDirAndmapHostFilesAndLabel;
+    QMap<QString, FILE_TAGS> dirAndFileTags;
     QMap<QString, QSet<QString>> mapDirAndLabel;
-    foreach(QString sSelDir, m_qLSelDirs)
-    {
-        QMap<QString, QStringList> mapFilePathAndLabel;
+
+    foreach(QString selDir, m_selDirs){
+        FILE_TAGS fileTags;
         QSet<QString> setLabels;
-        searchDirectory(sSelDir, mapFilePathAndLabel, setLabels);
-        mapDirAndmapHostFilesAndLabel[sSelDir] = mapFilePathAndLabel;
-        mapDirAndLabel[sSelDir] = setLabels;
+
+        searchDirectory(selDir, fileTags, setLabels);
+
+        dirAndFileTags[selDir] = fileTags;
+        if(setLabels.count() != 0)
+            mapDirAndLabel[selDir] = setLabels;
     }
-    emit sigResult(mapDirAndmapHostFilesAndLabel);
-    emit sendDirAndLabel(mapDirAndLabel);
+
+    emit sendResult(dirAndFileTags);
+    emit sendDirAndTags(mapDirAndLabel);
 }
 
-void ThreadTraverseDirs::searchDirectory(const QString& sDirPath, QMap<QString, QStringList> &mapFilePathAndLabel, QSet<QString> &setLabels)
+void ThreadTraverseDirs::searchDirectory(const QString& sDirPath, FILE_TAGS &fileTags, QSet<QString> &setTags)
 {
-    if(m_bIsStop)
-    {
+    if(m_isStop)
         return;
-    }
+
     QDir dir(sDirPath);
     if (!dir.exists())
-    {
         return;
-    }
 
     QFileInfoList fileInfoList = dir.entryInfoList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot);
-    for (const QFileInfo& fileInfo : fileInfoList)
-    {
-        if(m_bIsStop)
-        {
+    for (const QFileInfo& fileInfo : fileInfoList){
+        if(m_isStop)
             return;
-        }
-        QString sFilePath = fileInfo.absoluteFilePath();
-        findADSName(sFilePath, mapFilePathAndLabel, setLabels);
-        emit sendProcessInfo(sFilePath);
-        QCoreApplication::processEvents();
-        if (fileInfo.isDir())
-        {
-            searchDirectory(sFilePath, mapFilePathAndLabel, setLabels);
-        }
-    }
-}
 
-void ThreadTraverseDirs::findADSName(const QString &sFilePath, QMap<QString, QStringList> &mapFilePathAndLabel, QSet<QString> &setLabels)
-{
-    HANDLE hFile = CreateFile(sFilePath.toStdWString().c_str(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
-    if (hFile != INVALID_HANDLE_VALUE)
-    {
-        WIN32_FIND_STREAM_DATA findStreamData;
-        HANDLE hFind = FindFirstStreamW(sFilePath.toStdWString().c_str(), FindStreamInfoStandard, &findStreamData, 0);
-        if (hFind != INVALID_HANDLE_VALUE)
-        {
-            QStringList qLAdsNames;
-            do {
-                QString sADSName = QString::fromWCharArray(findStreamData.cStreamName + 1);
-                if(!Utility::isADSNameValue(sADSName))
-                {
-                    continue;
-                }
-                qLAdsNames << sADSName;
-                setLabels.insert(sADSName);
-            } while (FindNextStreamW(hFind, &findStreamData));
-            if(qLAdsNames.count() > 0)
-            {
-                mapFilePathAndLabel[sFilePath] = qLAdsNames;
-            }
-            FindClose(hFind);
-        }
-        CloseHandle(hFile);
+        QString filePath = fileInfo.absoluteFilePath();
+
+        QStringList adsFileNames = ADSOperation::listADSFileName(filePath);
+        fileTags[filePath] = adsFileNames;
+
+        QSet<QString> setAdsNames = adsFileNames.toSet();
+        setTags.unite(setAdsNames);
+
+        emit sendProcessInfo(filePath);
+        QCoreApplication::processEvents();
+
+        if (fileInfo.isDir())
+            searchDirectory(filePath, fileTags, setTags);
     }
 }
 
