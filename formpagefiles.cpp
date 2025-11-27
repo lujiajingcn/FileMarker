@@ -50,7 +50,7 @@ void FormPageFiles::onDeleteLabels()
     QStringList qLSelFilePaths = getSelFilePath();
     foreach(QString sSelFilePath, qLSelFilePaths)
     {
-        ADSOperation::deleteADS(sSelFilePath);
+        ADSOperation::deleteADSFiles(sSelFilePath);
     }
     on_btnRefresh_clicked();
 }

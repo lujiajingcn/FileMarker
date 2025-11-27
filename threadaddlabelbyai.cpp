@@ -93,7 +93,7 @@ bool ThreadAddLabelByAI::addTag(const QFileInfo& info)
             QJsonArray arr = obj.value("tags").toArray();
             for (auto v : arr)
             {
-                ADSOperation::writeADS(sFilePath, v.toString(), "");
+                ADSOperation::writeADSFile(sFilePath, v.toString(), "");
                 qLLabels.append(v.toString());
             }
             sLabels = qLLabels.join(",");

@@ -9,146 +9,49 @@ ADSOperation::ADSOperation()
 {
 }
 
-void ADSOperation::readADS(const QString &sFilePath, const QString &sStreamName)
-{
-    QString sFullFileName = sFilePath + ":" + sStreamName;
-    HANDLE hFile = CreateFile((LPCWSTR)sFullFileName.utf16(),
-                              GENERIC_READ,
-                              FILE_SHARE_READ,
-                              NULL,
-                              OPEN_EXISTING,
-                              FILE_ATTRIBUTE_NORMAL,
-                              NULL);
-
-    if (hFile != INVALID_HANDLE_VALUE) {
-        DWORD bytesRead;
-        char buffer[1024]; // adjust buffer size as needed
-        if (ReadFile(hFile, buffer, sizeof(buffer), &bytesRead, NULL))
-        {
-            QString sErrorMsg = QString("读取文件%1附属的ads失败").arg(sFullFileName);
-            qCritical("%s", sErrorMsg.toStdString().c_str());
-        }
-        CloseHandle(hFile);
-    }
-    else
-    {
-        QString sErrorMsg = QString("打开文件%1失败").arg(sFullFileName);
-        qCritical("%s", sErrorMsg.toStdString().c_str());
-    }
-}
-
-void ADSOperation::writeADS(const QString &sFilePath, const QString &sStreamName, const QString &sData, bool isDeleteOldAds)
+void ADSOperation::writeADSFile(const QString &filePath, const QString &streamName, const QString &text, bool isDeleteOldAds)
 {
     if(isDeleteOldAds)
-    {
-        deleteADS(sFilePath);
-    }
-    QString sFullFileName = sFilePath + ":" + sStreamName;
-    HANDLE hFile = CreateFile((LPCWSTR)sFullFileName.utf16(),
-                              GENERIC_WRITE,
-                              0,
-                              NULL,
-                              OPEN_ALWAYS,
-                              FILE_ATTRIBUTE_NORMAL,
-                              NULL);
+        deleteADSFiles(filePath);
 
-    if (hFile != INVALID_HANDLE_VALUE)
-    {
-        DWORD bytesWritten;
-        if (WriteFile(hFile, sData.toUtf8().constData(), sData.toUtf8().length(), &bytesWritten, NULL) == FALSE)
-        {
-            DWORD dwError = GetLastError();
-            LPWSTR lpMsgBuf = NULL;
-            DWORD dwChars = FormatMessageW(
-                    FORMAT_MESSAGE_ALLOCATE_BUFFER |
-                    FORMAT_MESSAGE_FROM_SYSTEM |
-                    FORMAT_MESSAGE_IGNORE_INSERTS,
-                    NULL,
-                    dwError,
-                    MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-                    (LPWSTR)&lpMsgBuf, // 注意这里接收的是 LPWSTR
-                    0,
-                    NULL
-                );
-            if (dwChars > 0 && lpMsgBuf != NULL) {
-                        // 打印错误代码和错误描述
-                printf("WriteFile failed! Error Code: %lu\n", dwError);
-                printf("Error Description: %s\n", lpMsgBuf);
+    QString sFullFileName = filePath + ":" + streamName;
+    QFile f(sFullFileName);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+        return ;
 
-                QString sErrorMsg = QString("写入文件%1附属的ads失败，错误码：%1,错误描述：%2").arg(dwError).arg(QString::fromWCharArray(lpMsgBuf));
-                qCritical("%s", sErrorMsg.toStdString().c_str());
+    f.write(text.toUtf8());
+}
 
-                // 释放 FormatMessage 分配的内存
-                LocalFree(lpMsgBuf);
-            }
-        }
-        CloseHandle(hFile);
-    }
-    else
+// 删除指定文件的所有关联的ads文件
+void ADSOperation::deleteADSFiles(const QString &filePath)
+{
+    QStringList adsFileNames = listADSFileName(filePath);
+    foreach(QString adsName, adsFileNames)
     {
-        QString sErrorMsg = QString("打开文件%1失败").arg(sFullFileName);
-        qCritical("%s", sErrorMsg.toStdString().c_str());
+        QString adsFilePath = filePath + ":" + adsName;
+        DeleteFile(adsFilePath.toStdWString().c_str());
     }
 }
 
-void ADSOperation::deleteADS(const QString &sFilePath)
+// 根据文件路径，找出该文件所关联的ads文件的文件名
+QStringList ADSOperation::listADSFileName(const QString &filePath)
 {
-    QStringList qLAdsNames = listADS(sFilePath);
-    foreach(QString sAdsName, qLAdsNames)
-    {
-        QString sFullName = sFilePath + ":" + sAdsName;
-        DeleteFile((LPCWSTR)sFullName.utf16());
-    }
-}
-
-QStringList ADSOperation::listADS(const QString &sFilePath)
-{
-    QStringList qLLabes;
-    LPCWSTR lpFileName = reinterpret_cast<LPCWSTR>(sFilePath.utf16());
+    QStringList fileNames;
     WIN32_FIND_STREAM_DATA findData;
 
-    // Open a handle to the file
-    HANDLE hFind = FindFirstStreamW(lpFileName, FindStreamInfoStandard, &findData, 0);
-    if (hFind == INVALID_HANDLE_VALUE) {
-        return qLLabes;
-    }
-
-    do {
-        QString streamName = QString::fromWCharArray(findData.cStreamName);
-        if (streamName != "::$DATA" && streamName.startsWith(L":")) {
-            streamName = streamName.mid(1); // Remove the leading ":"
-            qLLabes << streamName;
-        }
-    } while (FindNextStreamW(hFind, &findData));
-
-    FindClose(hFind);
-
-    return qLLabes;
-}
-
-QStringList ADSOperation::listADSFileName(const QString &sFilePath)
-{
-    QStringList qLLabes;
-    LPCWSTR lpFileName = reinterpret_cast<LPCWSTR>(sFilePath.utf16());
-    WIN32_FIND_STREAM_DATA findData;
-
-    HANDLE hFind = FindFirstStreamW(lpFileName, FindStreamInfoStandard, &findData, 0);
+    HANDLE hFind = FindFirstStreamW(filePath.toStdWString().c_str(), FindStreamInfoStandard, &findData, 0);
     if (hFind == INVALID_HANDLE_VALUE)
-    {
-        return qLLabes;
-    }
+        return fileNames;
 
     do {
         QString streamName = QString::fromWCharArray(findData.cStreamName);
         streamName = streamName.mid(1); // Remove the leading ":"
         if(Utility::isADSNameValue(streamName))
-        {
-            qLLabes << streamName;
-        }
-
+            fileNames << streamName;
     } while (FindNextStreamW(hFind, &findData));
 
     FindClose(hFind);
-
-    return qLLabes;
+    return fileNames;
 }
+
+

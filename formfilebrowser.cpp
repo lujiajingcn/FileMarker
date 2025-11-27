@@ -189,7 +189,7 @@ void FormFileBrowser::onActionAddLabelsTriggered()
     {
         foreach(const QString &sSelLabel, m_qLSelLabels)
         {
-            ADSOperation::writeADS(sFilePath, sSelLabel, "");
+            ADSOperation::writeADSFile(sFilePath, sSelLabel, "");
         }
     }
 
@@ -315,10 +315,10 @@ void FormFileBrowser::onRecvLabels(QString sLabels)
     QStringList qLLabels = sLabels.split(",");
     foreach(const QString &sFilePath, qLFilePaths)
     {
-        ADSOperation::deleteADS(sFilePath);
+        ADSOperation::deleteADSFiles(sFilePath);
         foreach(const QString &sSelLabel, qLLabels)
         {
-            ADSOperation::writeADS(sFilePath, sSelLabel, "");
+            ADSOperation::writeADSFile(sFilePath, sSelLabel, "");
         }
     }
 

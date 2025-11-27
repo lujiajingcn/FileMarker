@@ -9,12 +9,9 @@ public:
     ADSOperation();
 
 public :
-    void setStop(bool bIsStop);
-    static void readADS(const QString &sFilePath, const QString& sStreamName);
-    static void writeADS(const QString &sFilePath, const QString& sStreamName, const QString& sData, bool isDeleteOldAds = false);
-    static void deleteADS(const QString &sFilePath);
-    static QStringList listADS(const QString &sFilePath);
-    static QStringList listADSFileName(const QString &sFilePath);
+    static void writeADSFile(const QString &filePath, const QString& streamName, const QString& text, bool isDeleteOldAds = false);
+    static void deleteADSFiles(const QString &filePath);
+    static QStringList listADSFileName(const QString &filePath);
 };
 
 #endif // ADSOPERATION_H
