@@ -1,20 +1,20 @@
 #include "threadtraversedirs.h"
-#include "adsoperation.h"
-#include <QDir>
 #include <QCoreApplication>
+
+#include "adsoperation.h"
+#include "traversedirectory.h"
 
 ThreadTraverseDirs::ThreadTraverseDirs(QObject *parent) : QThread(parent)
 {
     qRegisterMetaType<QMap<QString, QSet<QString>>>();
 
-    m_isStop = false;
 
     connect(this, &ThreadTraverseDirs::finished, this, &QObject::deleteLater);
 }
 
 void ThreadTraverseDirs::stopThread()
 {
-    m_isStop = true;
+    TraverseDirectory::stop();
 }
 
 void ThreadTraverseDirs::setSelDirs(QStringList selDirs)
@@ -24,52 +24,44 @@ void ThreadTraverseDirs::setSelDirs(QStringList selDirs)
 
 void ThreadTraverseDirs::run()
 {
+    auto func = [this](const QFileInfo& info) -> bool {
+        return this->traverseDir(info);
+    };
+
     QMap<QString, FILE_TAGS> dirAndFileTags;
-    QMap<QString, QSet<QString>> mapDirAndLabel;
+    QMap<QString, QSet<QString>> dirAndTags;
 
     foreach(QString selDir, m_selDirs){
-        FILE_TAGS fileTags;
-        QSet<QString> setLabels;
+        TraverseDirectory::traverseDirectory(selDir, func, true);
 
-        searchDirectory(selDir, fileTags, setLabels);
+        dirAndFileTags[selDir] = m_fileTags;
+        if(m_tags.count() != 0)
+            dirAndTags[selDir] = m_tags;
 
-        dirAndFileTags[selDir] = fileTags;
-        if(setLabels.count() != 0)
-            mapDirAndLabel[selDir] = setLabels;
+        m_tags.clear();
+        m_fileTags.clear();
     }
 
-    emit sendResult(dirAndFileTags, mapDirAndLabel);
+    emit sendResult(dirAndFileTags, dirAndTags);
 }
 
-void ThreadTraverseDirs::searchDirectory(const QString& sDirPath, FILE_TAGS &fileTags, QSet<QString> &setTags)
+bool ThreadTraverseDirs::traverseDir(const QFileInfo& fileInfo)
 {
-    if(m_isStop)
-        return;
+    QString filePath = fileInfo.absoluteFilePath();
 
-    QDir dir(sDirPath);
-    if (!dir.exists())
-        return;
+    QStringList adsFileNames = ADSOperation::listADSFileName(filePath);
+    if(adsFileNames.isEmpty())
+        return true;
 
-    QFileInfoList fileInfoList = dir.entryInfoList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot);
-    for (const QFileInfo& fileInfo : fileInfoList){
-        if(m_isStop)
-            return;
+    m_fileTags[filePath] = adsFileNames;
 
-        QString filePath = fileInfo.absoluteFilePath();
+    QSet<QString> setAdsNames = adsFileNames.toSet();
+    m_tags.unite(setAdsNames);
 
-        QStringList adsFileNames = ADSOperation::listADSFileName(filePath);
-        fileTags[filePath] = adsFileNames;
+    emit sendProcessInfo(filePath);
+    QCoreApplication::processEvents();
 
-        QSet<QString> setAdsNames = adsFileNames.toSet();
-        setTags.unite(setAdsNames);
+//    QThread::msleep(1);//让出时间片，使得ui有时间响应
 
-        emit sendProcessInfo(filePath);
-        QCoreApplication::processEvents();
-
-        QThread::msleep(1);//让出时间片，是ui有时间响应
-
-        if (fileInfo.isDir())
-            searchDirectory(filePath, fileTags, setTags);
-    }
+    return true;
 }
-

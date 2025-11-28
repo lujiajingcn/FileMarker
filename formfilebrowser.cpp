@@ -265,10 +265,10 @@ void FormFileBrowser::onActionTraverseSelDirsTriggered()
     m_threadTraverseDirs->start();
 }
 
-void FormFileBrowser::onRecvTraverseResult(QMap<QString, FILE_TAGS> mapDirAndmapHostFilesAndLabel, QMap<QString, QSet<QString>> dirAndTags)
+void FormFileBrowser::onRecvTraverseResult(QMap<QString, FILE_TAGS> dirAndFileTags, QMap<QString, QSet<QString>> dirAndTags)
 {
-    m_sqlOperation->clearTable(TABLE_NAME_FILEPATH_LABEL);
-    m_sqlOperation->insertRecord(mapDirAndmapHostFilesAndLabel);
+    m_sqlOperation->clearTable(TABLE_NAME_FILEPATH_TAG);
+    m_sqlOperation->insertRecord(dirAndFileTags);
     showFilesWidget();
     setActionState(TRAVERER_FINISH);
     emit sendDirAndLabels(dirAndTags);

@@ -2,6 +2,8 @@
 #define THREADSEARCH_H
 
 #include <QThread>
+#include <QDir>
+
 #include "common.h"
 
 class ThreadSearch : public QThread
@@ -13,10 +15,10 @@ public:
 
     void setPara(const QStringList &selDirs, const QStringList &tags, const labelLogic taglLogic);
 
+    bool searchFile(const QFileInfo& fileInfo);
+
 protected:
     void run();
-
-    void searchDirectory(const QString& dirPath, QStringList &hostFiles);
 
 signals:
     void sigState(bool bIsStop);
@@ -24,10 +26,10 @@ signals:
     void sendProcessInfo(QString sProcessedFilePath);
 
 private:
-    bool        m_isStop;
     QStringList m_selDirs;
     QStringList m_adsName;
     labelLogic  m_tagLogic;
+    QStringList m_filePaths;
 };
 
 #endif // THREADSEARCH_H

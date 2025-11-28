@@ -80,8 +80,7 @@ bool ThreadAddTagByAI::addTag(const QFileInfo& info)
     QString tags;
     if (perr.error == QJsonParseError::NoError && doc.isObject()) {
         QJsonObject obj = doc.object();
-        if (obj.contains("tags") && obj.value("tags").isArray())
-        {
+        if (obj.contains("tags") && obj.value("tags").isArray()) {
             QJsonArray arr = obj.value("tags").toArray();
             for (auto v : arr) {
                 ADSOperation::writeADSFile(filePath, v.toString(), "");
@@ -90,7 +89,6 @@ bool ThreadAddTagByAI::addTag(const QFileInfo& info)
             tags = listTags.join(",");
             if(!tags.isEmpty())
                 emit sendTags(tags);
-
         }
         if (obj.contains("summary"))
             QString sSummary = obj.value("summary").toString();

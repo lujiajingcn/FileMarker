@@ -18,8 +18,7 @@ FormCurDirLabels::~FormCurDirLabels()
 
 void FormCurDirLabels::onRecvDirAndLabels(QMap<QString, QSet<QString>> mapDirAndLabels)
 {
-    for (QMap<QString, QSet<QString>>::const_iterator cItr = mapDirAndLabels.begin(); cItr != mapDirAndLabels.end(); cItr++)
-    {
+    for (QMap<QString, QSet<QString>>::const_iterator cItr = mapDirAndLabels.begin(); cItr != mapDirAndLabels.end(); cItr++) {
         QString dir = cItr.key();
         QStandardItem *item = getItem(dir);
         if(nullptr != item)
@@ -30,22 +29,20 @@ void FormCurDirLabels::onRecvDirAndLabels(QMap<QString, QSet<QString>> mapDirAnd
 
         QSet<QString> setLabels = cItr.value();
         foreach (const QString &sLabel, setLabels)
-        {
-            QStandardItem *itemLabel = new QStandardItem(sLabel);
-            itemDir->appendRow(itemLabel);
-        }
+            itemDir->appendRow(new QStandardItem(sLabel));
     }
 }
 
 void FormCurDirLabels::on_treeView_clicked(const QModelIndex &index)
 {
+    Q_UNUSED(index);
+
     QStringList qLLabels;
     QItemSelectionModel *selectionModel = ui->treeView->selectionModel();
     QModelIndexList selectedIndexes = selectionModel->selectedIndexes();
     foreach (const QModelIndex &index, selectedIndexes)
-    {
-        qLLabels<<m_modelLabels->itemFromIndex(index)->text();
-    }
+        qLLabels << m_modelLabels->itemFromIndex(index)->text();
+
     sendSelLabels(qLLabels);
 }
 

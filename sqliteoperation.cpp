@@ -77,35 +77,40 @@ void SqliteOperation::clearLabels(const QString &sFilePath)
     }
 }
 
-void SqliteOperation::insertRecord(QMap<QString, QMap<QString, QStringList>> mapDirAndmapHostFilesAndLabel)
+void SqliteOperation::insertRecord(QMap<QString, FILE_TAGS> dirAndFileTags)
 {
     QSqlQuery query(m_sqlDB);
-    for(QMap<QString, QMap<QString, QStringList>>::const_iterator cItr = mapDirAndmapHostFilesAndLabel.begin(); cItr != mapDirAndmapHostFilesAndLabel.end(); cItr++)
-    {
-        QString sSelDir = cItr.key();
-        QString sSql = QString("INSERT INTO %1 (dir) VALUES ('%2')").arg(TABLE_NAME_DIR).arg(sSelDir);
-        bool bRet = query.exec(sSql);
-        if(!bRet)
-        {
+    for(QMap<QString, FILE_TAGS>::const_iterator cItr = dirAndFileTags.begin(); cItr != dirAndFileTags.end(); cItr++) {
+        QString selDir = cItr.key();
+
+        QString sql = QString("INSERT INTO %1 (dir) VALUES ('%2')").arg(TABLE_NAME_DIR).arg(selDir);
+        bool bRet = query.exec(sql);
+        if(!bRet) {
             QString sErrorMsg = QString("向表dirs中插入数据失败：%2").arg(query.lastError().text());
             qCritical("%s", sErrorMsg.toStdString().c_str());
         }
     }
-    if (m_sqlDB.transaction())
-    {
+
+    if (m_sqlDB.transaction()) {
         QSqlQuery query(m_sqlDB);
-        query.prepare(QString("INSERT INTO %1 (filepath, labels, dir) VALUES (:filepath, :labels, :dir)").arg(TABLE_NAME_FILEPATH_LABEL));
-        for(QMap<QString, QMap<QString, QStringList>>::const_iterator cItr = mapDirAndmapHostFilesAndLabel.begin(); cItr != mapDirAndmapHostFilesAndLabel.end(); cItr++)
-        {
-            QString sSelDir = cItr.key();
-            for(QMap<QString, QStringList>::const_iterator cItrChild = cItr.value().begin(); cItrChild != cItr.value().end(); cItrChild++)
-            {
+
+        query.prepare(QString("INSERT INTO %1 (filepath, labels, dir) VALUES (:filepath, :labels, :dir)").arg(TABLE_NAME_FILEPATH_TAG));
+        for(QMap<QString, FILE_TAGS>::const_iterator cItr = dirAndFileTags.begin(); cItr != dirAndFileTags.end(); cItr++) {
+            QString selDir = cItr.key();
+
+            QString sql = QString("DELETE FROM %1 WHERE dir='%2'").arg(TABLE_NAME_FILEPATH_TAG).arg(selDir);
+            bool bRet = query.exec(sql);
+            if(!bRet) {
+                QString sErrorMsg = QString("删除表%1中dir为%2的记录失败：%3").arg(TABLE_NAME_FILEPATH_TAG).arg(selDir).arg(query.lastError().text());
+                qCritical("%s", sErrorMsg.toStdString().c_str());
+            }
+
+            for(QMap<QString, QStringList>::const_iterator cItrChild = cItr.value().begin(); cItrChild != cItr.value().end(); cItrChild++) {
                 query.bindValue(":filepath", cItrChild.key());
                 query.bindValue(":labels", cItrChild.value().join(","));
-                query.bindValue(":dir", sSelDir);
-                if (!query.exec())
-                {
-                    QString sErrorMsg = QString("向表%1中插入数据失败：%2").arg(TABLE_NAME_FILEPATH_LABEL).arg(query.lastError().text());
+                query.bindValue(":dir", selDir);
+                if (!query.exec()) {
+                    QString sErrorMsg = QString("向表%1中插入数据失败：%2").arg(TABLE_NAME_FILEPATH_TAG).arg(query.lastError().text());
                     qCritical("%s", sErrorMsg.toStdString().c_str());
                     m_sqlDB.rollback();
                     return;
@@ -119,9 +124,7 @@ void SqliteOperation::insertRecord(QMap<QString, QMap<QString, QStringList>> map
             m_sqlDB.rollback();
             return;
         }
-    }
-    else
-    {
+    } else {
         QString sErrorMsg = QString("Transaction failed to start:%1").arg(query.lastError().text());
         qCritical("%s", sErrorMsg.toStdString().c_str());
     }

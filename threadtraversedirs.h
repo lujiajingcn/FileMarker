@@ -12,6 +12,7 @@
 #include <QThread>
 #include <QMap>
 #include <QSet>
+#include <QDir>
 
 #include "common.h"
 
@@ -28,16 +29,16 @@ public:
 
 protected:
     void run();
-
-    void searchDirectory(const QString& sDirPath, FILE_TAGS &fileTags, QSet<QString> &setTags);
+    bool traverseDir(const QFileInfo& fileInfo);
 
 signals:
     void sendResult(QMap<QString, FILE_TAGS> dirAndFileTags, QMap<QString, QSet<QString>> dirAndTags);
     void sendProcessInfo(QString sProcessedFilePath);
 
 private:
-    bool        m_isStop;
-    QStringList m_selDirs;
+    QStringList     m_selDirs;
+    FILE_TAGS       m_fileTags;
+    QSet<QString>   m_tags;
 };
 
 #endif // THREADTRAVERSEDIRS_H

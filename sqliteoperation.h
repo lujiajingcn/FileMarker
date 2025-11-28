@@ -7,7 +7,9 @@
 #include <QSqlDatabase>
 #include <QSqlQueryModel>
 
-#define TABLE_NAME_FILEPATH_LABEL "filewithlabels"
+#include "common.h"
+
+#define TABLE_NAME_FILEPATH_TAG "filewithlabels"
 #define TABLE_NAME_DIR "dirs"
 
 class SqliteOperation
@@ -20,7 +22,7 @@ public:
     void createTable();
     void clearTable(const QString &sTableName);
     void clearLabels(const QString &sFilePath);
-    void insertRecord(QMap<QString, QMap<QString, QStringList>> mapDirAndmapHostFilesAndLabel);
+    void insertRecord(QMap<QString, FILE_TAGS> dirAndFileTags);
     void deleteRecord(const QString &sFilePath, const QString &sLabel);
     QStringList searchFileByLabel(QStringList qLLabels, int nLabelLogic);
     /** 根据给定的标签和逻辑关系，在选中的文件夹中查找文件 */

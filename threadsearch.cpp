@@ -1,17 +1,17 @@
 #include "threadsearch.h"
 #include "adsoperation.h"
-#include <QDir>
 #include <QCoreApplication>
+
+#include "traversedirectory.h"
 
 ThreadSearch::ThreadSearch(QObject *parent) : QThread(parent)
 {
-    m_isStop = false;
     connect(this, &ThreadSearch::finished, this, &QObject::deleteLater);
 }
 
 void ThreadSearch::stopThread()
 {
-    m_isStop = true;
+    TraverseDirectory::stop();
 }
 
 void ThreadSearch::setPara(const QStringList &selDirs, const QStringList &tags, const labelLogic taglLogic)
@@ -23,39 +23,28 @@ void ThreadSearch::setPara(const QStringList &selDirs, const QStringList &tags, 
 
 void ThreadSearch::run()
 {
+    auto func = [this](const QFileInfo& info) -> bool {
+        return this->searchFile(info);
+    };
+
     QStringList hostFiles;
     foreach(QString selDir, m_selDirs)
-        searchDirectory(selDir, hostFiles);
+        TraverseDirectory::traverseDirectory(selDir, func, true);
 
-    emit sigResult(hostFiles);
+    emit sigResult(m_filePaths);
 }
 
-void ThreadSearch::searchDirectory(const QString& dirPath, QStringList &hostFiles)
+bool ThreadSearch::searchFile(const QFileInfo& fileInfo)
 {
-    if(m_isStop)
-    {
-        emit sigResult(hostFiles);
-        return;
-    }
-    QDir dir(dirPath);
-    if (!dir.exists())
-    {
-        emit sigResult(hostFiles);
-        return;
-    }
+    QString sFilePath = fileInfo.absoluteFilePath();
+    if(ADSOperation::isHostFile(sFilePath, m_adsName, m_tagLogic))
+        m_filePaths << sFilePath;
 
-    QFileInfoList fileInfoList = dir.entryInfoList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot);
-    for (const QFileInfo& fileInfo : fileInfoList)
-    {
-        QString sFilePath = fileInfo.absoluteFilePath();
-        if(ADSOperation::isHostFile(sFilePath, m_adsName, m_tagLogic))
-            hostFiles << sFilePath;
+    emit sendProcessInfo(sFilePath);
+    QCoreApplication::processEvents();
+//    QThread::msleep(1);//睡眠1ms可以让界面上的进度输出顺畅，但是，整个操作耗时太多
 
-        emit sendProcessInfo(sFilePath);
-        QCoreApplication::processEvents();
-        if (fileInfo.isDir())
-            searchDirectory(sFilePath, hostFiles);
-    }
+    return true;
 }
 
 
