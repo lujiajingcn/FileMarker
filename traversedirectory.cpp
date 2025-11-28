@@ -4,7 +4,6 @@ bool TraverseDirectory::m_bIsStop = false;
 
 TraverseDirectory::TraverseDirectory()
 {
-//    m_bIsStop = false;
 }
 
 void TraverseDirectory::traverseDirectory(const QString& path, FileAction action, bool recursive)
@@ -16,9 +15,7 @@ void TraverseDirectory::traverseDirectory(const QString& path, FileAction action
         it.next();
         bool shouldContinue = action(it.fileInfo());
         if (!shouldContinue || m_bIsStop)
-        {
             break;
-        }
     }
 }
 

@@ -139,11 +139,11 @@ void FormFileBrowser::onActionAddLabelByAITriggered()
 
     QStringList qLSelDirs = getSelDirs();
 
-    m_threadAddLabelByAI = new ThreadAddLabelByAI(this);
+    m_threadAddLabelByAI = new ThreadAddTagByAI(this);
 
-    connect(m_threadAddLabelByAI, &ThreadAddLabelByAI::sendProcessInfo, ui->pageProgressInfo, &FormPageProgressInfo::onRecvProgress);
-    connect(m_threadAddLabelByAI, &ThreadAddLabelByAI::sendFinish, this, &FormFileBrowser::onRecvAddLabelByAIFinish);
-    connect(m_threadAddLabelByAI, &ThreadAddLabelByAI::sendLabels, this, &FormFileBrowser::onRecvLabelsGeneratedByAI);
+    connect(m_threadAddLabelByAI, &ThreadAddTagByAI::sendProcessInfo, ui->pageProgressInfo, &FormPageProgressInfo::onRecvProgress);
+    connect(m_threadAddLabelByAI, &ThreadAddTagByAI::sendFinish, this, &FormFileBrowser::onRecvAddLabelByAIFinish);
+    connect(m_threadAddLabelByAI, &ThreadAddTagByAI::sendTags, this, &FormFileBrowser::onRecvLabelsGeneratedByAI);
 
     m_threadAddLabelByAI->setDirs(qLSelDirs);
 

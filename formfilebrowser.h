@@ -11,7 +11,7 @@
 #include "sqliteoperation.h"
 #include "threadsearch.h"
 #include "threadtraversedirs.h"
-#include "threadaddlabelbyai.h"
+#include "threadaddtagbyai.h"
 
 namespace Ui {
 class FormFileBrowser;
@@ -119,7 +119,7 @@ private:
     SqliteOperation     *m_sqlOperation;        // 操作sqlite数据库
     ThreadSearch        *m_threadSearch;        // 处理根据标签查找文件的线程
     ThreadTraverseDirs  *m_threadTraverseDirs;  // 遍历选中文件夹中全部文件的线程
-    ThreadAddLabelByAI  *m_threadAddLabelByAI;
+    ThreadAddTagByAI  *m_threadAddLabelByAI;
 
     int                 m_nThread;              // 用来记录当前运行的线程：根据标签查找文件、遍历文件夹、AI自动生成标签。
 };

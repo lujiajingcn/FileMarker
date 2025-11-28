@@ -45,7 +45,7 @@ SOURCES += \
         mainwindow.cpp \
         myqfilesystemmodel.cpp \
         sqliteoperation.cpp \
-        threadaddlabelbyai.cpp \
+        threadaddtagbyai.cpp \
         threadsearch.cpp \
         threadtraversedirs.cpp \
         thumbnailiconprovider.cpp \
@@ -72,7 +72,7 @@ HEADERS += \
         mainwindow.h \
         myqfilesystemmodel.h \
         sqliteoperation.h \
-        threadaddlabelbyai.h \
+        threadaddtagbyai.h \
         threadsearch.h \
         threadtraversedirs.h \
         thumbnailiconprovider.h \

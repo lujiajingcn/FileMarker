@@ -14,22 +14,21 @@ struct FileResult {
 
 Q_DECLARE_METATYPE(FileResult)
 
-class ThreadAddLabelByAI : public QThread
+class ThreadAddTagByAI : public QThread
 {
     Q_OBJECT
 
 public:
-    ThreadAddLabelByAI(QObject *parent = nullptr);
+    ThreadAddTagByAI(QObject *parent = nullptr);
 
-    void setDirs(QStringList qLDirs);
+    void setDirs(QStringList dirs);
 
     void stopThread();
 
 signals:
-//    void sendResult(const FileResult& res);
     void sendFinish();
     void sendProcessInfo(QString sProcessedFilePath);
-    void sendLabels(QString sLabels);
+    void sendTags(QString tags);
 
 protected:
     void run();
@@ -37,7 +36,7 @@ protected:
     bool addTag(const QFileInfo& info);
 
 private:
-    QStringList     m_qLDirs;
+    QStringList     m_dirs;
 };
 
 #endif // THREADADDLABELBYAI_H
