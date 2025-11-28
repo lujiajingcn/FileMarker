@@ -53,7 +53,6 @@ public:
 
 signals:
     void sendStop();
-    void sendProgress(QString sProcessedFilePath);
     void sendShowFilteredFiles(QStringList qLFilteredFiles);
     void sendRefresh();
     void sendGotoFile(QString sFilePath);
@@ -68,8 +67,6 @@ public:
 
 public slots:
     void showFilteredFile(QStringList qLFilteredFiles);
-
-    void recvProcessInfo(QString sProcessedFilePath);
 
     void onGotoFilePath(QString sFilePath);
 
@@ -96,11 +93,9 @@ private slots:
     /** 遍历选中的文件夹，查找这些文件夹中有ads信息的文件，将这些文件和ads信息写入数据库，作为下次查找的缓存信息 */
     void onActionTraverseSelDirsTriggered();
 
-    void onRecvTraverseResult(QMap<QString, QMap<QString, QStringList>> mapDirAndmapHostFilesAndLabel);
+    void onRecvTraverseResult(QMap<QString, FILE_TAGS> mapDirAndmapHostFilesAndLabel, QMap<QString, QSet<QString>> dirAndTags);
 
     void onActionSearchConfigTriggered();
-
-    void onRecvDirAndTags(QMap<QString, QSet<QString>> mapDirAndLabel);
 
     void onRecvStopSearch();
 

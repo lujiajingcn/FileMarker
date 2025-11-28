@@ -15,6 +15,8 @@
 
 #include "common.h"
 
+Q_DECLARE_METATYPE(FILE_TAGS);// sendResult传递的参数中有FILE_TAGS类型数据，不声明则槽函数不响应
+
 class ThreadTraverseDirs : public QThread
 {
     Q_OBJECT
@@ -30,8 +32,7 @@ protected:
     void searchDirectory(const QString& sDirPath, FILE_TAGS &fileTags, QSet<QString> &setTags);
 
 signals:
-    void sendResult(QMap<QString, FILE_TAGS> dirAndFileTags);
-    void sendDirAndTags(QMap<QString, QSet<QString>> dirAndTags);
+    void sendResult(QMap<QString, FILE_TAGS> dirAndFileTags, QMap<QString, QSet<QString>> dirAndTags);
     void sendProcessInfo(QString sProcessedFilePath);
 
 private:

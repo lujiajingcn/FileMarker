@@ -2,6 +2,7 @@
 #define THREADSEARCH_H
 
 #include <QThread>
+#include "common.h"
 
 class ThreadSearch : public QThread
 {
@@ -10,14 +11,12 @@ public:
     explicit ThreadSearch(QObject *parent = nullptr);
     void stopThread();
 
-    void setPara(const QStringList &sSelDirs, const QStringList &adsName, const int nLabelLogic);
+    void setPara(const QStringList &selDirs, const QStringList &tags, const labelLogic taglLogic);
 
 protected:
     void run();
-    /** 根据标签和标签的逻辑关系，判断给定的文件是否是目标文件 */
-    bool isHostFile(const QString &sFilePath);
 
-    void searchDirectory(const QString& dirPath, QStringList &qLHostFiles);
+    void searchDirectory(const QString& dirPath, QStringList &hostFiles);
 
 signals:
     void sigState(bool bIsStop);
@@ -25,10 +24,10 @@ signals:
     void sendProcessInfo(QString sProcessedFilePath);
 
 private:
-    bool m_bIsStop;
-    QStringList m_qLSelDirs;
+    bool        m_isStop;
+    QStringList m_selDirs;
     QStringList m_adsName;
-    int m_nLabelLogic;
+    labelLogic  m_tagLogic;
 };
 
 #endif // THREADSEARCH_H

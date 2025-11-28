@@ -25,3 +25,8 @@ void FormPageProgressInfo::on_btnStop_clicked()
 {
     emit sendStop();
 }
+
+void FormPageProgressInfo::clear()
+{
+    ui->plainTextEdit->clear();
+}

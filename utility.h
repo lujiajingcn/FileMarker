@@ -32,7 +32,7 @@ public:
     /** 判断一个QStringList是否包含另一个QStringList的全部元素，不考虑元素顺序 */
     static bool isContains(const QStringList &list1, const QStringList &list2);
 
-    static bool isADSNameValue(QString &sADSName);
+    static bool isADSNameValid(QString &sADSName);
 };
 
 #endif // UTILITY_H

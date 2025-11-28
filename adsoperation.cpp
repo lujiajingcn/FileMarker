@@ -46,7 +46,7 @@ QStringList ADSOperation::listADSFileName(const QString &filePath)
     do {
         QString streamName = QString::fromWCharArray(findData.cStreamName);
         streamName = streamName.mid(1); // Remove the leading ":"
-        if(Utility::isADSNameValue(streamName))
+        if(Utility::isADSNameValid(streamName))
             fileNames << streamName;
     } while (FindNextStreamW(hFind, &findData));
 
@@ -54,4 +54,29 @@ QStringList ADSOperation::listADSFileName(const QString &filePath)
     return fileNames;
 }
 
+// 根据标签和标签的逻辑关系，判断给定的文件是否是目标文件
+bool ADSOperation::isHostFile(const QString &sFilePath, const QStringList &tags, labelLogic logic)
+{
+    WIN32_FIND_STREAM_DATA findStreamData;
+    HANDLE hFind = FindFirstStreamW(sFilePath.toStdWString().c_str(), FindStreamInfoStandard, &findStreamData, 0);
+    if (hFind != INVALID_HANDLE_VALUE) {
+        QStringList adsNames;
+        do {
+            QString adsName = QString::fromWCharArray(findStreamData.cStreamName + 1);
+            if(!Utility::isADSNameValid(adsName))
+                continue;
 
+            if(logic == labelLogic::OR && tags.contains(adsName))
+                return true;
+            else if(logic == labelLogic::AND)
+                adsNames << adsName;
+
+        } while (FindNextStreamW(hFind, &findStreamData));
+        if(adsNames.count() > 0 && Utility::isContains(adsNames, tags))
+            return true;
+
+        FindClose(hFind);
+    }
+
+    return false;
+}

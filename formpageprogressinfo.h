@@ -19,6 +19,7 @@ public:
     explicit FormPageProgressInfo(QWidget *parent = nullptr);
     ~FormPageProgressInfo();
 
+    void clear();
 signals:
     void sendStop();
 

@@ -85,7 +85,7 @@ bool Utility::isContains(const QStringList &list1, const QStringList &list2)
     return set1.contains(set2);
 }
 
-bool Utility::isADSNameValue(QString &sADSName)
+bool Utility::isADSNameValid(QString &sADSName)
 {
     if(sADSName.endsWith(ADS_TAIL))
     {

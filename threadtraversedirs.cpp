@@ -38,8 +38,7 @@ void ThreadTraverseDirs::run()
             mapDirAndLabel[selDir] = setLabels;
     }
 
-    emit sendResult(dirAndFileTags);
-    emit sendDirAndTags(mapDirAndLabel);
+    emit sendResult(dirAndFileTags, mapDirAndLabel);
 }
 
 void ThreadTraverseDirs::searchDirectory(const QString& sDirPath, FILE_TAGS &fileTags, QSet<QString> &setTags)
@@ -66,6 +65,8 @@ void ThreadTraverseDirs::searchDirectory(const QString& sDirPath, FILE_TAGS &fil
 
         emit sendProcessInfo(filePath);
         QCoreApplication::processEvents();
+
+        QThread::msleep(1);//让出时间片，是ui有时间响应
 
         if (fileInfo.isDir())
             searchDirectory(filePath, fileTags, setTags);

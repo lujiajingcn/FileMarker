@@ -30,7 +30,6 @@ FormFileBrowser::FormFileBrowser(QWidget *parent) :
     connect(ui->pageFilteredFiles, &FormPageFilterdFiles::sendGotoFile, this, &FormFileBrowser::onGotoFilePath);
     connect(this, &FormFileBrowser::sendGotoFile, ui->pageFiles, &FormPageFiles::recvGotoFile);
 
-    connect(this, &FormFileBrowser::sendProgress, ui->pageProgressInfo, &FormPageProgressInfo::onRecvProgress);
     connect(this, &FormFileBrowser::sendShowFilteredFiles, ui->pageFilteredFiles, &FormPageFilterdFiles::onShowFilteredFiles);
     connect(this, &FormFileBrowser::sendRefresh, ui->pageFiles, &FormPageFiles::on_btnRefresh_clicked);
     connect(ui->pageProgressInfo, &FormPageProgressInfo::sendStop, this, &FormFileBrowser::onRecvStopSearch);
@@ -101,6 +100,7 @@ void FormFileBrowser::showFilteredFile(QStringList qLFilteredFiles)
     setActionState(SEARCH_FINISH);
     ui->stackedWidget->setCurrentWidget(ui->pageFilteredFiles);
     emit sendShowFilteredFiles(qLFilteredFiles);
+    ui->pageProgressInfo->clear();
 }
 
 void FormFileBrowser::onGotoFilePath(QString sFilePath)
@@ -127,11 +127,6 @@ void FormFileBrowser::onRecvSelLabels(QStringList qLSelLabels)
     m_qLSelLabels = qLSelLabels;
 }
 
-void FormFileBrowser::recvProcessInfo(QString sProcessedFilePath)
-{
-    emit sendProgress(sProcessedFilePath);
-}
-
 void FormFileBrowser::on_btnStop_clicked()
 {
     emit sendStop();
@@ -146,7 +141,7 @@ void FormFileBrowser::onActionAddLabelByAITriggered()
 
     m_threadAddLabelByAI = new ThreadAddLabelByAI(this);
 
-    connect(m_threadAddLabelByAI, &ThreadAddLabelByAI::sendProcessInfo, this, &FormFileBrowser::recvProcessInfo);
+    connect(m_threadAddLabelByAI, &ThreadAddLabelByAI::sendProcessInfo, ui->pageProgressInfo, &FormPageProgressInfo::onRecvProgress);
     connect(m_threadAddLabelByAI, &ThreadAddLabelByAI::sendFinish, this, &FormFileBrowser::onRecvAddLabelByAIFinish);
     connect(m_threadAddLabelByAI, &ThreadAddLabelByAI::sendLabels, this, &FormFileBrowser::onRecvLabelsGeneratedByAI);
 
@@ -159,6 +154,7 @@ void FormFileBrowser::onRecvAddLabelByAIFinish()
 {
     showFilesWidget();
     setActionState(ADDTAGBYAI_FINISH);
+    ui->pageProgressInfo->clear();
 }
 
 void FormFileBrowser::onRecvLabelsGeneratedByAI(QString sLabels)
@@ -238,7 +234,7 @@ void FormFileBrowser::onActionSearchFilesbyLabelsTriggered()
     m_threadSearch = new ThreadSearch(this); // todo 每次都要创建吗
     m_threadSearch->setPara(qLSelDirs, m_qLSelLabels, sc.logic);
     connect(m_threadSearch, &ThreadSearch::sigResult, this, &FormFileBrowser::showFilteredFile);
-    connect(m_threadSearch, &ThreadSearch::sendProcessInfo, this, &FormFileBrowser::recvProcessInfo);
+    connect(m_threadSearch, &ThreadSearch::sendProcessInfo, ui->pageProgressInfo, &FormPageProgressInfo::onRecvProgress);
     m_threadSearch->start();
 }
 
@@ -263,29 +259,26 @@ void FormFileBrowser::onActionTraverseSelDirsTriggered()
     qRegisterMetaType<QMap<QString, QMap<QString, QStringList>>>("QMap<QString, QMap<QString, QStringList>>");
     connect(m_threadTraverseDirs, &ThreadTraverseDirs::sendResult, this, &FormFileBrowser::onRecvTraverseResult);
     connect(this, &FormFileBrowser::sendStop, m_threadTraverseDirs, &ThreadTraverseDirs::stopThread);
-    connect(m_threadTraverseDirs, &ThreadTraverseDirs::sendDirAndTags, this, &FormFileBrowser::onRecvDirAndTags);
 
-    connect(m_threadTraverseDirs, &ThreadTraverseDirs::sendProcessInfo, this, &FormFileBrowser::recvProcessInfo);
+    connect(m_threadTraverseDirs, &ThreadTraverseDirs::sendProcessInfo, ui->pageProgressInfo, &FormPageProgressInfo::onRecvProgress);
+
     m_threadTraverseDirs->start();
 }
 
-void FormFileBrowser::onRecvTraverseResult(QMap<QString, QMap<QString, QStringList>> mapDirAndmapHostFilesAndLabel)
+void FormFileBrowser::onRecvTraverseResult(QMap<QString, FILE_TAGS> mapDirAndmapHostFilesAndLabel, QMap<QString, QSet<QString>> dirAndTags)
 {
     m_sqlOperation->clearTable(TABLE_NAME_FILEPATH_LABEL);
     m_sqlOperation->insertRecord(mapDirAndmapHostFilesAndLabel);
     showFilesWidget();
     setActionState(TRAVERER_FINISH);
+    emit sendDirAndLabels(dirAndTags);
+    ui->pageProgressInfo->clear();
 }
 
 void FormFileBrowser::onActionSearchConfigTriggered()
 {
     DlgSearchConfig dlg(this, g_sAppDir + "/" + SEARCH_CONFIG_FILE);
     dlg.exec();
-}
-
-void FormFileBrowser::onRecvDirAndTags(QMap<QString, QSet<QString>> mapDirAndLabel)
-{
-    emit sendDirAndLabels(mapDirAndLabel);
 }
 
 void FormFileBrowser::onRecvStopSearch()
