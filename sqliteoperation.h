@@ -18,16 +18,15 @@ public:
     SqliteOperation();
     ~SqliteOperation();
 
+    // P2-14：禁用拷贝构造和赋值，避免浅拷贝 QSqlDatabase 引用导致未定义行为。
+    SqliteOperation(const SqliteOperation&) = delete;
+    SqliteOperation& operator=(const SqliteOperation&) = delete;
+
     void openDB();
     void createTable();
-    void clearTable(const QString &sTableName);
-    void clearLabels(const QString &sFilePath);
     void insertRecord(QMap<QString, FILE_TAGS> dirAndFileTags);
-    void deleteRecord(const QString &sFilePath, const QString &sLabel);
-    QStringList searchFileByLabel(QStringList qLLabels, int nLabelLogic);
     /** 根据给定的标签和逻辑关系，在选中的文件夹中查找文件 */
     void searchFilesByLabels(QStringList qLSelDirs, QStringList qLLabels, int nLabelLogic, QStringList &qLFilePaths, QStringList &qLNotHitedDirs);
-    QVector<QString> getAllLabels();
 
 public:
     QSqlDatabase    m_sqlDB;

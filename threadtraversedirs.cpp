@@ -1,5 +1,4 @@
 #include "threadtraversedirs.h"
-#include <QCoreApplication>
 
 #include "adsoperation.h"
 #include "traversedirectory.h"
@@ -31,6 +30,7 @@ void ThreadTraverseDirs::run()
     QMap<QString, FILE_TAGS> dirAndFileTags;
     QMap<QString, QSet<QString>> dirAndTags;
 
+    TraverseDirectory::resetStop();   // 每个遍历任务开头复位一次停止标志（多目录遍历也能正确响应停止，P1-3）
     foreach(QString selDir, m_selDirs){
         TraverseDirectory::traverseDirectory(selDir, func, true);
 
@@ -59,7 +59,6 @@ bool ThreadTraverseDirs::traverseDir(const QFileInfo& fileInfo)
     m_tags.unite(setAdsNames);
 
     emit sendProcessInfo(filePath);
-    QCoreApplication::processEvents();
 
 //    QThread::msleep(1);//让出时间片，使得ui有时间响应
 

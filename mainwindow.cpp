@@ -3,6 +3,7 @@
 
 #include "dlgauthor.h"
 #include "utility.h"
+#include <QDebug>
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -46,7 +47,12 @@ MainWindow::~MainWindow()
 void MainWindow::initLogMessageHanlder()
 {
     m_logFile.setFileName(g_sAppDir + "/" + LOG_FILE);
-    m_logFile.open(QIODevice::WriteOnly | QIODevice::Append);
+    if (!m_logFile.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
+        // 例如程序装在 C:\Program Files 这类只读目录时打开会失败；
+        // 此时不绑定日志设备，所有日志静默丢弃（不崩溃），仅给出警告。
+        qWarning() << "无法打开日志文件，日志将不写入文件:" << m_logFile.fileName();
+        return;
+    }
     Utility::tsLogInfo.setDevice(&m_logFile);
     qInstallMessageHandler(Utility::myMessageHandler);
 }

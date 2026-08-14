@@ -52,6 +52,8 @@ public:
 
 signals:
     void sendDblClick(const QModelIndex &index);
+    // 缩略图模式下双击标签区域时发出，由 FormPageFiles 弹出输入框编辑该文件标签（P2-2）。
+    void sendEditTag(const QModelIndex &index);
 
 private:
     // mutable 允许在 const 函数中修改 (虽然 editorEvent 不是 const，但 createEditor 是)

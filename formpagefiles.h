@@ -50,7 +50,6 @@ public:
 
     QStringList getSelDirs();
 
-    bool event(QEvent *event);
     void updateToolButtons();
 
     void setAction(QAction *actionDeleteLabels);
@@ -59,7 +58,7 @@ public:
 
 signals:
 
-    void sendLabels(QString sLabels);
+    void sendLabels(QString sFilePath, QString sLabels);
 
 protected:
     // 双击文件夹则进入该文件夹，双击文件则打开该文件。
@@ -83,9 +82,6 @@ public slots:
 
 private slots:
 
-    /** https://stackoverflow.com/questions/24716271/qt-qfilesystemmodel-how-to-get-files-in-folder-noob */
-    void onDirectoryLoaded(const QString &sDir);
-
     void on_backButton_clicked();
 
     void on_forwardButton_clicked();
@@ -102,9 +98,12 @@ private slots:
 
     void on_listView_customContextMenuRequested(const QPoint &pos);
 
-    void onRecvLabels(QString sLabels);
+    void onRecvLabels(QString sFilePath, QString sLabels);
 
     void recvDblClick(const QModelIndex &index);
+
+    // 缩略图模式下双击标签区域时弹出输入框编辑该文件的标签（P2-2）。
+    void onEditTag(const QModelIndex &index);
 
 private:
 

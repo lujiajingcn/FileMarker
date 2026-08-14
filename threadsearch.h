@@ -28,7 +28,7 @@ signals:
 private:
     QStringList m_selDirs;
     QStringList m_adsName;
-    labelLogic  m_tagLogic;
+    labelLogic  m_tagLogic{labelLogic::AND};  // P1-8：初始化默认值，避免 setPara 未被调用时产生未定义行为
     QStringList m_filePaths;
 };
 

@@ -50,10 +50,13 @@ void DlgSearchConfig::writeSearchConfig()
 {
     SearchConfig sc;
 
-    if(!ui->rbFromCache->isChecked())
-        sc.bFromCache = false;
+    // P1-12：改用正向逻辑明确设置每个字段的值，不再依赖 SearchConfig 构造函数的默认值
+    // 碰巧匹配"选中"情况。若默认值日后改变，此处的负逻辑将静默出错。
+    sc.bFromCache = ui->rbFromCache->isChecked();
 
-    if(!ui->rbLogicAnd->isChecked())
+    if (ui->rbLogicAnd->isChecked())
+        sc.logic = labelLogic::AND;
+    else
         sc.logic = labelLogic::OR;
 
     ConfigOperation::writeSearchConfig(m_sConfigFilePath, sc);

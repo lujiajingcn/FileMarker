@@ -30,7 +30,6 @@ SOURCES += \
         common.cpp \
         configoperation.cpp \
         dlgauthor.cpp \
-        dlglabel.cpp \
         dlgsearchconfig.cpp \
         editablefiledelegate.cpp \
         formcurdirlabels.cpp \
@@ -58,7 +57,6 @@ HEADERS += \
         common.h \
         configoperation.h \
         dlgauthor.h \
-        dlglabel.h \
         dlgsearchconfig.h \
         editablefiledelegate.h \
         formcurdirlabels.h \
@@ -82,7 +80,6 @@ HEADERS += \
 
 FORMS += \
         dlgauthor.ui \
-        dlglabel.ui \
         dlgsearchconfig.ui \
         formcurdirlabels.ui \
         formfilebrowser.ui \

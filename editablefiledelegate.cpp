@@ -85,21 +85,20 @@ bool EditableDelegate::editorEvent(QEvent *event, QAbstractItemModel *model, con
         QMouseEvent *me = static_cast<QMouseEvent*>(event);
         LayoutRects layout = calculateRects(option);
 
+        // P2-22：me->pos() 在 view 坐标中，但需确保使用正确的相对坐标。
+        // QMouseEvent 的 pos() 已经是相对于接收 widget（即 view viewport）的坐标，
+        // 而 option.rect 也是在同一坐标系，因此两者可直接比较。
+        QPoint mousePos = me->pos();
+
         // 判断点击位置
-        if (layout.customRect.contains(me->pos()))
+        if (layout.customRect.contains(mousePos))
         {
-            m_editTarget = TargetCustomData; // 标记为编辑自定义列
-
-            QModelIndex customIndex = index.siblingAtColumn(4);
-            QString customData = customIndex.data(Qt::DisplayRole).toString();
-
-            // 强制触发编辑 (QListView 默认只有双击才编辑，这里我们可以手动触发)
-            // 注意：通常需要发送信号或使用 View 的 edit() 接口，但在 editorEvent 内部比较难直接调 view->edit()
-            // 这里的 return false 让 view 继续处理事件，通常 view 会在双击时调用 createEditor
-            // 如果要单击即编辑，需要更复杂的处理。这里假设用户双击了该区域。
-            return false;
+            // 缩略图模式下第 4 列（标签）不在视图中，无法用内置 inline 编辑，
+            // 改为发出信号，由 FormPageFiles 弹出输入框编辑该文件的标签（P2-2）。
+            emit sendEditTag(index);
+            return true;
         }
-        else if(layout.nameRect.contains(me->pos()) )
+        else if(layout.nameRect.contains(mousePos) )
         {
             m_editTarget = TargetFileName; // 默认编辑文件名
         }

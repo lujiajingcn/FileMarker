@@ -44,7 +44,8 @@ xmlXPathObjectPtr Utility::searchByXPath(xmlDocPtr doc, const xmlChar *xpath)
 
     if (context == nullptr)
     {
-        printf("context is NULL\n");
+        // P3-26：改用 qWarning 替代 printf，确保日志能被全局 messageHandler 捕获写入文件。
+        qWarning("searchByXPath: context is NULL");
         return nullptr;
     }
 
@@ -52,14 +53,14 @@ xmlXPathObjectPtr Utility::searchByXPath(xmlDocPtr doc, const xmlChar *xpath)
     xmlXPathFreeContext(context);
     if (result == nullptr)
     {
-        printf("xmlXPathEvalExpression return NULL\n");
+        qWarning("searchByXPath: xmlXPathEvalExpression returned NULL");
         return nullptr;
     }
 
     if (xmlXPathNodeSetIsEmpty(result->nodesetval))
     {
         xmlXPathFreeObject(result);
-        printf("nodeset is empty\n");
+        qWarning("searchByXPath: nodeset is empty");
         return nullptr;
     }
 
@@ -85,7 +86,9 @@ bool Utility::isContains(const QStringList &list1, const QStringList &list2)
     return set1.contains(set2);
 }
 
-bool Utility::isADSNameValid(QString &sADSName)
+// P2-21：参数改为按值传递。原签名是非 const 引用，函数内部调用 chop() 会修改调用者的字符串，
+// 调用者可能不期望参数被修改。按值传递后函数内部可以自由修改副本。
+bool Utility::isADSNameValid(QString sADSName)
 {
     if(sADSName.endsWith(ADS_TAIL))
     {

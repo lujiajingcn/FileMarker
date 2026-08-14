@@ -1,6 +1,5 @@
 #include "threadsearch.h"
 #include "adsoperation.h"
-#include <QCoreApplication>
 
 #include "traversedirectory.h"
 
@@ -28,6 +27,7 @@ void ThreadSearch::run()
     };
 
     QStringList hostFiles;
+    TraverseDirectory::resetStop();   // 每个搜索任务开头复位一次停止标志（多目录搜索也能正确响应停止，P1-3）
     foreach(QString selDir, m_selDirs)
         TraverseDirectory::traverseDirectory(selDir, func, true);
 
@@ -41,7 +41,6 @@ bool ThreadSearch::searchFile(const QFileInfo& fileInfo)
         m_filePaths << sFilePath;
 
     emit sendProcessInfo(sFilePath);
-    QCoreApplication::processEvents();
 //    QThread::msleep(1);//睡眠1ms可以让界面上的进度输出顺畅，但是，整个操作耗时太多
 
     return true;

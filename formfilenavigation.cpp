@@ -8,7 +8,7 @@ FormFileNavigation::FormFileNavigation(QWidget *parent) :
     ui->setupUi(this);
 
     m_tvNavigation = ui->tvNavigation;
-    m_modelNavigation = new QFileSystemModel;
+    m_modelNavigation = new QFileSystemModel(this);
     m_tvNavigation->setModel(m_modelNavigation);
 
     m_modelNavigation->setRootPath("");

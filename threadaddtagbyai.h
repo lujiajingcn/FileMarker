@@ -4,16 +4,6 @@
 #include <QThread>
 #include <QFileInfo>
 
-struct FileResult {
-    QString sFilePath;
-    QString sType;
-    QStringList qLTags;
-    QString sSummary;
-    QString sStatus;
-};
-
-Q_DECLARE_METATYPE(FileResult)
-
 class ThreadAddTagByAI : public QThread
 {
     Q_OBJECT
@@ -29,6 +19,7 @@ signals:
     void sendFinish();
     void sendProcessInfo(QString sProcessedFilePath);
     void sendTags(QString tags);
+    void sendSummary(QString summary);
 
 protected:
     void run();

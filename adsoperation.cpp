@@ -2,6 +2,7 @@
 #include <windows.h>
 #include <QDebug>
 #include <QDir>
+#include <QRegularExpression>
 #include "common.h"
 #include "utility.h"
 
@@ -9,15 +10,32 @@ ADSOperation::ADSOperation()
 {
 }
 
+// NTFS 流名不允许包含 : / \ * ? " < > |，且不能为空。
+// 标签作为流名使用时需做净化，否则 QFile::open 会静默失败导致标签“看似加上实则没写”。
+static QString sanitizeStreamName(const QString &name)
+{
+    QString s = name;
+    // 同时禁止逗号：标签以逗号 join/split 在缓存入库、缓存查找、AI 上报、标签导入中传递，
+    // 含逗号的标签名会被错误拆成多个幻影标签（见 P1-1）。
+    static const QRegularExpression re("[/\\\\:*?\"<>|,]");
+    s.replace(re, "_");
+    s = s.trimmed();
+    if (s.isEmpty())
+        s = "tag";
+    return s;
+}
+
 void ADSOperation::writeADSFile(const QString &filePath, const QString &streamName, const QString &text, bool isDeleteOldAds)
 {
     if(isDeleteOldAds)
         deleteADSFiles(filePath);
 
-    QString sFullFileName = filePath + ":" + streamName;
+    QString sFullFileName = filePath + ":" + sanitizeStreamName(streamName);
     QFile f(sFullFileName);
-    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        qWarning() << "写入 ADS 失败:" << sFullFileName;
         return ;
+    }
 
     f.write(text.toUtf8());
 }
@@ -29,7 +47,10 @@ void ADSOperation::deleteADSFiles(const QString &filePath)
     foreach(QString adsName, adsFileNames)
     {
         QString adsFilePath = filePath + ":" + adsName;
-        DeleteFile(adsFilePath.toStdWString().c_str());
+        // P2-23：检查 DeleteFile 返回值，失败时记录警告。
+        if (!DeleteFile(adsFilePath.toStdWString().c_str())) {
+            qWarning() << "删除 ADS 失败:" << adsFilePath << "GetLastError:" << GetLastError();
+        }
     }
 }
 
@@ -59,24 +80,31 @@ bool ADSOperation::isHostFile(const QString &sFilePath, const QStringList &tags,
 {
     WIN32_FIND_STREAM_DATA findStreamData;
     HANDLE hFind = FindFirstStreamW(sFilePath.toStdWString().c_str(), FindStreamInfoStandard, &findStreamData, 0);
-    if (hFind != INVALID_HANDLE_VALUE) {
-        QStringList adsNames;
-        do {
-            QString adsName = QString::fromWCharArray(findStreamData.cStreamName + 1);
-            if(!Utility::isADSNameValid(adsName))
-                continue;
+    if (hFind == INVALID_HANDLE_VALUE)
+        return false;
 
-            if(logic == labelLogic::OR && tags.contains(adsName))
-                return true;
-            else if(logic == labelLogic::AND)
-                adsNames << adsName;
+    bool bResult = false;
+    QStringList adsNames;
+    do {
+        QString adsName = QString::fromWCharArray(findStreamData.cStreamName + 1);
+        if(!Utility::isADSNameValid(adsName))
+            continue;
 
-        } while (FindNextStreamW(hFind, &findStreamData));
-        if(adsNames.count() > 0 && Utility::isContains(adsNames, tags))
-            return true;
+        if(logic == labelLogic::OR) {
+            if(tags.contains(adsName)) {
+                bResult = true;
+                break;
+            }
+        } else if(logic == labelLogic::AND) {
+            adsNames << adsName;
+        }
+    } while (FindNextStreamW(hFind, &findStreamData));
 
-        FindClose(hFind);
-    }
+    // 无论 OR 提前命中还是正常遍历结束，都必须释放流枚举句柄，否则每次命中都会泄漏一个句柄（P1-2）。
+    FindClose(hFind);
 
-    return false;
+    if (!bResult && logic == labelLogic::AND && adsNames.count() > 0 && Utility::isContains(adsNames, tags))
+        bResult = true;
+
+    return bResult;
 }

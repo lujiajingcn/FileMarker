@@ -2,6 +2,8 @@
 #include <QDebug>
 #include "adsoperation.h"
 #include <QStack>
+#include <QDateTime>
+#include <QFileInfo>
 
 MyQFileSystemModel::MyQFileSystemModel(QObject *parent) :
     QFileSystemModel(parent)
@@ -66,7 +68,19 @@ QVariant MyQFileSystemModel::data(const QModelIndex & index, int role) const
         }
         else
         {
+            // 用文件修改时间做缓存键：标签是通过写 NTFS 流添加的，会更新文件 mtime，
+            // 因此 mtime 不变即可认为标签集合未变，避免每次重绘都枚举流。
+            // 注：QFileSystemModel 在 Qt5.13 无 ModifiedRole 角色，故仍需 QFileInfo。
+            qint64 mtime = QFileInfo(sFilePath).lastModified().toMSecsSinceEpoch();
+            auto it = m_tagCache.find(sFilePath);
+            if (it != m_tagCache.end() && it.value().first == mtime)
+                return QVariant(it.value().second.join(","));
+
             QStringList qLAdsFileNames = ADSOperation::listADSFileName(sFilePath);
+            m_tagCache[sFilePath] = qMakePair(mtime, qLAdsFileNames);
+            // 缓存容量上限：长会话下避免内存只增不减。超出后整体清空（下次访问重新枚举，P3）。
+            if (m_tagCache.size() > 2000)
+                m_tagCache.clear();
             QString sAdsFileNames = qLAdsFileNames.join(",");
             if(sAdsFileNames.isEmpty())
             {
@@ -88,11 +102,20 @@ bool MyQFileSystemModel::setData(const QModelIndex &index, const QVariant &value
 {
     if (index.column() == 4 && role == Qt::EditRole)
     {
+        // 标签被编辑后，失效该文件的缓存，下次绘制重新枚举。
+        QString sFilePath = index.sibling(index.row(), 0).data(QFileSystemModel::FilePathRole).toString();
+        m_tagCache.remove(sFilePath);
+
         QString sLabels = value.toString();
-        emit sendLabels(sLabels);
+        emit sendLabels(sFilePath, sLabels);
         return true;
     }
     return QFileSystemModel::setData(index, value, role);
+}
+
+void MyQFileSystemModel::clearTagCache()
+{
+    m_tagCache.clear();
 }
 
 // 让第4列【标签】可编辑

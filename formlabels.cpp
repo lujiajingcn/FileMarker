@@ -8,12 +8,14 @@
 #include <QDebug>
 #include <QAction>
 #include <QMenu>
+#include <functional>
 
 #include <libxml/parser.h>
 #include <libxml/tree.h>
 #include <libxml/xpath.h>
 
 #include "common.h"
+#include "utility.h"
 
 FormLabels::FormLabels(QWidget *parent) :
     QWidget(parent),
@@ -67,13 +69,15 @@ void FormLabels::initLabels()
     for(QList<LabelInfo>::const_iterator cItr = lstLabelInfo.begin(); cItr != lstLabelInfo.end(); cItr++)
     {
         QString sName = (*cItr).sName;
-        QStandardItem *item = new QStandardItem(sName);
+        // #1：保留从文件读到的 UUID（为空则新生成），避免保存时 UUID 被清空。
+        QString sUuid = (*cItr).sUuid.isEmpty() ? Utility::createUuid() : (*cItr).sUuid;
+        QStandardItem *item = createLabelItem(sName, sUuid);
         if((*cItr).lstChild.count() > 0)
         {
             traverseWriteLabel(item, (*cItr).lstChild);
         }
         m_modelAllLabels->appendRow(item);
-        m_setLabels.insert(sName);
+        registerItem(item);
     }
 }
 
@@ -81,17 +85,23 @@ QStringList FormLabels::getSelLabels()
 {
     QStringList qLLabels;
     QItemSelectionModel *selectionModel = m_tvAllLabels->selectionModel();
-    QModelIndexList selectedIndexes = selectionModel->selectedIndexes();
+    // P1-10：selectedIndexes() 会为同一选中行的每一列都返回一个索引，若不只取第 0 列，
+    // 会导致同一标签被重复返回多次（搜索时会重复匹配）。这里用 QSet 去重。
+    QSet<QString> stLabels;
+    QModelIndexList selectedIndexes = selectionModel->selectedRows(0);
     foreach (const QModelIndex &index, selectedIndexes)
     {
-        qLLabels<<m_modelAllLabels->itemFromIndex(index)->text();
+        QStandardItem *item = m_modelAllLabels->itemFromIndex(index);
+        if (item != nullptr)
+            stLabels.insert(item->text());
     }
+    qLLabels << stLabels.values();
     return qLLabels;
 }
 
 void FormLabels::addItem(QStandardItem *parentItem)
 {
-    QStandardItem *newItem = new QStandardItem(NEW_LABEL_NAME);
+    QStandardItem *newItem = createLabelItem(NEW_LABEL_NAME);
     if(nullptr == parentItem)
     {
         m_modelAllLabels->appendRow(newItem);
@@ -100,7 +110,9 @@ void FormLabels::addItem(QStandardItem *parentItem)
     {
         parentItem->appendRow(newItem);
     }
+    registerItem(newItem);
     m_tvAllLabels->setCurrentIndex(newItem->index());
+    saveLabelToXmlFile();   // #11 新增标签后立即持久化
 }
 
 void FormLabels::on_actionAdd_triggered()
@@ -155,6 +167,11 @@ void FormLabels::on_actionDelete_triggered()
         parentItem->removeRow(nCurRow);
         m_tvAllLabels->setCurrentIndex(parentItem->index());
     }
+    // #3：删除可能包含整棵子树，删除“之后”按当前模型重新同步去重集合，
+    // 必须在 removeRow 之后调用，否则 m_setLabels 会残留被删标签名，
+    // 导致之后同名的外部/AI 标签被 m_setLabels.contains() 误判为已存在而静默丢弃（P2-1）。
+    resyncSets();
+    saveLabelToXmlFile();   // #11 删除后立即持久化
 }
 
 void FormLabels::on_actionMoveUp_triggered()
@@ -175,7 +192,8 @@ void FormLabels::on_actionMoveUp_triggered()
     QStandardItem *parentItem = curItem->parent();
     if(parentItem == nullptr)
     {
-        QStandardItem *curItem = m_modelAllLabels->takeItem(nCurRow);
+        // P2-19：移除内部 curItem 的类型声明，避免遮蔽外层变量。
+        curItem = m_modelAllLabels->takeItem(nCurRow);
         if(curItem == nullptr)
             return;
 
@@ -189,7 +207,7 @@ void FormLabels::on_actionMoveUp_triggered()
     }
     else
     {
-        QStandardItem *curItem = parentItem->takeChild(nCurRow);
+        curItem = parentItem->takeChild(nCurRow);
         if(curItem == nullptr)
             return;
 
@@ -201,6 +219,7 @@ void FormLabels::on_actionMoveUp_triggered()
         QModelIndex index = curItem->index();
         m_tvAllLabels->setCurrentIndex(index);
     }
+    saveLabelToXmlFile();   // #11 移动后立即持久化
 }
 
 void FormLabels::on_actionMoveDown_triggered()
@@ -222,7 +241,8 @@ void FormLabels::on_actionMoveDown_triggered()
             return;
         }
 
-        QStandardItem *curItem = m_modelAllLabels->takeItem(nCurRow);
+        // P2-19：移除内部 curItem 的类型声明，避免遮蔽外层变量。
+        curItem = m_modelAllLabels->takeItem(nCurRow);
         if(curItem == nullptr)
             return;
 
@@ -241,7 +261,7 @@ void FormLabels::on_actionMoveDown_triggered()
             return;
         }
 
-        QStandardItem *curItem = parentItem->takeChild(nCurRow);
+        curItem = parentItem->takeChild(nCurRow);
         if(curItem == nullptr)
             return;
 
@@ -253,6 +273,7 @@ void FormLabels::on_actionMoveDown_triggered()
         QModelIndex index = curItem->index();
         m_tvAllLabels->setCurrentIndex(index);
     }
+    saveLabelToXmlFile();   // #11 移动后立即持久化
 }
 
 void FormLabels::on_actionMoveLeft_triggered()
@@ -271,8 +292,9 @@ void FormLabels::on_actionMoveLeft_triggered()
     }
     else
     {
+        // P0-1：takeChild 已将该节点从父节点移除并返回，这里再次 removeRow 会误删
+        // 原本位于 curIdx.row() 之后的相邻节点。移除冗余的 removeRow 调用。
         curItem = parentItem->takeChild(curIdx.row());
-        parentItem->removeRow(curIdx.row());
         QStandardItem *pParentItem = parentItem->parent();
         if(pParentItem == nullptr)
         {
@@ -286,6 +308,7 @@ void FormLabels::on_actionMoveLeft_triggered()
 
     QModelIndex index = curItem->index();
     m_tvAllLabels->setCurrentIndex(index);
+    saveLabelToXmlFile();   // #11 移动后立即持久化
 
 }
 
@@ -309,8 +332,8 @@ void FormLabels::on_actionMoveRight_triggered()
        }
        else
        {
+            // P0-2：takeItem 已将该节点移除并返回，这里再次 removeRow 会误删相邻节点。
             curItem = m_modelAllLabels->takeItem(curIdx.row());
-            m_modelAllLabels->removeRow(curIdx.row());
             upItem->appendRow(curItem);
        }
     }
@@ -323,31 +346,92 @@ void FormLabels::on_actionMoveRight_triggered()
         }
         else
         {
+             // P0-2：takeChild 已将该节点移除并返回，这里再次 removeRow 会误删相邻节点。
              curItem = parentItem->takeChild(curIdx.row());
-             parentItem->removeRow(curIdx.row());
              upItem->appendRow(curItem);
         }
     }
 
     QModelIndex index = curItem->index();
     m_tvAllLabels->setCurrentIndex(index);
+    saveLabelToXmlFile();   // #11 移动后立即持久化
 
 }
 
-// todo 这个判断是在节点的文本内容已经修改结束时执行，如果标签重复，则应该叫节点内容改回旧值。
+// 节点文本编辑结束时触发：处理去重、回退旧值，并保持 m_setLabels / m_committedText 同步。
 void FormLabels::onItemChanged(QStandardItem *item)
 {
-    QString sLabel = item->text();
-    if(m_setLabels.contains(sLabel))
-    {
-        QMessageBox::information(this, "提示", QString("标签【%1】已经存在").arg(sLabel));
+    QString sLabel = item->text().trimmed();
+    QPersistentModelIndex pidx(item->index());
+
+    // 空名称不允许，回退到上次提交的值。
+    if (sLabel.isEmpty()) {
+        item->setText(m_committedText.value(pidx));
+        return;
     }
-    else
-    {
-        m_setLabels.insert(sLabel);
+    item->setText(sLabel);
+
+    QString old = m_committedText.value(pidx);
+    if (sLabel == old)
+        return; // 实际无变化
+
+    // 若整棵树中该名称已出现多次，说明产生了重复，回退原名。
+    if (countLabelOccurrences(sLabel) > 1) {
+        QMessageBox::information(this, "提示", QString("标签【%1】已经存在，已恢复原名").arg(sLabel));
+        item->setText(old);
+        return;
     }
+
+    // 更新去重集合与“已提交文本”，使重命名后旧键被移除、新键被加入。
+    if (!old.isEmpty())
+        m_setLabels.remove(old);
+    m_setLabels.insert(sLabel);
+    m_committedText[pidx] = sLabel;
+
+    saveLabelToXmlFile();   // #11 重命名后立即持久化
 }
 
+
+QStandardItem* FormLabels::createLabelItem(const QString &name, const QString &uuid)
+{
+    QStandardItem *item = new QStandardItem(name);
+    // #1：每个标签节点携带稳定 UUID，保存时回写，避免退出保存后标识全部丢失。
+    item->setData(uuid.isEmpty() ? Utility::createUuid() : uuid, LabelUuidRole);
+    return item;
+}
+
+void FormLabels::registerItem(QStandardItem *item)
+{
+    m_setLabels.insert(item->text());
+    m_committedText[QPersistentModelIndex(item->index())] = item->text();
+    // 递归登记子树
+    for (int i = 0; i < item->rowCount(); ++i)
+        registerItem(item->child(i));
+}
+
+int FormLabels::countLabelOccurrences(const QString &name) const
+{
+    int n = 0;
+    std::function<void(QStandardItem*)> walk = [&](QStandardItem *it) {
+        for (int i = 0; i < it->rowCount(); ++i) {
+            QStandardItem *child = it->child(i);
+            if (child->text() == name)
+                ++n;
+            walk(child);
+        }
+    };
+    walk(m_modelAllLabels->invisibleRootItem());
+    return n;
+}
+
+// 依据当前模型重建去重集合与“已提交文本”映射（用于删除等结构性变更后保持一致）。
+void FormLabels::resyncSets()
+{
+    m_setLabels.clear();
+    m_committedText.clear();
+    for (int i = 0; i < m_modelAllLabels->rowCount(); ++i)
+        registerItem(m_modelAllLabels->item(i));
+}
 
 void FormLabels::saveLabelToXmlFile()
 {
@@ -358,6 +442,9 @@ void FormLabels::saveLabelToXmlFile()
     {
         LabelInfo labelInfo;
         QStandardItem *item = m_modelAllLabels->item(i);
+        labelInfo.sUuid = item->data(LabelUuidRole).toString();
+        if (labelInfo.sUuid.isEmpty())
+            labelInfo.sUuid = Utility::createUuid();
         traverseReadLabel(item, labelInfo.lstChild);
         labelInfo.sName = item->text();
         lstLabelInfo.push_back(labelInfo);
@@ -370,7 +457,9 @@ void FormLabels::traverseWriteLabel(QStandardItem *item, const QList<LabelInfo> 
 {
     for (QList<LabelInfo>::const_iterator cItr = lstLabelInfo.begin(); cItr != lstLabelInfo.end(); cItr++)
     {
-        QStandardItem *itemChild = new QStandardItem((*cItr).sName);
+        // #1：写子节点时同样保留 UUID（为空则新生成）。
+        QString sUuid = (*cItr).sUuid.isEmpty() ? Utility::createUuid() : (*cItr).sUuid;
+        QStandardItem *itemChild = createLabelItem((*cItr).sName, sUuid);
         if((*cItr).lstChild.count() > 0)
         {
             traverseWriteLabel(itemChild, (*cItr).lstChild);
@@ -386,6 +475,9 @@ void FormLabels::traverseReadLabel(QStandardItem *item, QList<LabelInfo> &lstLab
     {
         QStandardItem *itemChild = item->child(i);
         LabelInfo labelInfo;
+        labelInfo.sUuid = itemChild->data(LabelUuidRole).toString();
+        if (labelInfo.sUuid.isEmpty())
+            labelInfo.sUuid = Utility::createUuid();
         labelInfo.sName = itemChild->text();
         traverseReadLabel(itemChild, labelInfo.lstChild);
         lstLabelInfo.push_back(labelInfo);
@@ -395,24 +487,21 @@ void FormLabels::traverseReadLabel(QStandardItem *item, QList<LabelInfo> &lstLab
 void FormLabels::updateAllLabelList(QVector<QString> vtAllLabels)
 {
     m_modelAllLabels->removeRows(0, m_modelAllLabels->rowCount());
-    QStandardItem *item = nullptr;
+    m_setLabels.clear();
+    m_committedText.clear();
     for(QVector<QString>::iterator it = vtAllLabels.begin(); it != vtAllLabels.end(); it++)
     {
-        item = new QStandardItem(*it);
+        QStandardItem *item = createLabelItem(*it);
         m_modelAllLabels->appendRow(item);
+        registerItem(item);
     }
 }
 
 void FormLabels::on_treeView_clicked(const QModelIndex &index)
 {
-    QStringList qLLabels;
-    QItemSelectionModel *selectionModel = m_tvAllLabels->selectionModel();
-    QModelIndexList selectedIndexes = selectionModel->selectedIndexes();
-    foreach (const QModelIndex &index, selectedIndexes)
-    {
-        qLLabels<<m_modelAllLabels->itemFromIndex(index)->text();
-    }
-    sendSelLabels(qLLabels);
+    Q_UNUSED(index);
+    // P1-10/P3-32：复用 getSelLabels，避免与 getSelLabels 重复逻辑，且同样去除 selectedIndexes 多列重复。
+    sendSelLabels(getSelLabels());
 }
 
 void FormLabels::onRecvLabels(QString sLabels)
@@ -420,13 +509,17 @@ void FormLabels::onRecvLabels(QString sLabels)
     QStringList qLLabels = sLabels.split(",");
     foreach (QString sLabel , qLLabels)
     {
+        sLabel = sLabel.trimmed();
+        if (sLabel.isEmpty())
+            continue;
         if(!m_setLabels.contains(sLabel))
         {
-            QStandardItem *newItem = new QStandardItem(sLabel);
+            QStandardItem *newItem = createLabelItem(sLabel);
             m_modelAllLabels->appendRow(newItem);
-            m_setLabels.insert(sLabel);
+            registerItem(newItem);
         }
     }
+    saveLabelToXmlFile();   // #11 外部写入标签后立即持久化
 }
 
 void FormLabels::onRecvLabelsGeneratedByAI(QString sLabels)
@@ -445,19 +538,24 @@ void FormLabels::onRecvLabelsGeneratedByAI(QString sLabels)
     }
     if(!bAlreadyHaveItem)
     {
-        itemLabelsGeneratedByAI = new QStandardItem(LABEL_NAME_AI);
+        itemLabelsGeneratedByAI = createLabelItem(LABEL_NAME_AI);
         itemLabelsGeneratedByAI->setEditable(false);
         m_modelAllLabels->appendRow(itemLabelsGeneratedByAI);
+        registerItem(itemLabelsGeneratedByAI);
     }
 
     QStringList qLLabels = sLabels.split(",");
     foreach (QString sLabel , qLLabels)
     {
+        sLabel = sLabel.trimmed();
+        if (sLabel.isEmpty())
+            continue;
         if(!m_setLabels.contains(sLabel))
         {
-            QStandardItem *newItem = new QStandardItem(sLabel);
+            QStandardItem *newItem = createLabelItem(sLabel);
             itemLabelsGeneratedByAI->appendRow(newItem);
-            m_setLabels.insert(sLabel);
+            registerItem(newItem);
         }
     }
+    saveLabelToXmlFile();   // #11 AI 生成标签后立即持久化
 }

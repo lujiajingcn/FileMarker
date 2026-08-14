@@ -11,17 +11,25 @@ SqliteOperation::SqliteOperation()
 
 SqliteOperation::~SqliteOperation()
 {
+    // P0-4：close 后必须 removeDatabase 清理全局数据库连接表，否则再次 addDatabase 会
+    // 返回已关闭的旧连接并产生 "driver is already in use" 警告。
+    // 注意：默认连接（addDatabase 未指定名称）的 connectionName() 是空字符串，
+    // 因此不能以 connectionName() 是否为空作为是否清理的判断条件。
+    QString connName = m_sqlDB.connectionName();  // 默认连接为空串 ""
     m_sqlDB.close();
+    QSqlDatabase::removeDatabase(connName);
 }
 
 void SqliteOperation::openDB()
 {
     m_sqlDB = QSqlDatabase::addDatabase("QSQLITE");
-    m_sqlDB.setDatabaseName("FileMarker.db");
+    // 使用绝对路径，避免依赖进程当前工作目录（CWD 改变时数据库会打开失败）。
+    m_sqlDB.setDatabaseName(g_sAppDir + "/FileMarker.db");
     if(!m_sqlDB.open())
     {
-        QString sErrorMsg = QString("open database fails!").arg(m_sqlDB.lastError().text());
-        qFatal("%s", sErrorMsg.toStdString().c_str());
+        // 不要用 qFatal 直接终止程序，改为记录错误并继续，
+        // 让上层有机会提示用户而不是无声崩溃。
+        qCritical("open database fails! %s", qPrintable(m_sqlDB.lastError().text()));
     }
 }
 
@@ -37,8 +45,7 @@ void SqliteOperation::createTable()
                       )";
     if(!query.exec(sSql))
     {
-        QString sErrorMsg = QString("create table filewithlabels fails:").arg(query.lastError().text());
-        qFatal("%s", sErrorMsg.toStdString().c_str());
+        qCritical("create table filewithlabels fails: %s", qPrintable(query.lastError().text()));
     }
 
     QSqlQuery query1(m_sqlDB);
@@ -49,68 +56,48 @@ void SqliteOperation::createTable()
                       )";
     if(!query1.exec(sSql1))
     {
-        QString sErrorMsg = QString("create table dirs fails:").arg(query.lastError().text());
-        qFatal("%s", sErrorMsg.toStdString().c_str());
-    }
-}
-
-void SqliteOperation::clearTable(const QString &sTableName)
-{
-    QSqlQuery query(m_sqlDB);
-    QString sSql = QString("DELETE FROM %1").arg(sTableName);
-    bool bRet = query.exec(sSql);
-    if(!bRet)
-    {
-        qCritical("删除数据失败！");
-    }
-}
-
-void SqliteOperation::clearLabels(const QString &sFilePath)
-{
-    QSqlQuery query(m_sqlDB);
-    QString sSql = QString("DELETE FROM filewithlabels WHERE filepath='%1'")
-                   .arg(sFilePath);
-    bool bRet = query.exec(sSql);
-    if(!bRet)
-    {
-        qCritical("删除数据失败！");
+        qCritical("create table dirs fails: %s", qPrintable(query1.lastError().text()));
     }
 }
 
 void SqliteOperation::insertRecord(QMap<QString, FILE_TAGS> dirAndFileTags)
 {
     QSqlQuery query(m_sqlDB);
+    // 使用 INSERT OR IGNORE 写入目录，dir 列有 UNIQUE 约束，重复遍历同一目录不会报错。
+    query.prepare(QString("INSERT OR IGNORE INTO %1 (dir) VALUES (:dir)").arg(TABLE_NAME_DIR));
     for(QMap<QString, FILE_TAGS>::const_iterator cItr = dirAndFileTags.begin(); cItr != dirAndFileTags.end(); cItr++) {
-        QString selDir = cItr.key();
-
-        QString sql = QString("INSERT INTO %1 (dir) VALUES ('%2')").arg(TABLE_NAME_DIR).arg(selDir);
-        bool bRet = query.exec(sql);
-        if(!bRet) {
+        query.bindValue(":dir", cItr.key());
+        if(!query.exec()) {
             QString sErrorMsg = QString("向表dirs中插入数据失败：%2").arg(query.lastError().text());
             qCritical("%s", sErrorMsg.toStdString().c_str());
         }
     }
 
     if (m_sqlDB.transaction()) {
-        QSqlQuery query(m_sqlDB);
+        // 预编译语句：删除指定目录的旧缓存。
+        QSqlQuery delQuery(m_sqlDB);
+        delQuery.prepare(QString("DELETE FROM %1 WHERE dir=:dir").arg(TABLE_NAME_FILEPATH_TAG));
+        // 预编译语句：插入文件标签，使用 bindValue 防止单引号等特殊字符造成 SQL 语法错误。
+        QSqlQuery insQuery(m_sqlDB);
+        insQuery.prepare(QString("INSERT INTO %1 (filepath, labels, dir) VALUES (:filepath, :labels, :dir)").arg(TABLE_NAME_FILEPATH_TAG));
 
-        query.prepare(QString("INSERT INTO %1 (filepath, labels, dir) VALUES (:filepath, :labels, :dir)").arg(TABLE_NAME_FILEPATH_TAG));
         for(QMap<QString, FILE_TAGS>::const_iterator cItr = dirAndFileTags.begin(); cItr != dirAndFileTags.end(); cItr++) {
             QString selDir = cItr.key();
 
-            QString sql = QString("DELETE FROM %1 WHERE dir='%2'").arg(TABLE_NAME_FILEPATH_TAG).arg(selDir);
-            bool bRet = query.exec(sql);
-            if(!bRet) {
-                QString sErrorMsg = QString("删除表%1中dir为%2的记录失败：%3").arg(TABLE_NAME_FILEPATH_TAG).arg(selDir).arg(query.lastError().text());
+            delQuery.bindValue(":dir", selDir);
+            if(!delQuery.exec()) {
+                QString sErrorMsg = QString("删除表%1中dir为%2的记录失败：%3").arg(TABLE_NAME_FILEPATH_TAG).arg(selDir).arg(delQuery.lastError().text());
                 qCritical("%s", sErrorMsg.toStdString().c_str());
+                m_sqlDB.rollback();
+                return;
             }
 
             for(QMap<QString, QStringList>::const_iterator cItrChild = cItr.value().begin(); cItrChild != cItr.value().end(); cItrChild++) {
-                query.bindValue(":filepath", cItrChild.key());
-                query.bindValue(":labels", cItrChild.value().join(","));
-                query.bindValue(":dir", selDir);
-                if (!query.exec()) {
-                    QString sErrorMsg = QString("向表%1中插入数据失败：%2").arg(TABLE_NAME_FILEPATH_TAG).arg(query.lastError().text());
+                insQuery.bindValue(":filepath", cItrChild.key());
+                insQuery.bindValue(":labels", cItrChild.value().join(","));
+                insQuery.bindValue(":dir", selDir);
+                if (!insQuery.exec()) {
+                    QString sErrorMsg = QString("向表%1中插入数据失败：%2").arg(TABLE_NAME_FILEPATH_TAG).arg(insQuery.lastError().text());
                     qCritical("%s", sErrorMsg.toStdString().c_str());
                     m_sqlDB.rollback();
                     return;
@@ -119,67 +106,16 @@ void SqliteOperation::insertRecord(QMap<QString, FILE_TAGS> dirAndFileTags)
         }
 
         if (!m_sqlDB.commit()) {
-            QString sErrorMsg = QString("Transaction commit failed:%1").arg(query.lastError().text());
+            QString sErrorMsg = QString("Transaction commit failed:%1").arg(insQuery.lastError().text());
             qCritical("%s", sErrorMsg.toStdString().c_str());
             m_sqlDB.rollback();
             return;
         }
     } else {
-        QString sErrorMsg = QString("Transaction failed to start:%1").arg(query.lastError().text());
+        // P2-20：transaction() 失败时，query 是前面的 INSERT INTO dirs，属于无关语句。
+        // 事务本身的错误应取自数据库连接 lastError()。
+        QString sErrorMsg = QString("Transaction failed to start:%1").arg(m_sqlDB.lastError().text());
         qCritical("%s", sErrorMsg.toStdString().c_str());
-    }
-}
-
-void SqliteOperation::deleteRecord(const QString &sFilePath, const QString &sLabel)
-{
-    QSqlQuery query(m_sqlDB);
-    QString sSql = QString("DELETE FROM filewithlabels WHERE filepath='%1' and labels='%2'")
-                   .arg(sFilePath).arg(sLabel);
-    bool bRet = query.exec(sSql);
-    if(!bRet)
-    {
-        qCritical("删除数据失败！");
-    }
-
-    sSql = QString("DELETE FROM alllabels WHERE label='%2'")
-           .arg(sLabel);
-    bRet = query.exec(sSql);
-    if(!bRet)
-    {
-        qCritical("删除数据失败！");
-    }
-}
-
-QStringList SqliteOperation::searchFileByLabel(QStringList qLLabels, int nLabelLogic)
-{
-    QStringList qLFilesPath;
-    QSqlQuery query(m_sqlDB);
-    if(nLabelLogic == labelLogic::AND)
-    {
-        query.exec(QString("SELECT filepath,labels FROM filewithlabels WHERE labels='%1'").arg(qLLabels.join(",")));
-        while(query.next())
-        {
-            qLFilesPath << query.value("filepath").toString();
-            QString sLables = query.value("labels").toString();
-            QStringList qLLabelsOfFilePath = sLables.split(",");
-
-        }
-        return qLFilesPath;
-    }
-    else
-    {
-        query.exec(QString("SELECT filepath,labels FROM filewithlabels"));
-        while(query.next())
-        {
-            QString sLabels = query.value("labels").toString();
-            QStringList qLAttachedLabels = sLabels.split(",");
-            if(Utility::hasEqualElement(qLAttachedLabels, qLLabels))
-            {
-                qLFilesPath << query.value("filepath").toString();
-                break;
-            }
-        }
-        return qLFilesPath;
     }
 }
 
@@ -209,14 +145,17 @@ void SqliteOperation::searchFilesByLabels(QStringList qLSelDirs, QStringList qLL
         qLNotHitedDirs << *cItr;
     }
 
-    // todo 不知道根据文件夹条件多次查询跟不带条件的单词查询，哪个速度更快
+    // 使用预编译语句 + bindValue，避免路径中包含单引号等字符导致 SQL 语法错误。
+    QSqlQuery hitQuery(m_sqlDB);
+    hitQuery.prepare(QString("SELECT filepath,labels FROM filewithlabels WHERE dir=:dir"));
     for(QSet<QString>::const_iterator cItr = stHitedDirs.begin(); cItr != stHitedDirs.end(); cItr++)
     {
-        query.exec(QString("SELECT filepath,labels FROM filewithlabels WHERE dir='%1'").arg(*cItr));
-        while(query.next())
+        hitQuery.bindValue(":dir", *cItr);
+        hitQuery.exec();
+        while(hitQuery.next())
         {
-            QString sFilePath = query.value("filepath").toString();
-            QString sLabels = query.value("labels").toString();
+            QString sFilePath = hitQuery.value("filepath").toString();
+            QString sLabels = hitQuery.value("labels").toString();
             if(nLabelLogic == labelLogic::AND)
             {
                 QStringList qLLabelsOfFilePath = sLabels.split(",");
@@ -239,6 +178,6 @@ void SqliteOperation::searchFilesByLabels(QStringList qLSelDirs, QStringList qLL
                 }
             }
         }
-        query.finish();
+        hitQuery.finish();
     }
 }

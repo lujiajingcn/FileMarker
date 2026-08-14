@@ -4,6 +4,7 @@
 #include <QMenu>
 #include <QDesktopServices>
 #include <QUrl>
+#include <QInputDialog>
 
 #include "adsoperation.h"
 #include "thumbnailiconprovider.h"
@@ -15,7 +16,7 @@ FormPageFiles::FormPageFiles(QWidget *parent) :
 {
     ui->setupUi(this);
 
-    m_modelFiles = new MyQFileSystemModel;
+    m_modelFiles = new MyQFileSystemModel(this);
     // 设置根路径（例如当前目录）
     m_modelFiles->setRootPath("");
 
@@ -25,7 +26,6 @@ FormPageFiles::FormPageFiles(QWidget *parent) :
     // todo 后续将已经访问过的路径都添加上
     ui->lookInCombo->setEditText(m_sCurDir);
 
-    connect(m_modelFiles, &QFileSystemModel::directoryLoaded, this, &FormPageFiles::onDirectoryLoaded);
     connect(m_modelFiles, &MyQFileSystemModel::sendLabels, this, &FormPageFiles::onRecvLabels);
 }
 
@@ -116,6 +116,7 @@ void FormPageFiles::initThumbnailFileList()
     m_lstFiles->setItemDelegate(delegate);
 
     connect(delegate, &EditableDelegate::sendDblClick, this, &FormPageFiles::recvDblClick);
+    connect(delegate, &EditableDelegate::sendEditTag, this, &FormPageFiles::onEditTag);
 
     // 设置根索引为当前目录
     m_lstFiles->setRootIndex(m_modelFiles->index(""));
@@ -127,17 +128,14 @@ void FormPageFiles::curDirChanged(QString sCurDir)
     m_skBackward.push_back(m_sCurDir);
     m_skForward.clear();
     m_sCurDir = sCurDir;
+    // P2-16：导航栈变化时直接更新按钮状态，不再依赖 event() 拦截 Paint。
+    updateToolButtons();
 }
 
-bool FormPageFiles::event(QEvent *event)
-{
-    if((event->type() == QEvent::Type::Paint))
-    {
-        updateToolButtons();
-    }
-
-    return QWidget::event(event);
-}
+// P2-16 删除：不再需要拦截 Paint 事件来更新工具按钮。
+// 原 event() 重写中每次重绘都调用 updateToolButtons()，降低 UI 性能。
+// 按钮状态仅在导航栈变化时（back/forward/parent 点击、双击目录、onTvNavigationClicked）
+// 需要更新，这些调用点均已直接调用 updateToolButtons()。
 
 void FormPageFiles::updateToolButtons()
 {
@@ -161,9 +159,11 @@ void FormPageFiles::updateToolButtons()
 
 QStringList FormPageFiles::getSelFilePath()
 {
+    // selectedIndexes() 会为同一行的每一列都返回一个索引，
+    // 若直接收集会导致每个文件被重复返回 5 次（打标签/删标签时重复操作）。
+    // 这里只取第 0 列（每选中的行一个索引），自动去重。
     QStringList selFilePath;
-    QModelIndexList selected = m_tvFiles->selectionModel()->selectedIndexes();
-    QString sSelect;
+    QModelIndexList selected = m_tvFiles->selectionModel()->selectedRows(0);
     for (QModelIndexList::const_iterator cit = selected.begin(); cit != selected.end(); ++cit)
     {
         selFilePath << m_modelFiles->filePath(*cit);
@@ -199,15 +199,17 @@ void FormPageFiles::on_tvFiles_doubleClicked(const QModelIndex &index)
 
 void FormPageFiles::onCustomContextMenuRequested(const QPoint &pos)
 {
+    Q_UNUSED(pos);
     QMenu menu(m_tvFiles);
-    QAction *actionDetail = new QAction("详细信息");
-    QAction *actionThumbnail = new QAction("缩略图");
-    connect(actionDetail, &QAction::triggered, this, &FormPageFiles::on_tbDetail_clicked);
-    connect(actionThumbnail, &QAction::triggered, this, &FormPageFiles::on_tbThumbnail_clicked);
     QMenu menuShowType("查看");
-    menuShowType.addAction(actionDetail);
-    menuShowType.addAction(actionThumbnail);
-//    menu.addAction(m_actionDeleteLabels);
+    // P3-29：使用栈上 QAction，避免每次右键都 new QAction。
+    // menu 会作为 parent 持有 QAction，无需手动管理。
+    QAction actionDetail("详细信息", &menu);
+    QAction actionThumbnail("缩略图", &menu);
+    connect(&actionDetail, &QAction::triggered, this, &FormPageFiles::on_tbDetail_clicked);
+    connect(&actionThumbnail, &QAction::triggered, this, &FormPageFiles::on_tbThumbnail_clicked);
+    menuShowType.addAction(&actionDetail);
+    menuShowType.addAction(&actionThumbnail);
     menu.addMenu(&menuShowType);
     menu.exec(QCursor::pos());
 }
@@ -217,19 +219,6 @@ void FormPageFiles::on_tvFiles_customContextMenuRequested(const QPoint &pos)
     onCustomContextMenuRequested(pos);
 }
 
-void FormPageFiles::onDirectoryLoaded(const QString &sDir)
-{
-    QModelIndex parentIndex = m_modelFiles->index(sDir);
-    int numRows = m_modelFiles->rowCount(parentIndex);
-    for (int row = 0; row < numRows; ++row) {
-        QModelIndex childIndex = m_modelFiles->index(row, 0, parentIndex);
-        QString sFileName = m_modelFiles->data(childIndex).toString();
-
-        QString sFilePath = sDir + "/" + sFileName;
-        sFilePath = sFilePath.replace("//","/");
-    }
-}
-
 void FormPageFiles::on_backButton_clicked()
 {
     m_skForward.push_back(m_sCurDir);
@@ -237,6 +226,7 @@ void FormPageFiles::on_backButton_clicked()
     bothSetRootIndex(m_modelFiles->index(sDir));
     ui->lookInCombo->setEditText(sDir);
     m_sCurDir = sDir;
+    updateToolButtons();  // P2-16：导航栈变化后直接更新按钮
 }
 
 void FormPageFiles::on_forwardButton_clicked()
@@ -246,6 +236,7 @@ void FormPageFiles::on_forwardButton_clicked()
     bothSetRootIndex(m_modelFiles->index(sDir));
     ui->lookInCombo->setEditText(sDir);
     m_sCurDir = sDir;
+    updateToolButtons();  // P2-16：导航栈变化后直接更新按钮
 }
 
 void FormPageFiles::on_toParentButton_clicked()
@@ -266,20 +257,33 @@ void FormPageFiles::on_toParentButton_clicked()
     bothSetRootIndex(m_modelFiles->index(sNewDirectory));
     m_skBackward.push_back(sFilePath);
     m_sCurDir = sNewDirectory;
+    updateToolButtons();  // P2-16：导航栈变化后直接更新按钮
 }
 
 void FormPageFiles::on_btnRefresh_clicked()
 {
     QModelIndex curIndex = m_modelFiles->index(m_sCurDir);
-    m_modelFiles->setRootPath("");
-    m_tvFiles->setRootIndex(curIndex);
+    if (curIndex.isValid())
+    {
+        // P2-3：清空标签缓存，强制重新枚举 ADS（QFileSystemModel 本身通过文件监视器自动感知文件增删，
+        // 这里只需保证标签列刷新；Qt5 的 QFileSystemModel 没有 refresh() 接口）。
+        m_modelFiles->clearTagCache();
+        m_tvFiles->setRootIndex(curIndex);
+        m_lstFiles->setRootIndex(curIndex);
+    }
+    m_tvFiles->viewport()->update();
     m_lstFiles->viewport()->update();
 }
 
 void FormPageFiles::recvGotoFile(QString sFilePath)
 {
-    QString sFileDir = sFilePath.left(sFilePath.lastIndexOf("/"));
-    m_tvFiles->setRootIndex(m_modelFiles->index(sFileDir));
+    // P2-4：用 QFileInfo 取父目录，正确处理盘符根（如 C:/file.txt 下 lastIndexOf('/') 会失效）。
+    QFileInfo fi(sFilePath);
+    QString sFileDir = fi.absolutePath();
+    QModelIndex dirIndex = m_modelFiles->index(sFileDir);
+    // P1-7：使用 bothSetRootIndex 同时更新详细视图和缩略图视图，
+    // 否则缩略图模式下跳转后仍停留在旧目录。
+    bothSetRootIndex(dirIndex);
     m_tvFiles->setCurrentIndex(m_modelFiles->index(sFilePath));
 }
 
@@ -333,9 +337,38 @@ void FormPageFiles::on_listView_customContextMenuRequested(const QPoint &pos)
     onCustomContextMenuRequested(pos);
 }
 
-void FormPageFiles::onRecvLabels(QString sLabels)
+void FormPageFiles::onRecvLabels(QString sFilePath, QString sLabels)
 {
-    emit sendLabels(sLabels);
+    emit sendLabels(sFilePath, sLabels);
+}
+
+void FormPageFiles::onEditTag(const QModelIndex &index)
+{
+    QString sFilePath = m_modelFiles->filePath(index);
+    // 只对文件弹编辑框，目录无需标签
+    if (sFilePath.isEmpty() || m_modelFiles->isDir(index))
+        return;
+
+    QStringList adsNames = ADSOperation::listADSFileName(sFilePath);
+    bool ok = false;
+    QString sNewTags = QInputDialog::getText(this, tr("编辑标签"),
+                                             tr("用逗号分隔多个标签："),
+                                             QLineEdit::Normal,
+                                             adsNames.join(","), &ok);
+    if (!ok)
+        return;
+
+    // 先清空该文件全部标签，再按用户输入重新写入（P2-2）
+    ADSOperation::deleteADSFiles(sFilePath);
+    QStringList qLLabels = sNewTags.split(",");
+    foreach (const QString &sLabel, qLLabels) {
+        QString sTrim = sLabel.trimmed();
+        if (!sTrim.isEmpty())
+            ADSOperation::writeADSFile(sFilePath, sTrim, "");
+    }
+
+    emit sendLabels(sFilePath, qLLabels.join(","));
+    on_btnRefresh_clicked();
 }
 
 void FormPageFiles::recvDblClick(const QModelIndex &index)

@@ -20,6 +20,7 @@ QList<LabelInfo> XmlOperation::readLabelFromXmlFile(const char* sXml)
     xmlXPathObjectPtr result = Utility::searchByXPath(doc, xpath);
     if (nullptr == result)
     {
+        xmlFreeDoc(doc);   // 提前返回也要释放已解析的文档，否则内存泄漏
         return lstLabelInfo;
     }
     xmlNodeSetPtr nodeset = result->nodesetval;
@@ -28,6 +29,7 @@ QList<LabelInfo> XmlOperation::readLabelFromXmlFile(const char* sXml)
     traverseReadItem(root, lstLabelInfo, nullptr);
 
     xmlXPathFreeObject(result);
+    xmlFreeDoc(doc);       // 释放已解析的 XML 文档，避免内存泄漏
 
     return lstLabelInfo;
 }
@@ -50,6 +52,11 @@ bool XmlOperation::saveXml(const char* sXml, const QList<LabelInfo> &lstBlockInf
     int ret = xmlSaveFormatFileEnc(sXml, doc, "UTF-8", 1);
     if(ret == -1)
     {
+        // P0-5：保存失败时也要释放 strdup 分配的 doc->encoding 和 xmlNewDoc 分配的 doc，
+        // 否则每次失败的保存都会泄漏内存。
+        free((void *)(doc->encoding));
+        doc->encoding = NULL;
+        xmlFreeDoc(doc);
         return false;
     }
 
@@ -66,13 +73,30 @@ void XmlOperation::traverseReadItem(xmlNodePtr item, QList<LabelInfo> &lstLabelI
     xmlNodePtr cur = item->children;
     while(cur != nullptr)
     {
+        // P3-24：跳过非元素节点（如注释节点），避免文本/注释节点破坏遍历逻辑。
+        // （纯空白文本节点已由 XML_PARSE_NOBLANKS 过滤，此处再防御性检查。）
+        if (cur->type != XML_ELEMENT_NODE) {
+            cur = cur->next;
+            continue;
+        }
+
         LabelInfo labelInfo;
 
         xmlChar *propId = xmlGetProp(cur, (xmlChar*)"id");
-        labelInfo.sUuid = QString((char*)propId);
+        if (propId != nullptr) {
+            labelInfo.sUuid = QString((char*)propId);
+            xmlFree(propId);   // xmlGetProp 返回的字符串需要手动释放
+        } else {
+            labelInfo.sUuid.clear();
+        }
 
         xmlChar *propName = xmlGetProp(cur, (xmlChar*)"name");
-        labelInfo.sName = QString((char*)propName);
+        if (propName != nullptr) {
+            labelInfo.sName = QString((char*)propName);
+            xmlFree(propName);
+        } else {
+            labelInfo.sName.clear();
+        }
 
         if(cur->children != nullptr)
         {
@@ -99,8 +123,10 @@ void XmlOperation::traverseWriteItem( const QList<LabelInfo> &lstBlockInfo, xmlN
         LabelInfo labelInfo = *cIt;
 
         xmlNodePtr pNodeItem = xmlNewTextChild(pNode, NULL, BAD_CAST"label", BAD_CAST"");
-        xmlNewProp(pNodeItem, BAD_CAST"id", (xmlChar *)labelInfo.sUuid.toStdString().c_str());
-        xmlNewProp(pNodeItem, BAD_CAST"name", (xmlChar *)labelInfo.sName.toStdString().c_str());
+        // P3-25：用 toUtf8().constData() 替代 toStdString().c_str() 强转，
+        // 确保含非 ASCII 字符的标签名能正确编码为 UTF-8。
+        xmlNewProp(pNodeItem, BAD_CAST"id", (xmlChar *)labelInfo.sUuid.toUtf8().constData());
+        xmlNewProp(pNodeItem, BAD_CAST"name", (xmlChar *)labelInfo.sName.toUtf8().constData());
 
         int nChildCount = labelInfo.lstChild.count();
         if(nChildCount > 0)

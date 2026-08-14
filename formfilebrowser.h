@@ -79,8 +79,6 @@ public slots:
     void onRecvLabelsGeneratedByAI(QString sLabels);
 
 private slots:
-    void on_btnStop_clicked();
-
     /** 调用aAI大模型来自动分析文件，为文件生成标签*/
     void onActionAddLabelByAITriggered();
 
@@ -99,7 +97,7 @@ private slots:
 
     void onRecvStopSearch();
 
-    void onRecvLabels(QString sLabels);
+    void onRecvLabels(QString sFilePath, QString sLabels);
 
 protected:
     void setActionState(OPERATION op);
@@ -122,6 +120,8 @@ private:
     ThreadAddTagByAI  *m_threadAddLabelByAI;
 
     int                 m_nThread;              // 用来记录当前运行的线程：根据标签查找文件、遍历文件夹、AI自动生成标签。
+
+    QStringList         m_qLFilePathsFromCache; // 部分目录命中缓存时的缓存命中结果，最后与磁盘查找结果合并
 };
 
 #endif // FILEBROWSER_H
