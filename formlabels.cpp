@@ -97,16 +97,20 @@ QStringList FormLabels::getSelLabels()
     QStringList qLLabels;
     QItemSelectionModel *selectionModel = m_tvAllLabels->selectionModel();
     // P1-10：selectedIndexes() 会为同一选中行的每一列都返回一个索引，若不只取第 0 列，
-    // 会导致同一标签被重复返回多次（搜索时会重复匹配）。这里用 QSet 去重。
-    QSet<QString> stLabels;
+    // 会导致同一标签被重复返回多次（搜索时会重复匹配）。
+    // 这里按选中行的顺序逐个追加并去重，保证返回顺序与树上看到的顺序一致
+    // （原先用 QSet::values() 会打乱顺序，导致批量添加标签时顺序随机）。
     QModelIndexList selectedIndexes = selectionModel->selectedRows(0);
     foreach (const QModelIndex &index, selectedIndexes)
     {
         QStandardItem *item = m_modelAllLabels->itemFromIndex(index);
-        if (item != nullptr)
-            stLabels.insert(item->text());
+        if (item == nullptr)
+            continue;
+
+        const QString sLabel = item->text();
+        if (!qLLabels.contains(sLabel))
+            qLLabels << sLabel;
     }
-    qLLabels << stLabels.values();
     return qLLabels;
 }
 

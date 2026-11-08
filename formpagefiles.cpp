@@ -359,7 +359,8 @@ void FormPageFiles::onEditTag(const QModelIndex &index)
     if (sFilePath.isEmpty() || m_modelFiles->isDir(index))
         return;
 
-    QStringList adsNames = ADSOperation::listADSFileName(sFilePath);
+    // 按录入顺序显示当前标签（NTFS 枚举流是按流名排序的，不能直接用它）
+    QStringList adsNames = ADSOperation::listADSTagsInOrder(sFilePath);
     bool ok = false;
     QString sNewTags = QInputDialog::getText(this, tr("编辑标签"),
                                              tr("多个标签用逗号、顿号或分号分隔（支持中英文）："),
@@ -368,13 +369,10 @@ void FormPageFiles::onEditTag(const QModelIndex &index)
     if (!ok)
         return;
 
-    // 先清空该文件全部标签，再按用户输入重新写入（P2-2）。
+    // 先清空该文件全部标签，再按用户输入的顺序重新写入（P2-2）。
     // 支持英文逗号(,)、中文逗号(，)、顿号(、)、英文分号(;)、中文分号(；) 分隔。
-    ADSOperation::deleteADSFiles(sFilePath);
     const QStringList qLLabels = Utility::splitLabels(sNewTags);
-    foreach (const QString &sLabel, qLLabels) {
-        ADSOperation::writeADSFile(sFilePath, sLabel, "");
-    }
+    ADSOperation::replaceTags(sFilePath, qLLabels);
 
     emit sendLabels(sFilePath, qLLabels.join(","));
     onBtnRefreshClicked();

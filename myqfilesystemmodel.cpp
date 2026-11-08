@@ -76,7 +76,8 @@ QVariant MyQFileSystemModel::data(const QModelIndex & index, int role) const
             if (it != m_tagCache.end() && it.value().first == mtime)
                 return QVariant(it.value().second.join(","));
 
-            QStringList qLAdsFileNames = ADSOperation::listADSFileName(sFilePath);
+            // 按用户录入顺序取标签：流内容里存了顺序号，可还原录入顺序
+            QStringList qLAdsFileNames = ADSOperation::listADSTagsInOrder(sFilePath);
             m_tagCache[sFilePath] = qMakePair(mtime, qLAdsFileNames);
             // 缓存容量上限：长会话下避免内存只增不减。超出后整体清空（下次访问重新枚举，P3）。
             if (m_tagCache.size() > 2000)

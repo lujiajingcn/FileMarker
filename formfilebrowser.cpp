@@ -200,10 +200,8 @@ void FormFileBrowser::onActionAddLabelsTriggered()
 
     foreach(const QString &sFilePath, qLFilePaths)
     {
-        foreach(const QString &sSelLabel, m_qLSelLabels)
-        {
-            ADSOperation::writeADSFile(sFilePath, sSelLabel, "");
-        }
+        // 追加而不是覆盖：保留文件已有标签的顺序，新标签按选中顺序追加到末尾
+        ADSOperation::appendTags(sFilePath, m_qLSelLabels);
     }
 
     emit sendRefresh();
@@ -344,11 +342,9 @@ void FormFileBrowser::onRecvLabels(QString sFilePath, QString sLabels)
     // 不能当成一个标签传下去（否则会被写成一个无意义的流）。
     const QStringList qLLabels = Utility::splitLabels(sLabels);
 
-    ADSOperation::deleteADSFiles(sFilePath);
-    foreach(const QString &sSelLabel, qLLabels)
-    {
-        ADSOperation::writeADSFile(sFilePath, sSelLabel, "");
-    }
+    // replaceTags 会按 qLLabels 的先后顺序写入，并把顺序号存进流内容，
+    // 保证下次显示时仍是用户录入的顺序（NTFS 枚举流本身是按流名排序的）。
+    ADSOperation::replaceTags(sFilePath, qLLabels);
 
     emit sendRefresh();
 

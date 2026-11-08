@@ -2,7 +2,10 @@
 #include <windows.h>
 #include <QDebug>
 #include <QDir>
+#include <QFile>
+#include <QPair>
 #include <QRegularExpression>
+#include <algorithm>
 #include "common.h"
 #include "utility.h"
 
@@ -83,6 +86,74 @@ QStringList ADSOperation::listADSFileName(const QString &filePath)
 
     FindClose(hFind);
     return fileNames;
+}
+
+// 按用户录入的顺序列出标签。
+// NTFS 枚举流时按流名排序（FindFirstStreamW 返回的就是流名字母序），无法反映录入顺序，
+// 所以 replaceTags()/appendTags() 把顺序号写进每个标签流的内容里，这里读出来还原。
+// 没有顺序号的历史标签（旧数据内容为空）排在末尾，彼此之间保持流名顺序。
+QStringList ADSOperation::listADSTagsInOrder(const QString &filePath)
+{
+    const QStringList names = listADSFileName(filePath);
+    if (names.size() < 2)
+        return names;
+
+    QVector<QPair<int, QString>> orderedTags;
+    QStringList tagsWithoutOrder;
+    foreach (const QString &sName, names)
+    {
+        int nOrder = -1;
+        QFile f(filePath + ":" + sName);
+        if (f.open(QIODevice::ReadOnly)) {
+            bool bOk = false;
+            nOrder = QString::fromUtf8(f.readAll()).trimmed().toInt(&bOk);
+            if (!bOk)
+                nOrder = -1;
+            f.close();
+        }
+
+        if (nOrder >= 0)
+            orderedTags.append(qMakePair(nOrder, sName));
+        else
+            tagsWithoutOrder << sName;
+    }
+
+    std::stable_sort(orderedTags.begin(), orderedTags.end(),
+                     [](const QPair<int, QString> &a, const QPair<int, QString> &b) {
+                         if (a.first != b.first)
+                             return a.first < b.first;
+                         return a.second < b.second;
+                     });
+
+    QStringList result;
+    for (const QPair<int, QString> &item : orderedTags)
+        result << item.second;
+    result << tagsWithoutOrder;
+    return result;
+}
+
+// 用给定顺序重写文件的全部标签：先清空，再按顺序写入。
+// 顺序号写进流内容（标签本身不需要内容），供 listADSTagsInOrder() 还原顺序。
+void ADSOperation::replaceTags(const QString &filePath, const QStringList &tags)
+{
+    deleteADSFiles(filePath);
+
+    for (int i = 0; i < tags.count(); ++i)
+        writeADSFile(filePath, tags.at(i), QString::number(i));
+}
+
+// 在已有标签之后追加：保留已有标签的顺序，新标签按传入顺序追加，重复的跳过。
+void ADSOperation::appendTags(const QString &filePath, const QStringList &tags)
+{
+    QStringList merged = listADSTagsInOrder(filePath);
+    foreach (const QString &sTag, tags)
+    {
+        const QString sTrim = sTag.trimmed();
+        if (sTrim.isEmpty() || merged.contains(sTrim))
+            continue;
+        merged << sTrim;
+    }
+    replaceTags(filePath, merged);
 }
 
 // 根据标签和标签的逻辑关系，判断给定的文件是否是目标文件
