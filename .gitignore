@@ -25,6 +25,7 @@
 /FileMarker.log
 /labels.xml
 /config.ini
+/FileMarker.ini
 
 # ---- Python 缓存 ----
 __pycache__/

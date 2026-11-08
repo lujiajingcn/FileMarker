@@ -7,6 +7,7 @@ SqliteOperation::SqliteOperation()
 {
     openDB();
     createTable();
+    migrateLegacyLabels();
 }
 
 SqliteOperation::~SqliteOperation()
@@ -62,6 +63,20 @@ void SqliteOperation::createTable()
     {
         qCritical("create table dirs fails: %s", qPrintable(query1.lastError().text()));
     }
+}
+
+void SqliteOperation::migrateLegacyLabels()
+{
+    // 旧版本把 FindFirstStreamW 返回的 "tag:$DATA" 原样写进 labels。
+    // 新版按 "tag" 搜索时精确比较会全部落空，这里一次性去掉缓存里的后缀。
+    QSqlQuery query(m_sqlDB);
+    if (!query.exec(QStringLiteral("UPDATE %1 SET labels = REPLACE(labels, ':$DATA', '')")
+                        .arg(TABLE_NAME_FILEPATH_TAG))) {
+        qWarning() << "迁移旧标签缓存失败:" << query.lastError().text();
+        return;
+    }
+    if (query.numRowsAffected() > 0)
+        qInfo() << "已迁移旧标签缓存:" << query.numRowsAffected() << "行";
 }
 
 void SqliteOperation::insertRecord(QMap<QString, FILE_TAGS> dirAndFileTags)
@@ -160,6 +175,8 @@ void SqliteOperation::searchFilesByLabels(QStringList qLSelDirs, QStringList qLL
         {
             QString sFilePath = hitQuery.value("filepath").toString();
             QString sLabels = hitQuery.value("labels").toString();
+            // 防御性兼容：即使迁移失败/旧库只读，也按去掉 :$DATA 后的名字比较
+            sLabels.remove(QStringLiteral(":$DATA"), Qt::CaseInsensitive);
             if(nLabelLogic == labelLogic::AND)
             {
                 QStringList qLLabelsOfFilePath = sLabels.split(",");

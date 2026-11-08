@@ -24,6 +24,8 @@ public:
 
     void openDB();
     void createTable();
+    /** 兼容旧版本缓存：把历史上以 "tag:$DATA" 形式写入的标签统一去掉后缀 */
+    void migrateLegacyLabels();
     void insertRecord(QMap<QString, FILE_TAGS> dirAndFileTags);
     /** 根据给定的标签和逻辑关系，在选中的文件夹中查找文件 */
     void searchFilesByLabels(QStringList qLSelDirs, QStringList qLLabels, int nLabelLogic, QStringList &qLFilePaths, QStringList &qLNotHitedDirs);

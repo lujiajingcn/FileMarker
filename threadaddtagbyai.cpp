@@ -136,8 +136,10 @@ bool ThreadAddTagByAI::addTag(const QFileInfo& info)
                 // 按统一规则再拆一次，避免把 "a，b" 整体写成一个标签。
                 const QStringList tagsInItem = Utility::splitLabels(v.toString());
                 foreach (const QString &sTag, tagsInItem) {
-                    if (!listTags.contains(sTag))
-                        listTags.append(sTag);
+                    // 按磁盘流名规则先净化，避免库/磁盘出现 "C++:语言" vs "C++_语言"
+                    const QString sSanitized = ADSOperation::sanitizeTagName(sTag);
+                    if (!sSanitized.isEmpty() && !listTags.contains(sSanitized))
+                        listTags.append(sSanitized);
                 }
             }
             // 追加到已有标签之后，保留文件原有标签顺序（AI 生成的标签按模型给出的顺序排在其后）

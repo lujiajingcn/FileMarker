@@ -121,11 +121,15 @@ bool MyQFileSystemModel::setData(const QModelIndex &index, const QVariant &value
 {
     if (index.column() == 4 && role == Qt::EditRole)
     {
-        // 标签被编辑后，失效该文件的缓存，下次绘制重新枚举。
         QString sFilePath = index.sibling(index.row(), 0).data(QFileSystemModel::FilePathRole).toString();
         m_tagCache.remove(sFilePath);
 
         QString sLabels = value.toString();
+        // 内容没变化就不写盘：历史标签可能合法包含 "，、；"，再次 split 会把一个标签拆成多个。
+        const QStringList qLExisting = ADSOperation::listADSTagsInOrder(sFilePath);
+        if (sLabels == qLExisting.join(","))
+            return true;
+
         emit sendLabels(sFilePath, sLabels);
         return true;
     }

@@ -105,18 +105,38 @@ void ThumbnailIconProvider::setIconSize(int iconSize)
 
 QIcon ThumbnailIconProvider::icon(const QFileInfo &info) const
 {
-    if (info.isDir())
-        return QFileIconProvider::icon(info);
-
     const qreal dpr = currentDevicePixelRatio();
+
+    if (info.isDir()) {
+        // 文件夹也缓存：滚动/悬停会反复取图标，QFileIconProvider 每次都要查 Shell。
+        const QString key = QStringLiteral("dir|%1|%2|%3")
+                                .arg(info.filePath())
+                                .arg(m_iconSize)
+                                .arg(dpr);
+        if (const QPixmap *cached = m_cache.object(key)) {
+            if (cached->isNull())
+                return QFileIconProvider::icon(info);
+            return QIcon(*cached);
+        }
+
+        const QIcon dirIcon = QFileIconProvider::icon(info);
+        const QPixmap dirPixmap = dirIcon.pixmap(QSize(m_iconSize, m_iconSize));
+        m_cache.insert(key, new QPixmap(dirPixmap), 1);
+        return dirPixmap.isNull() ? dirIcon : QIcon(dirPixmap);
+    }
+
     const QString key = QStringLiteral("%1|%2|%3|%4")
                             .arg(info.filePath())
                             .arg(info.lastModified().toMSecsSinceEpoch())
                             .arg(m_iconSize)
                             .arg(dpr);
 
-    if (const QPixmap *cached = m_cache.object(key))
+    if (const QPixmap *cached = m_cache.object(key)) {
+        // 之前已确认缩略图/大图标都取不到：直接回退，避免每次重绘都重试 Shell。
+        if (cached->isNull())
+            return QFileIconProvider::icon(info);
         return QIcon(*cached);
+    }
 
     QPixmap thumbnail = loadImageThumbnail(info);
     if (thumbnail.isNull())
@@ -124,9 +144,17 @@ QIcon ThumbnailIconProvider::icon(const QFileInfo &info) const
     // 缩略图不可用时用 Shell 大图标兜底，保证图标能铺满图标区域
     if (thumbnail.isNull())
         thumbnail = loadShellIcon(info);
+    // 最后回退到文件类型图标，并把这个回退结果缓存起来
+    if (thumbnail.isNull()) {
+        const QIcon fallback = QFileIconProvider::icon(info);
+        thumbnail = fallback.pixmap(QSize(m_iconSize, m_iconSize));
+    }
 
-    if (thumbnail.isNull())
+    if (thumbnail.isNull()) {
+        // 连文件类型图标都取不到：缓存空结果，避免每帧重复 QImageReader + Shell 调用
+        m_cache.insert(key, new QPixmap(), 1);
         return QFileIconProvider::icon(info);
+    }
 
     m_cache.insert(key, new QPixmap(thumbnail), 1);
     return QIcon(thumbnail);

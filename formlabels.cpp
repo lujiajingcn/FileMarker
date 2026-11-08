@@ -13,6 +13,7 @@
 #include <QSettings>
 #include <QTimer>
 #include <functional>
+#include "adsoperation.h"
 
 #include <libxml/parser.h>
 #include <libxml/tree.h>
@@ -388,7 +389,20 @@ void FormLabels::onItemChanged(QStandardItem *item)
         item->setText(m_committedText.value(pidx));
         return;
     }
-    item->setText(sLabel);
+
+    // 标签库里的名字必须和磁盘流名规则一致，否则库里是 "a:b"、磁盘是 "a_b"，
+    // 后续按库中标签搜索会搜不到。
+    const QString sSanitized = ADSOperation::sanitizeTagName(sLabel);
+    if (sSanitized.isEmpty()) {
+        item->setText(m_committedText.value(pidx));
+        return;
+    }
+    if (sSanitized != item->text()) {
+        // 触发一次递归 itemChanged，在那次调用里统一做重复检查/提交。
+        item->setText(sSanitized);
+        return;
+    }
+    sLabel = sSanitized;
 
     QString old = m_committedText.value(pidx);
     if (sLabel == old)
@@ -612,15 +626,27 @@ void FormLabels::onRecvLabelsGeneratedByAI(QString sLabels)
         registerItem(itemLabelsGeneratedByAI);
     }
 
-    // 支持中英文逗号/分号分隔，splitLabels 已做 trim、去空、去重
+    // 支持中英文逗号/分号分隔，splitLabels 已做 trim、去空、去重；
+    // AI 返回的名字还要按磁盘规则净化，否则标签库与磁盘会不一致。
     foreach (const QString &sLabel, Utility::splitLabels(sLabels))
     {
-        if(!m_setLabels.contains(sLabel))
-        {
-            QStandardItem *newItem = createLabelItem(sLabel);
-            itemLabelsGeneratedByAI->appendRow(newItem);
-            registerItem(newItem);
+        const QString sSanitized = ADSOperation::sanitizeTagName(sLabel);
+        if (sSanitized.isEmpty())
+            continue;
+
+        bool bExists = false;
+        for (const QString &sExisting : m_setLabels) {
+            if (QString::compare(sExisting, sSanitized, Qt::CaseInsensitive) == 0) {
+                bExists = true;
+                break;
+            }
         }
+        if (bExists)
+            continue;
+
+        QStandardItem *newItem = createLabelItem(sSanitized);
+        itemLabelsGeneratedByAI->appendRow(newItem);
+        registerItem(newItem);
     }
     saveLabelToXmlFile();   // #11 AI 生成标签后立即持久化
 }

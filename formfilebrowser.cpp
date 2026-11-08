@@ -59,6 +59,30 @@ FormFileBrowser::FormFileBrowser(QWidget *parent) :
 
 FormFileBrowser::~FormFileBrowser()
 {
+    // 退出前先停掉并等待后台线程：QThread 运行中被销毁会触发 Qt 警告/崩溃，
+    // 线程还可能继续回调已销毁的 UI 或写 ADS。
+    if (m_threadSearch != nullptr) {
+        m_threadSearch->stopThread();
+        if (!m_threadSearch->wait(5000)) {
+            qWarning() << "搜索线程未能在 5 秒内退出，退出时将其分离";
+            m_threadSearch->setParent(nullptr);
+        }
+    }
+    if (m_threadTraverseDirs != nullptr) {
+        m_threadTraverseDirs->stopThread();
+        if (!m_threadTraverseDirs->wait(5000)) {
+            qWarning() << "遍历线程未能在 5 秒内退出，退出时将其分离";
+            m_threadTraverseDirs->setParent(nullptr);
+        }
+    }
+    if (m_threadAddLabelByAI != nullptr) {
+        m_threadAddLabelByAI->stopThread();
+        if (!m_threadAddLabelByAI->wait(5000)) {
+            qWarning() << "AI 线程未能在 5 秒内退出，退出时将其分离";
+            m_threadAddLabelByAI->setParent(nullptr);
+        }
+    }
+
     // P0-3：m_sqlOperation 在构造函数中 new 在堆上，从未释放，导致内存泄漏。
     delete m_sqlOperation;
     delete ui;
@@ -193,6 +217,9 @@ void FormFileBrowser::onRecvAddLabelByAIFinish()
     showFilesWidget();
     setActionState(ADDTAGBYAI_FINISH);
     ui->pageProgressInfo->clear();
+    // AI 线程写 ADS 时 FileTimeGuard 保持 mtime 不变，模型不会自动感知标签变化；
+    // 这里主动刷新并清空标签缓存，否则标签列会一直显示旧值。
+    emit sendRefresh();
 }
 
 void FormFileBrowser::onRecvLabelsGeneratedByAI(QString sLabels)

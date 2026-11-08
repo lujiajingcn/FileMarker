@@ -31,7 +31,11 @@ FormPageFilterdFiles::FormPageFilterdFiles(QWidget *parent) :
     m_tvFilteredFiles->setTextElideMode(Qt::ElideMiddle);
     m_tvFilteredFiles->header()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
     m_tvFilteredFiles->header()->setSectionResizeMode(1, QHeaderView::Stretch);
-    m_tvFilteredFiles->header()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+    // 标签列异步逐行 setText，QHeaderView 的 ResizeToContents 不会随 dataChanged 重算，
+    // 容易一直按“空标签”时的窄宽度显示；这里改用固定初始宽度的 Interactive。
+    m_tvFilteredFiles->header()->setSectionResizeMode(2, QHeaderView::Interactive);
+    m_tvFilteredFiles->header()->resizeSection(2, 180);
+    m_tvFilteredFiles->header()->setMinimumSectionSize(60);
 
     m_gotoFilePath = new QAction(tr("打开文件所在位置"), this);
     m_openFile = new QAction(tr("打开"), this);

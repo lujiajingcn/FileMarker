@@ -23,6 +23,9 @@ public:
 
     static void myMessageHandler(QtMsgType mType, const QMessageLogContext&, const QString& sMsg);
 
+    /** 退出前在锁内 flush 并摘掉日志设备，避免与工作线程日志竞争 */
+    static void shutdownLog();
+
     static xmlXPathObjectPtr searchByXPath(xmlDocPtr doc, const xmlChar *xpath);
     static QString createUuid();
 

@@ -93,8 +93,8 @@ MainWindow::~MainWindow()
     // 文件，出现 "QIODevice::write (QObject): device not open"。
     delete ui;
 
-    Utility::tsLogInfo.flush();
-    Utility::tsLogInfo.setDevice(nullptr);
+    // 在锁内 flush 并摘掉日志设备，避免与工作线程日志竞争
+    Utility::shutdownLog();
     qInstallMessageHandler(nullptr);
 }
 

@@ -13,6 +13,14 @@ Utility::Utility()
 QTextStream Utility::tsLogInfo;
 QMutex Utility::mutex;
 
+void Utility::shutdownLog()
+{
+    QMutexLocker locker(&mutex);
+    tsLogInfo.flush();
+    if (tsLogInfo.device() != nullptr)
+        tsLogInfo.setDevice(nullptr);
+}
+
 void Utility::myMessageHandler(QtMsgType mType, const QMessageLogContext&, const QString& sMsg)
 {
     QMutexLocker locker(&mutex);
@@ -149,7 +157,8 @@ bool Utility::isADSNameValid(QString sADSName)
     {
         return false;
     }
-    if(QString::compare(sADSName, FILTER_TAG) == 0)
+    // Windows 流名大小写不敏感，系统标记可能是 zone.identifier 等变体，必须忽略大小写。
+    if(QString::compare(sADSName, FILTER_TAG, Qt::CaseInsensitive) == 0)
     {
         return false;
     }

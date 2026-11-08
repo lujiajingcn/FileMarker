@@ -118,6 +118,11 @@ FormPageFiles::FormPageFiles(QWidget *parent) :
         if (isSameDirPath(sPath, m_sCurDir))
             scanDirLabels(m_sCurDir);
     });
+    // 扫描过程中用户点表头排序会改变行顺序，已扫描的行号会错位；重新扫一遍。
+    connect(m_modelFiles, &QAbstractItemModel::layoutChanged, this, [this]() {
+        if (!m_sCurDir.isEmpty())
+            scanDirLabels(m_sCurDir, true);
+    });
 
     initDetailFileList();
     initThumbnailFileList();
@@ -129,8 +134,25 @@ FormPageFiles::FormPageFiles(QWidget *parent) :
         settings.setIniCodec("UTF-8");
 #endif
         const QByteArray headerState = settings.value(QStringLiteral("view/headerState")).toByteArray();
-        if (!headerState.isEmpty() && m_tvFiles != nullptr && m_tvFiles->header() != nullptr)
+        if (!headerState.isEmpty() && m_tvFiles != nullptr && m_tvFiles->header() != nullptr) {
             m_tvFiles->header()->restoreState(headerState);
+            // 旧版本保存的状态可能把列模式/表头可点击性也恢复成旧值，这里重申当前策略
+            QHeaderView *header = m_tvFiles->header();
+            header->setSectionsClickable(true);
+            header->setSectionResizeMode(0, QHeaderView::Stretch);
+            header->setSectionResizeMode(1, QHeaderView::Interactive);
+            header->setSectionResizeMode(2, QHeaderView::Interactive);
+            header->setSectionResizeMode(3, QHeaderView::Interactive);
+            header->setSectionResizeMode(4, QHeaderView::Interactive);
+        }
+
+        // restoreState 会恢复上次的表头排序箭头，但模型排序状态仍是初始值；
+        // 用我们保存的排序列/方向重新 applySort，保证箭头、模型和右键勾选一致。
+        const int nSortColumn = settings.value(QStringLiteral("view/sortColumn"), 0).toInt();
+        const int nSortOrder = settings.value(QStringLiteral("view/sortOrder"),
+                                              static_cast<int>(Qt::AscendingOrder)).toInt();
+        if (nSortColumn >= 0 && nSortColumn <= 3)
+            applySort(nSortColumn, static_cast<Qt::SortOrder>(nSortOrder));
     }
 
     // 显式连接工具栏按钮与文件列表信号（此前依赖 on_<对象名>_<信号名> 的自动连接）
@@ -169,6 +191,8 @@ FormPageFiles::~FormPageFiles()
 #endif
     if (m_tvFiles != nullptr && m_tvFiles->header() != nullptr)
         settings.setValue(QStringLiteral("view/headerState"), m_tvFiles->header()->saveState());
+    settings.setValue(QStringLiteral("view/sortColumn"), m_nSortColumn);
+    settings.setValue(QStringLiteral("view/sortOrder"), static_cast<int>(m_sortOrder));
     if (!m_sCurDir.isEmpty())
         settings.setValue(QStringLiteral("view/lastDir"), m_sCurDir);
 
@@ -238,6 +262,9 @@ void FormPageFiles::initDetailFileList()
     // 排序统一由 applySort 控制：表头可点击排序，但“标签”列（第 5 列）不参与，
     // 否则 QFileSystemModel 会按名称兜底排序，与表头指示不一致。
     m_tvFiles->setSortingEnabled(false);
+    // setSortingEnabled(false) 不会把表头设为可点击；Qt 的 sectionClicked 只在
+    // sectionsClickable 为 true 时发出，必须显式打开，否则表头点击排序失效。
+    m_tvFiles->header()->setSectionsClickable(true);
     m_tvFiles->header()->setSortIndicatorShown(true);
     m_tvFiles->header()->setSortIndicator(m_nSortColumn, m_sortOrder);
     m_modelFiles->sort(m_nSortColumn, m_sortOrder);
@@ -340,8 +367,13 @@ void FormPageFiles::curDirChanged(QString sCurDir)
     updateToolButtons();
 
     // 进入目录后立即更新【当前目录标签】面板：先清空旧内容，再在文件模型加载完成后扫描。
-    emit sendDirLabels(sCurDir, QSet<QString>());
-    QTimer::singleShot(150, this, [this, sCurDir]() { scanDirLabels(sCurDir); });
+    updateDirLabelsPanel(sCurDir);
+}
+
+void FormPageFiles::updateDirLabelsPanel(const QString &sDir)
+{
+    emit sendDirLabels(sDir, QSet<QString>());
+    QTimer::singleShot(150, this, [this, sDir]() { scanDirLabels(sDir); });
 }
 
 void FormPageFiles::scanDirLabels(const QString &sDir, bool bForce)
@@ -569,10 +601,24 @@ void FormPageFiles::onTvFilesDoubleClicked(const QModelIndex &index)
 
 void FormPageFiles::onCustomContextMenuRequested(const QPoint &pos)
 {
-    Q_UNUSED(pos);
+    // 用右键发生位置定位，而不是 QCursor::pos()：键盘 Menu 键/触控/菜单期间鼠标移动时
+    // 前者才是用户真正指向的项。
+    QAbstractItemView *activeView = nullptr;
+    if (m_lstFiles != nullptr && m_lstFiles->isVisible())
+        activeView = m_lstFiles;
+    else
+        activeView = m_tvFiles;
 
-    // 右键位置下的项：若它未被选中，则把菜单操作对象指向它
-    const QModelIndex clickedIndex = indexAtCursor();
+    QModelIndex clickedIndex;
+    if (activeView != nullptr)
+        clickedIndex = activeView->indexAt(pos);
+    if (!clickedIndex.isValid())
+        clickedIndex = currentIndexInActiveView();
+
+    const QPoint globalPos = activeView != nullptr
+                                 ? activeView->viewport()->mapToGlobal(pos)
+                                 : QCursor::pos();
+
     QStringList files = getSelFilePath();
     if (clickedIndex.isValid()) {
         const QString sClickedPath = m_modelFiles->filePath(clickedIndex);
@@ -692,7 +738,7 @@ void FormPageFiles::onCustomContextMenuRequested(const QPoint &pos)
     connect(actionThumbnail, &QAction::triggered, this, &FormPageFiles::onTbThumbnailClicked);
     connect(actionRefresh, &QAction::triggered, this, &FormPageFiles::onBtnRefreshClicked);
 
-    menu.exec(QCursor::pos());
+    menu.exec(globalPos);
 }
 
 void FormPageFiles::onTvFilesCustomContextMenuRequested(const QPoint &pos)
@@ -708,6 +754,7 @@ void FormPageFiles::onBackButtonClicked()
     m_sCurDir = sDir;
     refreshAddressBar();
     updateToolButtons();  // P2-16：导航栈变化后直接更新按钮
+    updateDirLabelsPanel(sDir);
 }
 
 void FormPageFiles::onForwardButtonClicked()
@@ -718,6 +765,7 @@ void FormPageFiles::onForwardButtonClicked()
     m_sCurDir = sDir;
     refreshAddressBar();
     updateToolButtons();  // P2-16：导航栈变化后直接更新按钮
+    updateDirLabelsPanel(sDir);
 }
 
 void FormPageFiles::onToParentButtonClicked()
@@ -743,6 +791,16 @@ void FormPageFiles::onToParentButtonClicked()
     // 地址栏同步：之前这里漏了更新，导致点上移后地址栏还停留在旧路径。
     rememberPath(sNewDirectory);
     updateToolButtons();  // P2-16：导航栈变化后直接更新按钮
+    updateDirLabelsPanel(sNewDirectory);
+}
+
+void FormPageFiles::onTvNavigationClicked(const QModelIndex &index)
+{
+    QString path = index.data(QFileSystemModel::FilePathRole).toString();
+    // 详情视图和缩略图视图共用模型，根节点必须一起切，否则切到缩略图还是旧目录。
+    bothSetRootIndex(m_modelFiles->index(path));
+    ui->stackedWidget->setCurrentIndex(FILEPAGE::DETAIL);
+    curDirChanged(path);
 }
 
 void FormPageFiles::onBtnRefreshClicked()
@@ -774,14 +832,6 @@ void FormPageFiles::recvGotoFile(QString sFilePath)
     // 否则缩略图模式下跳转后仍停留在旧目录。
     bothSetRootIndex(dirIndex);
     m_tvFiles->setCurrentIndex(m_modelFiles->index(sFilePath));
-}
-
-void FormPageFiles::onTvNavigationClicked(const QModelIndex &index)
-{
-    QString path = index.data(QFileSystemModel::FilePathRole).toString();
-    m_tvFiles->setRootIndex(m_modelFiles->index(path));
-    ui->stackedWidget->setCurrentIndex(FILEPAGE::DETAIL);
-    curDirChanged(path);
 }
 
 void FormPageFiles::onTbDetailClicked()
@@ -841,12 +891,17 @@ void FormPageFiles::onEditTag(const QModelIndex &index)
 
     // 按录入顺序显示当前标签（NTFS 枚举流是按流名排序的，不能直接用它）
     QStringList adsNames = ADSOperation::listADSTagsInOrder(sFilePath);
+    const QString sOldText = adsNames.join(",");
     bool ok = false;
     QString sNewTags = QInputDialog::getText(this, tr("编辑标签"),
                                              tr("多个标签用逗号、顿号或分号分隔（支持中英文）："),
                                              QLineEdit::Normal,
-                                             adsNames.join(","), &ok);
+                                             sOldText, &ok);
     if (!ok)
+        return;
+
+    // 没有改动就不要重写：历史标签可能合法包含 "，、；"，重新 split 会把一个标签拆成多个。
+    if (sNewTags == sOldText)
         return;
 
     // 先清空该文件全部标签，再按用户输入的顺序重新写入（P2-2）。
