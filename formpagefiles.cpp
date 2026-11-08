@@ -92,8 +92,8 @@ void FormPageFiles::initDetailFileList()
     treeHeader->resizeSection(0, fm.horizontalAdvance(QLatin1String("wwwwwwwwwwwwwwwwwwwwwwwwww")));
     treeHeader->resizeSection(1, fm.horizontalAdvance(QLatin1String("128.88 GB")) + 15);
     treeHeader->resizeSection(2, fm.horizontalAdvance(QLatin1String("mp3Folder")) + 35);
-    treeHeader->resizeSection(3, fm.horizontalAdvance(QLatin1String("10/29/81 02:02PM")) + 5);
-    treeHeader->resizeSection(4, fm.horizontalAdvance(QLatin1String("10/29/81 02:02PM")));
+    treeHeader->resizeSection(3, fm.horizontalAdvance(QLatin1String("10/29/1981 02:02PM")) + 5);
+    treeHeader->resizeSection(4, fm.horizontalAdvance(QLatin1String("10/29/1981 02:02PM")));
     treeHeader->setContextMenuPolicy(Qt::ActionsContextMenu);
 
     m_sCurDir = "我的电脑";
