@@ -6,6 +6,11 @@
 #include <QUrl>
 #include <QInputDialog>
 #include <QToolButton>
+#include <QActionGroup>
+#include <QApplication>
+#include <QClipboard>
+#include <QDir>
+#include <QProcess>
 
 #include "adsoperation.h"
 #include "thumbnailiconprovider.h"
@@ -17,6 +22,12 @@ FormPageFiles::FormPageFiles(QWidget *parent) :
     ui(new Ui::FormPageFiles)
 {
     ui->setupUi(this);
+
+    m_delegate = nullptr;
+    m_iconProvider = nullptr;
+    m_nIconSize = ICON_SIZE;
+    m_nSortColumn = 0;
+    m_sortOrder = Qt::AscendingOrder;
 
     m_modelFiles = new MyQFileSystemModel(this);
     // 设置根路径（例如当前目录）
@@ -46,6 +57,7 @@ FormPageFiles::FormPageFiles(QWidget *parent) :
 
 FormPageFiles::~FormPageFiles()
 {
+    delete m_iconProvider;   // 非 QObject，需要手动释放
     delete ui;
 }
 
@@ -103,9 +115,10 @@ void FormPageFiles::initThumbnailFileList()
 {
     m_lstFiles = ui->listView;
 
-    // 创建并设置自定义图标提供器
-    ThumbnailIconProvider *iconProvider = new ThumbnailIconProvider();
-    m_modelFiles->setIconProvider(iconProvider);
+    // 缩略图生成器：由 delegate 在 GUI 线程按需调用。
+    // 不设置为 model 的 iconProvider：QFileSystemModel 是在后台线程取图标的，
+    // 而 QPixmap / Shell COM 只能在 GUI 线程安全使用。
+    m_iconProvider = new ThumbnailIconProvider(m_nIconSize);
 
     m_modelFiles->setReadOnly(false);
 
@@ -118,20 +131,33 @@ void FormPageFiles::initThumbnailFileList()
 
     // 设置视图属性以显示缩略图
     m_lstFiles->setViewMode(QListView::IconMode);    // 图标模式
-    m_lstFiles->setIconSize(QSize(ICON_SIZE, ICON_SIZE));        // 设置图标大小
-    m_lstFiles->setGridSize(QSize(GRID_SIZE, GRID_SIZE));        // 设置网格大小，为图标留出空间
+    m_lstFiles->setIconSize(QSize(m_nIconSize, m_nIconSize));    // 设置图标大小
+    m_lstFiles->setGridSize(QSize(m_nIconSize + THUMB_GRID_MARGIN,
+                                  m_nIconSize + THUMB_GRID_MARGIN)); // 设置网格大小，为图标和两行文字留出空间
     m_lstFiles->setResizeMode(QListView::Adjust);    // 自动调整布局
     m_lstFiles->setMovement(QListView::Static);      // 禁止拖动
     m_lstFiles->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_lstFiles->setContextMenuPolicy(Qt::CustomContextMenu);
+    m_lstFiles->setMouseTracking(true);              // 悬停高亮需要鼠标移动事件
 
     m_lstFiles->setEditTriggers(QAbstractItemView::DoubleClicked | QAbstractItemView::EditKeyPressed);
 
-    EditableDelegate *delegate = new EditableDelegate(this);
-    m_lstFiles->setItemDelegate(delegate);
+    m_delegate = new EditableDelegate(this);
+    m_delegate->setIconSize(m_nIconSize);
+    m_delegate->setThumbnailProvider(m_iconProvider);
+    m_lstFiles->setItemDelegate(m_delegate);
 
-    connect(delegate, &EditableDelegate::sendDblClick, this, &FormPageFiles::recvDblClick);
-    connect(delegate, &EditableDelegate::sendEditTag, this, &FormPageFiles::onEditTag);
+    connect(m_delegate, &EditableDelegate::sendDblClick, this, &FormPageFiles::recvDblClick);
+    connect(m_delegate, &EditableDelegate::sendEditTag, this, &FormPageFiles::onEditTag);
+
+    // 悬停高亮：进入某项时高亮，鼠标离开视图时清除
+    connect(m_lstFiles, &QAbstractItemView::entered, this, &FormPageFiles::onThumbnailHoverChanged);
+    connect(m_lstFiles, &QAbstractItemView::viewportEntered, this, [this]() {
+        if (m_delegate)
+            m_delegate->setHoveredIndex(QModelIndex());
+        m_lstFiles->viewport()->update();
+    });
+    m_lstFiles->viewport()->installEventFilter(this);
 
     // 设置根索引为当前目录
     m_lstFiles->setRootIndex(m_modelFiles->index(""));
@@ -215,17 +241,116 @@ void FormPageFiles::onTvFilesDoubleClicked(const QModelIndex &index)
 void FormPageFiles::onCustomContextMenuRequested(const QPoint &pos)
 {
     Q_UNUSED(pos);
-    QMenu menu(m_tvFiles);
-    QMenu menuShowType("查看");
-    // P3-29：使用栈上 QAction，避免每次右键都 new QAction。
-    // menu 会作为 parent 持有 QAction，无需手动管理。
-    QAction actionDetail("详细信息", &menu);
-    QAction actionThumbnail("缩略图", &menu);
-    connect(&actionDetail, &QAction::triggered, this, &FormPageFiles::onTbDetailClicked);
-    connect(&actionThumbnail, &QAction::triggered, this, &FormPageFiles::onTbThumbnailClicked);
-    menuShowType.addAction(&actionDetail);
-    menuShowType.addAction(&actionThumbnail);
-    menu.addMenu(&menuShowType);
+
+    const QStringList files = getSelFilePath();
+    const bool hasSelection = !files.isEmpty();
+    const bool singleSelection = (files.count() == 1);
+    const QString firstFile = hasSelection ? files.first() : QString();
+
+    QMenu menu(this);
+
+    QAction *actionOpen = menu.addAction(tr("打开"));
+    actionOpen->setEnabled(hasSelection);
+    QAction *actionOpenWith = menu.addAction(tr("打开方式…"));
+    actionOpenWith->setEnabled(singleSelection);
+    QAction *actionReveal = menu.addAction(tr("在资源管理器中显示"));
+    actionReveal->setEnabled(hasSelection);
+    QAction *actionCopyPath = menu.addAction(tr("复制路径"));
+    actionCopyPath->setEnabled(hasSelection);
+    QAction *actionEditTags = menu.addAction(tr("编辑标签…"));
+    actionEditTags->setEnabled(singleSelection);
+
+    menu.addSeparator();
+
+    // 查看方式
+    QMenu *viewMenu = menu.addMenu(tr("查看"));
+    QAction *actionDetail = viewMenu->addAction(tr("详细信息"));
+    QAction *actionThumbnail = viewMenu->addAction(tr("缩略图"));
+    actionDetail->setCheckable(true);
+    actionThumbnail->setCheckable(true);
+    actionDetail->setChecked(ui->stackedWidget->currentIndex() == FILEPAGE::DETAIL);
+    actionThumbnail->setChecked(ui->stackedWidget->currentIndex() == FILEPAGE::THUMBNAIL);
+
+    // 缩略图尺寸档位
+    QMenu *sizeMenu = menu.addMenu(tr("缩略图大小"));
+    QActionGroup *sizeGroup = new QActionGroup(sizeMenu);
+    sizeGroup->setExclusive(true);
+    const QList<QPair<QString, int>> sizeOptions = {
+        { tr("小"), ICON_SIZE_SMALL },
+        { tr("中"), ICON_SIZE_MEDIUM },
+        { tr("大"), ICON_SIZE_LARGE },
+    };
+    for (const QPair<QString, int> &option : sizeOptions) {
+        QAction *action = sizeMenu->addAction(option.first);
+        action->setCheckable(true);
+        action->setChecked(option.second == m_nIconSize);
+        action->setData(option.second);
+        sizeGroup->addAction(action);
+        connect(action, &QAction::triggered, this, [this, action]() {
+            setThumbnailSize(action->data().toInt());
+        });
+    }
+
+    // 排序：名称/大小/类型/修改日期 + 升降序
+    QMenu *sortMenu = menu.addMenu(tr("排序"));
+    QActionGroup *sortGroup = new QActionGroup(sortMenu);
+    sortGroup->setExclusive(true);
+    const QList<QPair<QString, int>> sortOptions = {
+        { tr("名称"), 0 },
+        { tr("大小"), 1 },
+        { tr("类型"), 2 },
+        { tr("修改日期"), 3 },
+    };
+    for (const QPair<QString, int> &option : sortOptions) {
+        QAction *action = sortMenu->addAction(option.first);
+        action->setCheckable(true);
+        action->setChecked(option.second == m_nSortColumn);
+        sortGroup->addAction(action);
+        connect(action, &QAction::triggered, this, [this, option]() {
+            applySort(option.second, m_sortOrder);
+        });
+    }
+    sortMenu->addSeparator();
+    QAction *actionAscending = sortMenu->addAction(tr("升序"));
+    QAction *actionDescending = sortMenu->addAction(tr("降序"));
+    actionAscending->setCheckable(true);
+    actionDescending->setCheckable(true);
+    actionAscending->setChecked(m_sortOrder == Qt::AscendingOrder);
+    actionDescending->setChecked(m_sortOrder == Qt::DescendingOrder);
+    connect(actionAscending, &QAction::triggered, this, [this]() {
+        applySort(m_nSortColumn, Qt::AscendingOrder);
+    });
+    connect(actionDescending, &QAction::triggered, this, [this]() {
+        applySort(m_nSortColumn, Qt::DescendingOrder);
+    });
+
+    menu.addSeparator();
+    QAction *actionRefresh = menu.addAction(tr("刷新"));
+
+    connect(actionOpen, &QAction::triggered, this, [files]() {
+        for (const QString &file : files)
+            QDesktopServices::openUrl(QUrl::fromLocalFile(file));
+    });
+    connect(actionOpenWith, &QAction::triggered, this, [firstFile]() {
+        QProcess::startDetached(QStringLiteral("rundll32.exe"),
+                                QStringList() << QStringLiteral("shell32.dll,OpenAs_RunDLL")
+                                              << QDir::toNativeSeparators(firstFile));
+    });
+    connect(actionReveal, &QAction::triggered, this, [firstFile]() {
+        QProcess::startDetached(QStringLiteral("explorer.exe"),
+                                QStringList() << (QStringLiteral("/select,")
+                                                  + QDir::toNativeSeparators(firstFile)));
+    });
+    connect(actionCopyPath, &QAction::triggered, this, [files]() {
+        QApplication::clipboard()->setText(files.join("\n"));
+    });
+    connect(actionEditTags, &QAction::triggered, this, [this]() {
+        onEditTag(currentIndexInActiveView());
+    });
+    connect(actionDetail, &QAction::triggered, this, &FormPageFiles::onTbDetailClicked);
+    connect(actionThumbnail, &QAction::triggered, this, &FormPageFiles::onTbThumbnailClicked);
+    connect(actionRefresh, &QAction::triggered, this, &FormPageFiles::onBtnRefreshClicked);
+
     menu.exec(QCursor::pos());
 }
 
@@ -381,4 +506,61 @@ void FormPageFiles::onEditTag(const QModelIndex &index)
 void FormPageFiles::recvDblClick(const QModelIndex &index)
 {
     onDoubleClicked(index);
+}
+
+// 切换缩略图尺寸：图标大小、格子大小、代理绘制尺寸、缩略图生成尺寸要一起改
+void FormPageFiles::setThumbnailSize(int iconSize)
+{
+    if (iconSize <= 0 || iconSize == m_nIconSize)
+        return;
+
+    m_nIconSize = iconSize;
+
+    if (m_delegate)
+        m_delegate->setIconSize(iconSize);
+    if (m_iconProvider)
+        m_iconProvider->setIconSize(iconSize);
+
+    if (m_lstFiles) {
+        m_lstFiles->setIconSize(QSize(iconSize, iconSize));
+        m_lstFiles->setGridSize(QSize(iconSize + THUMB_GRID_MARGIN,
+                                      iconSize + THUMB_GRID_MARGIN));
+        m_lstFiles->viewport()->update();
+    }
+}
+
+void FormPageFiles::onThumbnailHoverChanged(const QModelIndex &index)
+{
+    if (m_delegate == nullptr)
+        return;
+
+    m_delegate->setHoveredIndex(index);
+    m_lstFiles->viewport()->update();
+}
+
+bool FormPageFiles::eventFilter(QObject *watched, QEvent *event)
+{
+    if (m_lstFiles != nullptr && watched == m_lstFiles->viewport() && event->type() == QEvent::Leave) {
+        if (m_delegate)
+            m_delegate->setHoveredIndex(QModelIndex());
+        m_lstFiles->viewport()->update();
+    }
+    return QWidget::eventFilter(watched, event);
+}
+
+void FormPageFiles::applySort(int column, Qt::SortOrder order)
+{
+    m_nSortColumn = column;
+    m_sortOrder = order;
+
+    m_modelFiles->sort(column, order);
+    // 详细视图的表头同步显示排序指示；缩略图视图没有表头，靠右键菜单的勾选状态指示
+    m_tvFiles->header()->setSortIndicator(column, order);
+}
+
+QModelIndex FormPageFiles::currentIndexInActiveView() const
+{
+    if (m_lstFiles != nullptr && m_lstFiles->isVisible())
+        return m_lstFiles->currentIndex();
+    return m_tvFiles->currentIndex();
 }

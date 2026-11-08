@@ -54,49 +54,59 @@ QVariant MyQFileSystemModel::headerData(int section, Qt::Orientation orientation
 
 QVariant MyQFileSystemModel::data(const QModelIndex & index, int role) const
 {
+    if (!index.isValid())
+        return QFileSystemModel::data(index, role);
+
+    // FilePathRole 必须直接走基类：若用 index.data(...) 会虚调用回本函数造成无限递归。
+    if (role == QFileSystemModel::FilePathRole)
+        return QFileSystemModel::data(index, role);
+
+    const QModelIndex nameIndex = index.sibling(index.row(), 0);
+    const QString sFilePath = QFileSystemModel::data(nameIndex, QFileSystemModel::FilePathRole).toString();
+    const QString sName = QFileSystemModel::data(nameIndex, Qt::DisplayRole).toString();
+
+    // 悬停提示：完整文件名 + 全部标签（缩略图里名字和标签都可能被截断）
+    if (role == Qt::ToolTipRole && index.column() == 0
+        && !sFilePath.isEmpty() && !sFilePath.endsWith(":/") && !sName.isEmpty())
+    {
+        const QStringList tags = tagListForFile(sFilePath);
+        return QString("%1\n%2").arg(sName,
+                                     tags.isEmpty() ? QStringLiteral("（无标签）")
+                                                    : tags.join(QStringLiteral(", ")));
+    }
+
     if (index.column() == 4)
     {
-        QModelIndex indexPath = index.sibling(index.row(), 0);
-        QString sFilePath = indexPath.data(QFileSystemModel::FilePathRole).toString();
-        if(QFileSystemModel::data( indexPath, role ).toString().isEmpty() || sFilePath.endsWith(":/"))
-        {
+        if (sName.isEmpty() || sFilePath.isEmpty() || sFilePath.endsWith(":/"))
             return QVariant();
-        }
-        if(sFilePath.isEmpty())
-        {
-            return QVariant();
-        }
-        else
-        {
-            // 用文件修改时间做缓存键：标签是通过写 NTFS 流添加的，会更新文件 mtime，
-            // 因此 mtime 不变即可认为标签集合未变，避免每次重绘都枚举流。
-            // 注：QFileSystemModel 在 Qt5.13 无 ModifiedRole 角色，故仍需 QFileInfo。
-            qint64 mtime = QFileInfo(sFilePath).lastModified().toMSecsSinceEpoch();
-            auto it = m_tagCache.find(sFilePath);
-            if (it != m_tagCache.end() && it.value().first == mtime)
-                return QVariant(it.value().second.join(","));
 
-            // 按用户录入顺序取标签：流内容里存了顺序号，可还原录入顺序
-            QStringList qLAdsFileNames = ADSOperation::listADSTagsInOrder(sFilePath);
-            m_tagCache[sFilePath] = qMakePair(mtime, qLAdsFileNames);
-            // 缓存容量上限：长会话下避免内存只增不减。超出后整体清空（下次访问重新枚举，P3）。
-            if (m_tagCache.size() > 2000)
-                m_tagCache.clear();
-            QString sAdsFileNames = qLAdsFileNames.join(",");
-            if(sAdsFileNames.isEmpty())
-            {
-                return QVariant();
-            }
-            else
-            {
-                return QVariant(sAdsFileNames);
-            }
-        }
+        const QStringList tags = tagListForFile(sFilePath);
+        if (tags.isEmpty())
+            return QVariant();
+        return QVariant(tags.join(","));
     }
-    else
-    {
-        return QFileSystemModel::data( index, role );
-    }
+
+    return QFileSystemModel::data(index, role);
+}
+
+QStringList MyQFileSystemModel::tagListForFile(const QString &sFilePath) const
+{
+    // 用文件修改时间做缓存键：标签是通过写 NTFS 流添加的，会更新文件 mtime，
+    // 因此 mtime 不变即可认为标签集合未变，避免每次重绘都枚举流。
+    // 注：QFileSystemModel 在 Qt5.13 无 ModifiedRole 角色，故仍需 QFileInfo。
+    const qint64 mtime = QFileInfo(sFilePath).lastModified().toMSecsSinceEpoch();
+    auto it = m_tagCache.find(sFilePath);
+    if (it != m_tagCache.end() && it.value().first == mtime)
+        return it.value().second;
+
+    // 按用户录入顺序取标签：流内容里存了顺序号，可还原录入顺序
+    const QStringList tags = ADSOperation::listADSTagsInOrder(sFilePath);
+
+    // 缓存容量上限：长会话下避免内存只增不减。超出后整体清空（下次访问重新枚举，P3）。
+    if (m_tagCache.size() > 2000)
+        m_tagCache.clear();
+    m_tagCache[sFilePath] = qMakePair(mtime, tags);
+    return tags;
 }
 
 bool MyQFileSystemModel::setData(const QModelIndex &index, const QVariant &value, int role)

@@ -26,8 +26,15 @@ extern QString g_sAppDir;
 
 #define LABEL_NAME_AI "AI自动生成的标签"
 
-#define ICON_SIZE 128   // 以缩略图方式显示文件时的图标大小
-#define GRID_SIZE 200   // 以缩略图方式显示文件时的格子大小
+// 缩略图模式的尺寸档位（图标边长，逻辑像素），格子边长 = 图标边长 + THUMB_GRID_MARGIN
+#define ICON_SIZE_SMALL 96
+#define ICON_SIZE_MEDIUM 128
+#define ICON_SIZE_LARGE 192
+
+#define THUMB_GRID_MARGIN 88    // 图标之外留给文件名（最多两行）和标签（最多两行）的空间
+
+#define ICON_SIZE ICON_SIZE_MEDIUM  // 以缩略图方式显示文件时的默认图标大小
+#define GRID_SIZE (ICON_SIZE + THUMB_GRID_MARGIN)   // 以缩略图方式显示文件时的默认格子大小
 
 typedef QMap<QString, QStringList> FILE_TAGS;   // 文件和该文件的标签
 

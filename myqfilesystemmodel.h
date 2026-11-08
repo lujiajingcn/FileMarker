@@ -32,7 +32,10 @@ public:
     Qt::ItemFlags flags(const QModelIndex &index) const override;
 
 private:
-    // 缓存“文件路径 -> (文件修改时间, 标签流名列表)”，避免标签列每次重绘都枚举 NTFS 流。
+    /** 取文件的标签（按录入顺序），带 mtime 缓存 */
+    QStringList tagListForFile(const QString &sFilePath) const;
+
+    // 缓存“文件路径 -> (文件修改时间, 标签列表)”，避免标签列每次重绘都枚举 NTFS 流。
     mutable QHash<QString, QPair<qint64, QStringList>> m_tagCache;
 };
 

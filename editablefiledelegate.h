@@ -1,17 +1,22 @@
 /**
 ** 【可编辑代理】
 **
-** 使用自定义代理，实现当缩略图显示文件时，将文件的标签显示在该文件下方，并且可以手动编辑标签
+** 缩略图模式下绘制文件：图标 + 文件名（最多两行）+ 标签（次要颜色，最多两行）。
+** 标签为空时不占行，整个内容块在格子里垂直居中；鼠标悬停时给淡色圆角底。
+** 双击文件名区域编辑文件名，双击标签区域就地编辑标签（写回第 5 列）。
 **/
 #ifndef EDITABLEDELEGATE_H
 #define EDITABLEDELEGATE_H
 
 #include <QStyledItemDelegate>
+#include <QPersistentModelIndex>
 #include <QPainter>
 #include <QMouseEvent>
 #include <QLineEdit>
 #include <QFileSystemModel>
 #include "common.h"
+
+class ThumbnailIconProvider;
 
 // 标记当前处于什么编辑模式
 enum EditTarget { TargetNone, TargetFileName, TargetCustomData };
@@ -29,7 +34,21 @@ public:
 
     explicit EditableDelegate(QObject *parent = nullptr);
 
-    LayoutRects calculateRects(const QStyleOptionViewItem &option) const;
+    /** 设置图标边长（逻辑像素），格子大小由调用方同步设置 QListView */
+    void setIconSize(int iconSize);
+    int iconSize() const { return m_iconSize; }
+
+    /** 设置当前鼠标悬停的项，为空表示没有悬停项 */
+    void setHoveredIndex(const QModelIndex &index);
+
+    /**
+     ** 设置缩略图生成器。图标在 paint() 里（GUI 线程）按需获取，
+     ** 不走 QFileSystemModel 的图标提供器（那是在后台线程里调用的，
+     ** 而 QPixmap/Shell COM 只能在 GUI 线程安全使用）。
+     **/
+    void setThumbnailProvider(ThumbnailIconProvider *provider);
+
+    LayoutRects calculateRects(const QStyleOptionViewItem &option, const QModelIndex &index) const;
 
     QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override;
 
@@ -52,13 +71,16 @@ public:
 
 signals:
     void sendDblClick(const QModelIndex &index);
-    // 缩略图模式下双击标签区域时发出，由 FormPageFiles 弹出输入框编辑该文件标签（P2-2）。
+    // 保留给需要弹框编辑标签的场景（右键菜单“编辑标签”）
     void sendEditTag(const QModelIndex &index);
 
 private:
-    // mutable 允许在 const 函数中修改 (虽然 editorEvent 不是 const，但 createEditor 是)
-    // 实际使用中，editorEvent 会先于 createEditor 调用
+    // mutable 允许在 const 函数中修改 (createEditor 是 const，而 editorEvent 先于它调用)
     mutable EditTarget m_editTarget;
+
+    int m_iconSize;
+    QPersistentModelIndex m_hoveredIndex;
+    ThumbnailIconProvider *m_thumbnailProvider;
 };
 
 #endif // EDITABLEDELEGATE_H

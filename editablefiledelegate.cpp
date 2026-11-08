@@ -1,80 +1,178 @@
 #include "editablefiledelegate.h"
 
-EditableDelegate::EditableDelegate(QObject *parent)
-    : QStyledItemDelegate(parent), m_editTarget(TargetNone)
-{
+#include <QtMath>
+#include <QFileInfo>
 
+#include "thumbnailiconprovider.h"
+
+namespace {
+
+const int ITEM_MARGIN = 6;      // 文本区域左右留白
+const int ITEM_GAP = 4;         // 图标与文字、文件名与标签之间的间距
+
+// 按可用宽度计算文本需要几行（最多两行），并返回对应高度
+int textHeightFor(const QFontMetrics &fm, const QString &text, int width, int maxLines)
+{
+    if (text.isEmpty() || width <= 0)
+        return 0;
+
+    const QRect bound = fm.boundingRect(QRect(0, 0, width, fm.lineSpacing() * (maxLines + 2)),
+                                        Qt::AlignHCenter | Qt::TextWordWrap, text);
+    int lines = qCeil(qreal(bound.height()) / qMax(1, fm.lineSpacing()));
+    lines = qBound(1, lines, maxLines);
+    return lines * fm.lineSpacing();
 }
 
-LayoutRects EditableDelegate::calculateRects(const QStyleOptionViewItem &option) const
+QFont tagFontFor(const QFont &base)
 {
-    QRect rect = option.rect;
-    int iconSize = ICON_SIZE;
-    int padding = 5;
+    QFont font = base;
+    if (font.pointSizeF() > 1.0)
+        font.setPointSizeF(font.pointSizeF() - 1.0);
+    return font;
+}
 
+} // namespace
+
+EditableDelegate::EditableDelegate(QObject *parent)
+    : QStyledItemDelegate(parent)
+    , m_editTarget(TargetNone)
+    , m_iconSize(ICON_SIZE)
+    , m_thumbnailProvider(nullptr)
+{
+}
+
+void EditableDelegate::setIconSize(int iconSize)
+{
+    if (iconSize > 0)
+        m_iconSize = iconSize;
+}
+
+void EditableDelegate::setHoveredIndex(const QModelIndex &index)
+{
+    m_hoveredIndex = index;
+}
+
+void EditableDelegate::setThumbnailProvider(ThumbnailIconProvider *provider)
+{
+    m_thumbnailProvider = provider;
+}
+
+LayoutRects EditableDelegate::calculateRects(const QStyleOptionViewItem &option, const QModelIndex &index) const
+{
     LayoutRects layout;
-    // 图标区域
-    layout.iconRect = QRect(rect.center().x() - iconSize/2, rect.top() + padding, iconSize, iconSize);
 
-    // 文件名区域 (图标下方)
-    layout.nameRect = QRect(rect.left(), layout.iconRect.bottom() + padding, rect.width(), 20);
+    const int width = qMax(1, option.rect.width() - 2 * ITEM_MARGIN);
+    const QFontMetrics nameFm(option.font);
+    const QFontMetrics tagFm(tagFontFor(option.font));
 
-    // 自定义数据区域 (文件名下方)
-    layout.customRect = QRect(rect.left(), layout.nameRect.bottom(), rect.width(), 20);
+    const QString name = index.data(Qt::DisplayRole).toString();
+    const QString tags = index.sibling(index.row(), 4).data(Qt::DisplayRole).toString();
+
+    const int nameHeight = textHeightFor(nameFm, name, width, 2);
+    const int tagHeight = textHeightFor(tagFm, tags, width, 2);
+
+    const int totalHeight = m_iconSize
+                            + (nameHeight > 0 ? ITEM_GAP + nameHeight : 0)
+                            + (tagHeight > 0 ? ITEM_GAP + tagHeight : 0);
+
+    // 内容整体垂直居中：没有标签时不会在下方留出一条空白
+    const int top = option.rect.top() + qMax(0, (option.rect.height() - totalHeight) / 2);
+
+    layout.iconRect = QRect(option.rect.center().x() - m_iconSize / 2, top, m_iconSize, m_iconSize);
+
+    int y = layout.iconRect.bottom() + ITEM_GAP;
+    if (nameHeight > 0) {
+        layout.nameRect = QRect(option.rect.left() + ITEM_MARGIN, y, width, nameHeight);
+        y = layout.nameRect.bottom() + ITEM_GAP;
+    }
+    if (tagHeight > 0)
+        layout.customRect = QRect(option.rect.left() + ITEM_MARGIN, y, width, tagHeight);
 
     return layout;
 }
 
 QSize EditableDelegate::sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const
 {
-    QSize size = QStyledItemDelegate::sizeHint(option, index);
-    size.setHeight(GRID_SIZE);
-    size.setWidth(qMax(size.width(), GRID_SIZE));
-    return size;
+    Q_UNUSED(option);
+    Q_UNUSED(index);
+
+    const int side = m_iconSize + THUMB_GRID_MARGIN;
+    return QSize(side, side);
 }
 
 void EditableDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const
 {
     if (!index.isValid())
-    {
         return;
-    }
+
     painter->save();
 
-    LayoutRects layout = calculateRects(option);
+    const LayoutRects layout = calculateRects(option, index);
+    const bool selected = (option.state & QStyle::State_Selected) != 0;
+    const bool hovered = m_hoveredIndex.isValid() && m_hoveredIndex == index;
 
-    // 绘制选中背景
-    if (option.state & QStyle::State_Selected)
-    {
+    // 背景：选中用系统高亮；悬停只铺一层淡色圆角，避免整格填满显得沉重
+    if (selected) {
         painter->fillRect(option.rect, option.palette.highlight());
-        painter->setPen(option.palette.highlightedText().color());
+    } else if (hovered) {
+        QColor hoverColor = option.palette.color(QPalette::Highlight);
+        hoverColor.setAlpha(28);
+        painter->setRenderHint(QPainter::Antialiasing, true);
+        painter->setPen(Qt::NoPen);
+        painter->setBrush(hoverColor);
+        painter->drawRoundedRect(option.rect.adjusted(2, 2, -2, -2), 6, 6);
     }
-    else
-    {
-        painter->setPen(option.palette.text().color());
+
+    // 图标：在 GUI 线程里向缩略图生成器要图（带缓存）。
+    // 不用 model 的 DecorationRole，是因为 QFileSystemModel 在后台线程取图标，
+    // 而 QPixmap / Shell COM 只能在 GUI 线程安全使用。
+    QIcon icon;
+    if (m_thumbnailProvider != nullptr) {
+        const QString sFilePath = index.data(QFileSystemModel::FilePathRole).toString();
+        if (!sFilePath.isEmpty())
+            icon = m_thumbnailProvider->icon(QFileInfo(sFilePath));
+    }
+    if (icon.isNull())
+        icon = index.data(Qt::DecorationRole).value<QIcon>();
+
+    if (!icon.isNull()) {
+        const qreal dpr = painter->device() != nullptr ? painter->device()->devicePixelRatioF() : 1.0;
+        const int targetPx = qMax(1, qRound(m_iconSize * dpr));
+        const QPixmap pixmap = icon.pixmap(QSize(targetPx, targetPx),
+                                           selected ? QIcon::Selected : QIcon::Normal);
+        if (!pixmap.isNull()) {
+            const qreal pixmapDpr = pixmap.devicePixelRatio() > 0 ? pixmap.devicePixelRatio() : 1.0;
+            const QSize logicalSize(qRound(pixmap.width() / pixmapDpr),
+                                    qRound(pixmap.height() / pixmapDpr));
+            const QSize drawSize = logicalSize.scaled(layout.iconRect.size(), Qt::KeepAspectRatio);
+            const QRect drawRect(layout.iconRect.center()
+                                     - QPoint(drawSize.width() / 2, drawSize.height() / 2),
+                                 drawSize);
+            painter->drawPixmap(drawRect, pixmap);
+        }
     }
 
-    // 绘制图标
-    QIcon icon = index.data(Qt::DecorationRole).value<QIcon>();
-    icon.paint(painter, layout.iconRect, Qt::AlignCenter);
+    // 文件名：主文字颜色
+    if (!layout.nameRect.isEmpty()) {
+        painter->setFont(option.font);
+        painter->setPen(selected ? option.palette.color(QPalette::HighlightedText)
+                                 : option.palette.color(QPalette::Text));
+        painter->drawText(layout.nameRect, Qt::AlignHCenter | Qt::AlignTop | Qt::TextWordWrap,
+                          index.data(Qt::DisplayRole).toString());
+    }
 
-    // 绘制文件名
-    QString fileName = index.data(Qt::DisplayRole).toString();
-    painter->drawText(layout.nameRect, Qt::AlignHCenter | Qt::AlignVCenter,
-                      painter->fontMetrics().elidedText(fileName, Qt::ElideRight, layout.nameRect.width()));
+    // 标签：次要样式（小一号、半透明），与文件名区分层次
+    if (!layout.customRect.isEmpty()) {
+        QColor tagColor = selected ? option.palette.color(QPalette::HighlightedText)
+                                   : option.palette.color(QPalette::Text);
+        tagColor.setAlpha(selected ? 230 : 150);
 
-    // 绘制自定义数据 (第4列)
-    QModelIndex customIndex = index.siblingAtColumn(4);
-    QString customData = customIndex.data(Qt::DisplayRole).toString();
-    QString headerName = index.model()->headerData(4, Qt::Horizontal).toString();
+        painter->setFont(tagFontFor(option.font));
+        painter->setPen(tagColor);
+        painter->drawText(layout.customRect, Qt::AlignHCenter | Qt::AlignTop | Qt::TextWordWrap,
+                          index.sibling(index.row(), 4).data(Qt::DisplayRole).toString());
+    }
 
-    // 稍微变个颜色区分一下
-//    painter->save();
-//    if (!(option.state & QStyle::State_Selected)){
-//        painter->setPen(Qt::darkBlue);
-//    }
-    painter->drawText(layout.customRect, Qt::AlignHCenter | Qt::AlignVCenter,
-                      painter->fontMetrics().elidedText(QString("%1").arg(customData), Qt::ElideRight, layout.nameRect.width()));
     painter->restore();
 }
 
@@ -83,32 +181,25 @@ bool EditableDelegate::editorEvent(QEvent *event, QAbstractItemModel *model, con
     if (event->type() == QEvent::MouseButtonDblClick)
     {
         QMouseEvent *me = static_cast<QMouseEvent*>(event);
-        LayoutRects layout = calculateRects(option);
+        const LayoutRects layout = calculateRects(option, index);
+        const QPoint mousePos = me->pos();
 
-        // P2-22：me->pos() 在 view 坐标中，但需确保使用正确的相对坐标。
-        // QMouseEvent 的 pos() 已经是相对于接收 widget（即 view viewport）的坐标，
-        // 而 option.rect 也是在同一坐标系，因此两者可直接比较。
-        QPoint mousePos = me->pos();
-
-        // 判断点击位置
-        if (layout.customRect.contains(mousePos))
-        {
-            // 缩略图模式下第 4 列（标签）不在视图中，无法用内置 inline 编辑，
-            // 改为发出信号，由 FormPageFiles 弹出输入框编辑该文件的标签（P2-2）。
-            emit sendEditTag(index);
-            return true;
+        // 双击标签区域：切换为“就地编辑标签”，交给视图打开第 5 列的编辑器
+        if (!layout.customRect.isEmpty() && layout.customRect.contains(mousePos)) {
+            m_editTarget = TargetCustomData;
+            return false;
         }
-        else if(layout.nameRect.contains(mousePos) )
-        {
-            m_editTarget = TargetFileName; // 默认编辑文件名
+        // 双击文件名区域：编辑文件名（沿用原有行为）
+        if (layout.nameRect.contains(mousePos)) {
+            m_editTarget = TargetFileName;
+            return false;
         }
-        else
-        {
-            m_editTarget = TargetNone;
-            emit sendDblClick(index);
-            return true;
-        }
+        // 其他区域：双击直接打开文件
+        m_editTarget = TargetNone;
+        emit sendDblClick(index);
+        return true;
     }
+
     return QStyledItemDelegate::editorEvent(event, model, option, index);
 }
 
@@ -117,63 +208,47 @@ QWidget *EditableDelegate::createEditor(QWidget *parent, const QStyleOptionViewI
     if (m_editTarget == TargetCustomData)
     {
         QLineEdit *editor = new QLineEdit(parent);
-        QModelIndex customIndex = index.siblingAtColumn(4);
-        QString customData = customIndex.data(Qt::DisplayRole).toString();
-        editor->setPlaceholderText(customData);
+        editor->setFont(tagFontFor(option.font));
+        editor->setPlaceholderText(index.sibling(index.row(), 4).data(Qt::DisplayRole).toString());
         return editor;
     }
-    // 否则返回默认编辑器 (文件名)
+    // 否则返回默认编辑器（文件名）
     return QStyledItemDelegate::createEditor(parent, option, index);
 }
 
-// 3. 从模型加载数据到编辑器
+// 从第 5 列（标签列）加载数据到编辑器
 void EditableDelegate::setEditorData(QWidget *editor, const QModelIndex &index) const
 {
     if (m_editTarget == TargetCustomData)
     {
         QLineEdit *lineEdit = qobject_cast<QLineEdit*>(editor);
         if (lineEdit)
-        {
-            // 关键：从第 4 列获取数据，而不是 index (第0列)
-            QString data = index.siblingAtColumn(4).data(Qt::EditRole).toString();
-            lineEdit->setText(data);
-        }
+            lineEdit->setText(index.sibling(index.row(), 4).data(Qt::EditRole).toString());
+        return;
     }
-    else
-    {
-        QStyledItemDelegate::setEditorData(editor, index);
-    }
+    QStyledItemDelegate::setEditorData(editor, index);
 }
 
-// 4. 保存数据回模型
+// 把编辑器内容写回第 5 列（标签列），由模型通知 FormFileBrowser 写 ADS
 void EditableDelegate::setModelData(QWidget *editor, QAbstractItemModel *model, const QModelIndex &index) const
 {
     if (m_editTarget == TargetCustomData)
     {
         QLineEdit *lineEdit = qobject_cast<QLineEdit*>(editor);
         if (lineEdit)
-        {
-            // 关键：写入第 4 列
-            QModelIndex customIndex = index.siblingAtColumn(4);
-            model->setData(customIndex, lineEdit->text(), Qt::EditRole);
-        }
+            model->setData(index.sibling(index.row(), 4), lineEdit->text(), Qt::EditRole);
+        return;
     }
-    else
-    {
-        QStyledItemDelegate::setModelData(editor, model, index);
-    }
+    QStyledItemDelegate::setModelData(editor, model, index);
 }
 
-// 5. 调整编辑器位置 (让输入框正好覆盖在文字上)
+// 让编辑器正好覆盖在对应的文字上
 void EditableDelegate::updateEditorGeometry(QWidget *editor, const QStyleOptionViewItem &option, const QModelIndex &index) const
 {
-    LayoutRects layout = calculateRects(option);
-    if (m_editTarget == TargetCustomData)
-    {
-        editor->setGeometry(layout.customRect);
+    const LayoutRects layout = calculateRects(option, index);
+    if (m_editTarget == TargetCustomData) {
+        editor->setGeometry(layout.customRect.isEmpty() ? layout.nameRect : layout.customRect);
+        return;
     }
-    else
-    {
-        editor->setGeometry(layout.nameRect);
-    }
+    editor->setGeometry(layout.nameRect);
 }
