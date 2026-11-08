@@ -101,20 +101,35 @@ QString Utility::adsNameWithoutType(QString sADSName)
 }
 
 // 拆分标签字符串：英文逗号、中文逗号、顿号、英文分号、中文分号都算，
-// 方便中文输入法下直接敲"，"、"、"或"；"。split() 保留空项，这里统一 trim + 过滤空项 + 去重。
+// 方便中文输入法下直接敲"，"、"、"或"；"。这里逐字符扫描而不是用正则：
+// 剪贴板等来源可能含未配对代理项（非法 UTF-16），QRegularExpression 遇到这种
+// 主题会匹配失败，导致整串一个标签都拆不出来。
 QStringList Utility::splitLabels(const QString &sLabels)
 {
-    static const QRegularExpression re("[,，、;；]");
-
     QStringList labels;
-    const QStringList parts = sLabels.split(re);
-    foreach (const QString &sPart, parts)
-    {
-        const QString sLabel = sPart.trimmed();
-        if (sLabel.isEmpty() || labels.contains(sLabel))
-            continue;
-        labels << sLabel;
+    QString current;
+
+    auto flushCurrent = [&]() {
+        const QString sLabel = current.trimmed();
+        if (!sLabel.isEmpty() && !labels.contains(sLabel))
+            labels << sLabel;
+        current.clear();
+    };
+
+    for (int i = 0; i < sLabels.size(); ++i) {
+        const QChar c = sLabels.at(i);
+        const bool isSeparator = (c == QLatin1Char(','))
+                                 || (c == QLatin1Char(';'))
+                                 || (c == QChar(0xFF0C))   // ，
+                                 || (c == QChar(0xFF1B))   // ；
+                                 || (c == QChar(0x3001));  // 、
+        if (isSeparator)
+            flushCurrent();
+        else
+            current += c;
     }
+    flushCurrent();
+
     return labels;
 }
 

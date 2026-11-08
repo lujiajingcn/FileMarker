@@ -6,6 +6,7 @@
 #include <QPair>
 #include <QRegularExpression>
 #include <algorithm>
+#include <string>
 #include "common.h"
 #include "utility.h"
 
@@ -13,19 +14,76 @@ ADSOperation::ADSOperation()
 {
 }
 
+// FindFirstStreamW / DeleteFile 这些 Win32 API 不认长路径，超过 MAX_PATH 需要 \\?\ 前缀；
+// Qt 的 QFile 写入会自动处理长路径，所以只有直接调用 Win32 的地方需要转换。
+static std::wstring win32APIPath(const QString &filePath)
+{
+    QString sNative = QDir::toNativeSeparators(filePath);
+    if (sNative.startsWith(QStringLiteral("\\\\?\\")))
+        return sNative.toStdWString();
+
+    // 保守阈值：接近 MAX_PATH(260) 时就加前缀，避免长标签导致删除/枚举失败
+    if (sNative.size() >= 200) {
+        if (sNative.startsWith(QStringLiteral("\\\\")))
+            sNative = QStringLiteral("\\\\?\\UNC\\") + sNative.mid(2);
+        else
+            sNative = QStringLiteral("\\\\?\\") + sNative;
+    }
+    return sNative.toStdWString();
+}
+
 // NTFS 流名不允许包含 : / \ * ? " < > |，且不能为空。
 // 标签作为流名使用时需做净化，否则 QFile::open 会静默失败导致标签“看似加上实则没写”。
 static QString sanitizeStreamName(const QString &name)
 {
     QString s = name;
+
+    // 先去掉未配对的代理项（无效 UTF-16）。
+    // 必须在正则替换之前做：QRegularExpression 遇到含孤立代理项的字符串会匹配失败，
+    // 导致后面的非法字符替换全部失效，写流时才失败。
+    {
+        QString cleaned;
+        cleaned.reserve(s.size());
+        for (int i = 0; i < s.size(); ++i) {
+            const QChar c = s.at(i);
+            if (c.isHighSurrogate()) {
+                if (i + 1 < s.size() && s.at(i + 1).isLowSurrogate()) {
+                    cleaned += c;
+                    cleaned += s.at(i + 1);
+                    ++i;
+                }
+                // 孤立的高代理项直接丢弃
+            } else if (!c.isLowSurrogate()) {
+                cleaned += c;
+            }
+            // 孤立的低代理项直接丢弃
+        }
+        s = cleaned;
+    }
+
     // 同时禁止逗号、顿号和分号：标签以分隔符 join/split 在缓存入库、缓存查找、AI 上报、
     // 标签导入以及用户手工编辑中传递（见 P1-1）。五个分隔符（, ， 、 ; ；）都算边界，
     // 标签名里若含它们会被错误拆成多个幻影标签，故统一替换为下划线。
     static const QRegularExpression re("[/\\\\:*?\"<>|,，、;；]");
     s.replace(re, "_");
+
+    // 换行、制表符等控制字符在单行显示时会撑乱布局，统一替换为下划线
+    static const QRegularExpression reControl("[\\x00-\\x1F\\x7F]");
+    s.replace(reControl, "_");
+
     s = s.trimmed();
     // 空名字保持为空，由 writeADSFile 直接跳过。
     // 以前这里兜底成 "tag"，导致"把标签清空"反而凭空写入一个 tag 标签。
+    if (s.isEmpty())
+        return s;
+
+    // NTFS 流名最长 255 个 UTF-16 字符，超长会导致写入失败，这里截断并提示
+    if (s.size() > 255) {
+        s.truncate(255);
+        if (s.at(s.size() - 1).isHighSurrogate())
+            s.chop(1);
+        qWarning() << "标签过长，已截断为 255 个字符:" << name.left(32) << "...";
+    }
     return s;
 }
 
@@ -43,8 +101,18 @@ void ADSOperation::writeADSFile(const QString &filePath, const QString &streamNa
 
     QString sFullFileName = filePath + ":" + sStreamName;
     QFile f(sFullFileName);
-    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-        qWarning() << "写入 ADS 失败:" << sFullFileName;
+    // 刚删除同名流后立即重建，Windows 上偶尔会出现短暂的共享冲突；
+    // 这里做几次短重试，避免标签偶发丢失。
+    bool bOpened = false;
+    for (int nAttempt = 0; nAttempt < 3 && !bOpened; ++nAttempt) {
+        bOpened = f.open(QIODevice::WriteOnly | QIODevice::Truncate);
+        if (!bOpened) {
+            f.close();
+            ::Sleep(10);
+        }
+    }
+    if (!bOpened) {
+        qWarning() << "写入 ADS 失败:" << sFullFileName << f.errorString();
         return ;
     }
 
@@ -59,7 +127,7 @@ void ADSOperation::deleteADSFiles(const QString &filePath)
     {
         QString adsFilePath = filePath + ":" + adsName;
         // P2-23：检查 DeleteFile 返回值，失败时记录警告。
-        if (!DeleteFile(adsFilePath.toStdWString().c_str())) {
+        if (!DeleteFileW(win32APIPath(adsFilePath).c_str())) {
             qWarning() << "删除 ADS 失败:" << adsFilePath << "GetLastError:" << GetLastError();
         }
     }
@@ -71,7 +139,7 @@ QStringList ADSOperation::listADSFileName(const QString &filePath)
     QStringList fileNames;
     WIN32_FIND_STREAM_DATA findData;
 
-    HANDLE hFind = FindFirstStreamW(filePath.toStdWString().c_str(), FindStreamInfoStandard, &findData, 0);
+    HANDLE hFind = FindFirstStreamW(win32APIPath(filePath).c_str(), FindStreamInfoStandard, &findData, 0);
     if (hFind == INVALID_HANDLE_VALUE)
         return fileNames;
 
@@ -159,8 +227,13 @@ void ADSOperation::appendTags(const QString &filePath, const QStringList &tags)
 // 根据标签和标签的逻辑关系，判断给定的文件是否是目标文件
 bool ADSOperation::isHostFile(const QString &sFilePath, const QStringList &tags, labelLogic logic)
 {
+    // 没有指定标签时不应匹配任何文件：
+    // 空集合是任意集合的子集，会让下面的 AND 判断误判为命中。
+    if (tags.isEmpty())
+        return false;
+
     WIN32_FIND_STREAM_DATA findStreamData;
-    HANDLE hFind = FindFirstStreamW(sFilePath.toStdWString().c_str(), FindStreamInfoStandard, &findStreamData, 0);
+    HANDLE hFind = FindFirstStreamW(win32APIPath(sFilePath).c_str(), FindStreamInfoStandard, &findStreamData, 0);
     if (hFind == INVALID_HANDLE_VALUE)
         return false;
 
