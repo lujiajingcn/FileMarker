@@ -46,7 +46,14 @@ MainWindow::MainWindow(QWidget *parent) :
 
 MainWindow::~MainWindow()
 {
+    // 先销毁界面（析构过程中产生的日志仍写入文件），再把日志落盘并断开设备，
+    // 最后恢复默认 handler：否则窗口销毁后 Qt 收尾阶段的日志会写进已关闭的
+    // 文件，出现 "QIODevice::write (QObject): device not open"。
     delete ui;
+
+    Utility::tsLogInfo.flush();
+    Utility::tsLogInfo.setDevice(nullptr);
+    qInstallMessageHandler(nullptr);
 }
 
 void MainWindow::initLogMessageHanlder()

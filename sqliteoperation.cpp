@@ -17,6 +17,10 @@ SqliteOperation::~SqliteOperation()
     // 因此不能以 connectionName() 是否为空作为是否清理的判断条件。
     QString connName = m_sqlDB.connectionName();  // 默认连接为空串 ""
     m_sqlDB.close();
+    // removeDatabase 要求没有其它 QSqlDatabase 实例引用该连接。
+    // 先释放本对象成员持有的引用，再移除连接，否则退出时会警告
+    // "connection is still in use, all queries will cease to work"。
+    m_sqlDB = QSqlDatabase();
     QSqlDatabase::removeDatabase(connName);
 }
 

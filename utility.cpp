@@ -2,6 +2,7 @@
 
 #include <QUuid>
 #include <QDateTime>
+#include <QIODevice>
 #include <QRegularExpression>
 
 Utility::Utility()
@@ -14,7 +15,14 @@ QMutex Utility::mutex;
 
 void Utility::myMessageHandler(QtMsgType mType, const QMessageLogContext&, const QString& sMsg)
 {
-    mutex.lock();
+    QMutexLocker locker(&mutex);
+
+    // 程序退出收尾阶段日志设备可能已经断开/关闭，此时直接丢弃，
+    // 否则会触发 "QIODevice::write (QObject): device not open"。
+    QIODevice *pDevice = tsLogInfo.device();
+    if (pDevice == nullptr || !pDevice->isOpen())
+        return;
+
     QString sFormatCurTime = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss");
     switch (mType) {
     case QtDebugMsg:
@@ -33,7 +41,6 @@ void Utility::myMessageHandler(QtMsgType mType, const QMessageLogContext&, const
         tsLogInfo << QString("%1    Fatal       %2").arg(sFormatCurTime).arg(sMsg) << endl;
         abort();
     }
-    mutex.unlock();
 }
 
 // 根据xpath找到指定的节点集合。
