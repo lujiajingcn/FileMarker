@@ -11,7 +11,6 @@
 
 #include <QtCore/QVariant>
 #include <QtWidgets/QApplication>
-#include <QtWidgets/QGridLayout>
 #include <QtWidgets/QHBoxLayout>
 #include <QtWidgets/QSplitter>
 #include <QtWidgets/QStackedWidget>
@@ -33,11 +32,8 @@ public:
     FormFileNavigation *wFileNavigation;
     QStackedWidget *stackedWidget;
     FormPageFiles *pageFiles;
-    QGridLayout *gridLayout_3;
     FormPageFilterdFiles *pageFilteredFiles;
-    QGridLayout *gridLayout;
     FormPageProgressInfo *pageProgressInfo;
-    QGridLayout *gridLayout_5;
 
     void setupUi(QWidget *FormFileBrowser)
     {
@@ -66,22 +62,12 @@ public:
         stackedWidget->setObjectName(QString::fromUtf8("stackedWidget"));
         pageFiles = new FormPageFiles();
         pageFiles->setObjectName(QString::fromUtf8("pageFiles"));
-        gridLayout_3 = new QGridLayout(pageFiles);
-        gridLayout_3->setSpacing(0);
-        gridLayout_3->setObjectName(QString::fromUtf8("gridLayout_3"));
-        gridLayout_3->setContentsMargins(0, 0, 0, 0);
         stackedWidget->addWidget(pageFiles);
         pageFilteredFiles = new FormPageFilterdFiles();
         pageFilteredFiles->setObjectName(QString::fromUtf8("pageFilteredFiles"));
-        gridLayout = new QGridLayout(pageFilteredFiles);
-        gridLayout->setSpacing(0);
-        gridLayout->setObjectName(QString::fromUtf8("gridLayout"));
-        gridLayout->setContentsMargins(0, 0, 0, 0);
         stackedWidget->addWidget(pageFilteredFiles);
         pageProgressInfo = new FormPageProgressInfo();
         pageProgressInfo->setObjectName(QString::fromUtf8("pageProgressInfo"));
-        gridLayout_5 = new QGridLayout(pageProgressInfo);
-        gridLayout_5->setObjectName(QString::fromUtf8("gridLayout_5"));
         stackedWidget->addWidget(pageProgressInfo);
         splitter->addWidget(stackedWidget);
 
