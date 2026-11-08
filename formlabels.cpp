@@ -28,6 +28,17 @@ FormLabels::FormLabels(QWidget *parent) :
     m_tvAllLabels->setModel(m_modelAllLabels);
 
     setToolButtonDefaultAction();
+
+    // 显式连接标签管理动作与标签树点击（此前依赖 on_<对象名>_<信号名> 的自动连接）
+    connect(ui->actionAdd, &QAction::triggered, this, &FormLabels::onActionAddTriggered);
+    connect(ui->actionAddChild, &QAction::triggered, this, &FormLabels::onActionAddChildTriggered);
+    connect(ui->actionDelete, &QAction::triggered, this, &FormLabels::onActionDeleteTriggered);
+    connect(ui->actionMoveUp, &QAction::triggered, this, &FormLabels::onActionMoveUpTriggered);
+    connect(ui->actionMoveDown, &QAction::triggered, this, &FormLabels::onActionMoveDownTriggered);
+    connect(ui->actionMoveLeft, &QAction::triggered, this, &FormLabels::onActionMoveLeftTriggered);
+    connect(ui->actionMoveRight, &QAction::triggered, this, &FormLabels::onActionMoveRightTriggered);
+    connect(m_tvAllLabels, &QTreeView::clicked, this, &FormLabels::onTreeViewClicked);
+
     initLabels();
 
     connect(m_modelAllLabels, &QStandardItemModel::itemChanged, this, &FormLabels::onItemChanged);
@@ -115,7 +126,7 @@ void FormLabels::addItem(QStandardItem *parentItem)
     saveLabelToXmlFile();   // #11 新增标签后立即持久化
 }
 
-void FormLabels::on_actionAdd_triggered()
+void FormLabels::onActionAddTriggered()
 {
     QModelIndex curIdx = m_tvAllLabels->currentIndex();
     if(!curIdx.isValid())
@@ -136,7 +147,7 @@ void FormLabels::on_actionAdd_triggered()
     }
 }
 
-void FormLabels::on_actionAddChild_triggered()
+void FormLabels::onActionAddChildTriggered()
 {
     QModelIndex curIdx = m_tvAllLabels->currentIndex();
     if(!curIdx.isValid())
@@ -148,7 +159,7 @@ void FormLabels::on_actionAddChild_triggered()
     addItem(curItem);
 }
 
-void FormLabels::on_actionDelete_triggered()
+void FormLabels::onActionDeleteTriggered()
 {
     QModelIndex curIdx = m_tvAllLabels->currentIndex();
     if(!curIdx.isValid())
@@ -174,7 +185,7 @@ void FormLabels::on_actionDelete_triggered()
     saveLabelToXmlFile();   // #11 删除后立即持久化
 }
 
-void FormLabels::on_actionMoveUp_triggered()
+void FormLabels::onActionMoveUpTriggered()
 {
     QModelIndex curIdx = m_tvAllLabels->currentIndex();
     if(!curIdx.isValid())
@@ -222,7 +233,7 @@ void FormLabels::on_actionMoveUp_triggered()
     saveLabelToXmlFile();   // #11 移动后立即持久化
 }
 
-void FormLabels::on_actionMoveDown_triggered()
+void FormLabels::onActionMoveDownTriggered()
 {
     QModelIndex curIdx = m_tvAllLabels->currentIndex();
     if(!curIdx.isValid())
@@ -276,7 +287,7 @@ void FormLabels::on_actionMoveDown_triggered()
     saveLabelToXmlFile();   // #11 移动后立即持久化
 }
 
-void FormLabels::on_actionMoveLeft_triggered()
+void FormLabels::onActionMoveLeftTriggered()
 {
     QModelIndex curIdx = m_tvAllLabels->currentIndex();
     if(!curIdx.isValid())
@@ -313,7 +324,7 @@ void FormLabels::on_actionMoveLeft_triggered()
 }
 
 // 作为其上方的节点的子节点
-void FormLabels::on_actionMoveRight_triggered()
+void FormLabels::onActionMoveRightTriggered()
 {
     QModelIndex curIdx = m_tvAllLabels->currentIndex();
     if(!curIdx.isValid() || m_modelAllLabels->rowCount() <= 1)
@@ -497,7 +508,7 @@ void FormLabels::updateAllLabelList(QVector<QString> vtAllLabels)
     }
 }
 
-void FormLabels::on_treeView_clicked(const QModelIndex &index)
+void FormLabels::onTreeViewClicked(const QModelIndex &index)
 {
     Q_UNUSED(index);
     // P1-10/P3-32：复用 getSelLabels，避免与 getSelLabels 重复逻辑，且同样去除 selectedIndexes 多列重复。

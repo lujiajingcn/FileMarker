@@ -1,6 +1,8 @@
 #include "dlgsearchconfig.h"
 #include "ui_dlgsearchconfig.h"
 
+#include <QPushButton>
+
 #include "common.h"
 #include "configoperation.h"
 
@@ -10,6 +12,11 @@ DlgSearchConfig::DlgSearchConfig(QWidget *parent, QString sConfigFilePath) :
     ui(new Ui::DlgSearchConfig)
 {
     ui->setupUi(this);
+
+    // 显式连接按钮信号（此前依赖 on_<对象名>_<信号名> 的自动连接）
+    connect(ui->btnOk, &QPushButton::clicked, this, &DlgSearchConfig::onBtnOkClicked);
+    connect(ui->btnCancel, &QPushButton::clicked, this, &DlgSearchConfig::onBtnCancelClicked);
+
     setWindowFlags(Qt::Dialog | Qt::CustomizeWindowHint | Qt::WindowTitleHint | Qt::WindowCloseButtonHint);
     readSearchConfig();
 }
@@ -62,13 +69,13 @@ void DlgSearchConfig::writeSearchConfig()
     ConfigOperation::writeSearchConfig(m_sConfigFilePath, sc);
 }
 
-void DlgSearchConfig::on_btnOk_clicked()
+void DlgSearchConfig::onBtnOkClicked()
 {
     writeSearchConfig();
     accept();
 }
 
-void DlgSearchConfig::on_btnCancel_clicked()
+void DlgSearchConfig::onBtnCancelClicked()
 {
     reject();
 }

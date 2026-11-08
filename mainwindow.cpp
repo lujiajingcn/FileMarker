@@ -3,6 +3,7 @@
 
 #include "dlgauthor.h"
 #include "utility.h"
+#include <QAction>
 #include <QDebug>
 
 MainWindow::MainWindow(QWidget *parent) :
@@ -14,6 +15,10 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->setupUi(this);
 
     initLogMessageHanlder();
+
+    // 显式连接菜单动作（此前依赖 on_<对象名>_<信号名> 的自动连接）
+    connect(ui->actionHelp, &QAction::triggered, this, &MainWindow::onActionHelpTriggered);
+    connect(ui->actionAuthor, &QAction::triggered, this, &MainWindow::onActionAuthorTriggered);
 
     // 将【标签管理】窗口的工具栏操作添加到主窗口的菜单中
     ui->dwcLabels->addToolButtonsToMenu(ui->menuLabelManage);
@@ -58,13 +63,13 @@ void MainWindow::initLogMessageHanlder()
 }
 
 // 参考了qt creator的 UI Tour功能，原始代码为 https://github.com/qt-creator/qt-creator/blob/qds/4.5/src/plugins/welcome/introductionwidget.cpp
-void MainWindow::on_actionHelp_triggered()
+void MainWindow::onActionHelpTriggered()
 {
     auto *wIntroduction = new IntroductionWidget(this);
     wIntroduction->show();
 }
 
-void MainWindow::on_actionAuthor_triggered()
+void MainWindow::onActionAuthorTriggered()
 {
     DlgAuthor dlgAuthor(this);
     dlgAuthor.exec();

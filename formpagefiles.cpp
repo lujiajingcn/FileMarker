@@ -5,6 +5,7 @@
 #include <QDesktopServices>
 #include <QUrl>
 #include <QInputDialog>
+#include <QToolButton>
 
 #include "adsoperation.h"
 #include "thumbnailiconprovider.h"
@@ -22,6 +23,19 @@ FormPageFiles::FormPageFiles(QWidget *parent) :
 
     initDetailFileList();
     initThumbnailFileList();
+
+    // 显式连接工具栏按钮与文件列表信号（此前依赖 on_<对象名>_<信号名> 的自动连接）
+    connect(ui->backButton, &QToolButton::clicked, this, &FormPageFiles::onBackButtonClicked);
+    connect(ui->forwardButton, &QToolButton::clicked, this, &FormPageFiles::onForwardButtonClicked);
+    connect(ui->toParentButton, &QToolButton::clicked, this, &FormPageFiles::onToParentButtonClicked);
+    connect(ui->btnRefresh, &QToolButton::clicked, this, &FormPageFiles::onBtnRefreshClicked);
+    connect(ui->tbDetail, &QToolButton::clicked, this, &FormPageFiles::onTbDetailClicked);
+    connect(ui->tbThumbnail, &QToolButton::clicked, this, &FormPageFiles::onTbThumbnailClicked);
+    connect(ui->tvFiles, &QTreeView::doubleClicked, this, &FormPageFiles::onTvFilesDoubleClicked);
+    connect(ui->tvFiles, &QTreeView::customContextMenuRequested,
+            this, &FormPageFiles::onTvFilesCustomContextMenuRequested);
+    connect(ui->listView, &QListView::customContextMenuRequested,
+            this, &FormPageFiles::onListViewCustomContextMenuRequested);
 
     // todo 后续将已经访问过的路径都添加上
     ui->lookInCombo->setEditText(m_sCurDir);
@@ -52,7 +66,7 @@ void FormPageFiles::onDeleteLabels()
     {
         ADSOperation::deleteADSFiles(sSelFilePath);
     }
-    on_btnRefresh_clicked();
+    onBtnRefreshClicked();
 }
 
 void FormPageFiles::initDetailFileList()
@@ -192,7 +206,7 @@ QStringList FormPageFiles::getSelDirs()
     return qLSelDirs;
 }
 
-void FormPageFiles::on_tvFiles_doubleClicked(const QModelIndex &index)
+void FormPageFiles::onTvFilesDoubleClicked(const QModelIndex &index)
 {
     onDoubleClicked(index);
 }
@@ -206,20 +220,20 @@ void FormPageFiles::onCustomContextMenuRequested(const QPoint &pos)
     // menu 会作为 parent 持有 QAction，无需手动管理。
     QAction actionDetail("详细信息", &menu);
     QAction actionThumbnail("缩略图", &menu);
-    connect(&actionDetail, &QAction::triggered, this, &FormPageFiles::on_tbDetail_clicked);
-    connect(&actionThumbnail, &QAction::triggered, this, &FormPageFiles::on_tbThumbnail_clicked);
+    connect(&actionDetail, &QAction::triggered, this, &FormPageFiles::onTbDetailClicked);
+    connect(&actionThumbnail, &QAction::triggered, this, &FormPageFiles::onTbThumbnailClicked);
     menuShowType.addAction(&actionDetail);
     menuShowType.addAction(&actionThumbnail);
     menu.addMenu(&menuShowType);
     menu.exec(QCursor::pos());
 }
 
-void FormPageFiles::on_tvFiles_customContextMenuRequested(const QPoint &pos)
+void FormPageFiles::onTvFilesCustomContextMenuRequested(const QPoint &pos)
 {
     onCustomContextMenuRequested(pos);
 }
 
-void FormPageFiles::on_backButton_clicked()
+void FormPageFiles::onBackButtonClicked()
 {
     m_skForward.push_back(m_sCurDir);
     QString sDir = m_skBackward.pop();
@@ -229,7 +243,7 @@ void FormPageFiles::on_backButton_clicked()
     updateToolButtons();  // P2-16：导航栈变化后直接更新按钮
 }
 
-void FormPageFiles::on_forwardButton_clicked()
+void FormPageFiles::onForwardButtonClicked()
 {
     m_skBackward.push_back(m_sCurDir);
     QString sDir = m_skForward.pop();
@@ -239,7 +253,7 @@ void FormPageFiles::on_forwardButton_clicked()
     updateToolButtons();  // P2-16：导航栈变化后直接更新按钮
 }
 
-void FormPageFiles::on_toParentButton_clicked()
+void FormPageFiles::onToParentButtonClicked()
 {
     QModelIndex rootIndex = m_tvFiles->rootIndex();
     QString sFilePath = m_modelFiles->filePath(rootIndex);
@@ -260,7 +274,7 @@ void FormPageFiles::on_toParentButton_clicked()
     updateToolButtons();  // P2-16：导航栈变化后直接更新按钮
 }
 
-void FormPageFiles::on_btnRefresh_clicked()
+void FormPageFiles::onBtnRefreshClicked()
 {
     QModelIndex curIndex = m_modelFiles->index(m_sCurDir);
     if (curIndex.isValid())
@@ -295,20 +309,15 @@ void FormPageFiles::onTvNavigationClicked(const QModelIndex &index)
     curDirChanged(path);
 }
 
-void FormPageFiles::on_tbDetail_clicked()
+void FormPageFiles::onTbDetailClicked()
 {
     ui->stackedWidget->setCurrentIndex(FILEPAGE::DETAIL);
 }
 
-void FormPageFiles::on_tbThumbnail_clicked()
+void FormPageFiles::onTbThumbnailClicked()
 {
     ui->stackedWidget->setCurrentIndex(FILEPAGE::THUMBNAIL);
 }
-
-//void FormPageFiles::on_listView_doubleClicked(const QModelIndex &index)
-//{
-//    onDoubleClicked(index);
-//}
 
 void FormPageFiles::onDoubleClicked(const QModelIndex &index)
 {
@@ -332,7 +341,7 @@ void FormPageFiles::bothSetRootIndex(const QModelIndex &index)
     m_lstFiles->setRootIndex(index);
 }
 
-void FormPageFiles::on_listView_customContextMenuRequested(const QPoint &pos)
+void FormPageFiles::onListViewCustomContextMenuRequested(const QPoint &pos)
 {
     onCustomContextMenuRequested(pos);
 }
@@ -368,7 +377,7 @@ void FormPageFiles::onEditTag(const QModelIndex &index)
     }
 
     emit sendLabels(sFilePath, qLLabels.join(","));
-    on_btnRefresh_clicked();
+    onBtnRefreshClicked();
 }
 
 void FormPageFiles::recvDblClick(const QModelIndex &index)

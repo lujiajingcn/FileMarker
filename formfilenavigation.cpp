@@ -11,6 +11,9 @@ FormFileNavigation::FormFileNavigation(QWidget *parent) :
     m_modelNavigation = new QFileSystemModel(this);
     m_tvNavigation->setModel(m_modelNavigation);
 
+    // 显式连接目录树点击（此前依赖 on_<对象名>_<信号名> 的自动连接）
+    connect(m_tvNavigation, &QTreeView::clicked, this, &FormFileNavigation::onTvNavigationClicked);
+
     m_modelNavigation->setRootPath("");
 
     // QFileSystemModel 默认有四列信息：Name、Size、Type、Date Modified，
@@ -37,7 +40,7 @@ FormFileNavigation::~FormFileNavigation()
     delete ui;
 }
 
-void FormFileNavigation::on_tvNavigation_clicked(const QModelIndex &index)
+void FormFileNavigation::onTvNavigationClicked(const QModelIndex &index)
 {
     emit sendNavigationClicked(index);
 }

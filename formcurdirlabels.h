@@ -30,10 +30,11 @@ signals:
 public slots:
     void onRecvDirAndLabels(QMap<QString, QSet<QString>> mapDirAndLabels);
 
-private slots:
-    void on_treeView_clicked(const QModelIndex &index);
-
 private:
+    // 标签树点击处理：构造函数中显式 connect，
+    // 不再使用 on_<对象名>_<信号名> 的自动连接（connectSlotsByName）。
+    void onTreeViewClicked(const QModelIndex &index);
+
     // 在最顶层找到指定内容的节点
     QStandardItem *getItem(QString text);
 

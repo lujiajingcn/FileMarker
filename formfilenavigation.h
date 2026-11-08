@@ -25,8 +25,10 @@ public:
 signals:
     void sendNavigationClicked(const QModelIndex &index);
 
-private slots:
-    void on_tvNavigation_clicked(const QModelIndex &index);
+private:
+    // 目录树点击处理：构造函数中显式 connect，
+    // 不再使用 on_<对象名>_<信号名> 的自动连接（connectSlotsByName）。
+    void onTvNavigationClicked(const QModelIndex &index);
 
 private:
     Ui::FormFileNavigation *ui;

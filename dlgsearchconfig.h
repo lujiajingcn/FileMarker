@@ -25,10 +25,12 @@ protected:
 
     void writeSearchConfig();
 
-private slots:
-    void on_btnOk_clicked();
+private:
+    // 按钮点击处理函数：构造函数中显式 connect，
+    // 不再使用 on_<对象名>_<信号名> 的自动连接（connectSlotsByName）。
+    void onBtnOkClicked();
 
-    void on_btnCancel_clicked();
+    void onBtnCancelClicked();
 
 private:
     QString         m_sConfigFilePath;

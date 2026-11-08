@@ -64,24 +64,26 @@ public slots:
 
     void onRecvLabelsGeneratedByAI(QString sLabels);
 
-private slots:
-    void on_actionAdd_triggered();
+private:
+    // 标签管理动作与标签树点击的处理函数：全部在构造函数中显式 connect，
+    // 不再使用 on_<对象名>_<信号名> 的自动连接（connectSlotsByName）。
+    void onActionAddTriggered();
 
-    void on_actionAddChild_triggered();
+    void onActionAddChildTriggered();
 
-    void on_actionDelete_triggered();
+    void onActionDeleteTriggered();
 
-    void on_actionMoveUp_triggered();
+    void onActionMoveUpTriggered();
 
-    void on_actionMoveDown_triggered();
+    void onActionMoveDownTriggered();
 
-    void on_actionMoveLeft_triggered();
+    void onActionMoveLeftTriggered();
 
-    void on_actionMoveRight_triggered();
+    void onActionMoveRightTriggered();
 
     void onItemChanged(QStandardItem *item); // 检查新标签是否已存在，并重命名时保持集合同步
 
-    void on_treeView_clicked(const QModelIndex &index);
+    void onTreeViewClicked(const QModelIndex &index);
 
 private:
     Ui::FormLabels *ui;

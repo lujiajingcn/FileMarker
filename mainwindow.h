@@ -21,12 +21,13 @@ public:
 protected:
     void initLogMessageHanlder();
 
-private slots:
-    void on_actionHelp_triggered();
-
-    void on_actionAuthor_triggered();
-
 private:
+    // 菜单动作的处理函数：由构造函数中的 connect 显式连接，
+    // 不再使用 on_<对象名>_<信号名> 的自动连接（connectSlotsByName）。
+    void onActionHelpTriggered();
+
+    void onActionAuthorTriggered();
+
     QFile                   m_logFile;
 
     Ui::MainWindow *ui;

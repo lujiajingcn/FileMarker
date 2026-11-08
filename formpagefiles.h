@@ -60,6 +60,10 @@ signals:
 
     void sendLabels(QString sFilePath, QString sLabels);
 
+public:
+    // 刷新当前目录：既响应【刷新】按钮，也作为 FormFileBrowser::sendRefresh 信号的接收者
+    void onBtnRefreshClicked();
+
 protected:
     // 双击文件夹则进入该文件夹，双击文件则打开该文件。
     void onDoubleClicked(const QModelIndex &index);
@@ -71,32 +75,30 @@ protected:
 
 public slots:
 
-    // 文件列表的右键菜单
-    void on_tvFiles_customContextMenuRequested(const QPoint &pos);
-
-    void on_btnRefresh_clicked();
-
     void recvGotoFile(QString sFilePath);
 
     void onTvNavigationClicked(const QModelIndex &index);
 
-private slots:
+private:
+    // 以下处理函数全部在构造函数中显式 connect，
+    // 不再使用 on_<对象名>_<信号名> 的自动连接（connectSlotsByName）。
+    void onTvFilesCustomContextMenuRequested(const QPoint &pos);
 
-    void on_backButton_clicked();
+    void onBackButtonClicked();
 
-    void on_forwardButton_clicked();
+    void onForwardButtonClicked();
 
-    void on_toParentButton_clicked();
+    void onToParentButtonClicked();
 
     void onDeleteLabels();
 
-    void on_tbDetail_clicked();
+    void onTbDetailClicked();
 
-    void on_tbThumbnail_clicked();
+    void onTbThumbnailClicked();
 
-    void on_tvFiles_doubleClicked(const QModelIndex &index);
+    void onTvFilesDoubleClicked(const QModelIndex &index);
 
-    void on_listView_customContextMenuRequested(const QPoint &pos);
+    void onListViewCustomContextMenuRequested(const QPoint &pos);
 
     void onRecvLabels(QString sFilePath, QString sLabels);
 

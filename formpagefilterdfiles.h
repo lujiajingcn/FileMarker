@@ -30,9 +30,10 @@ public slots:
     void onShowFilteredFiles(QStringList qLFilteredFiles);
     void onGotoFilePath();
 
-private slots:
-    // 右键菜单
-    void on_tvFilteredFiles_customContextMenuRequested(const QPoint &pos);
+private:
+    // 右键菜单处理函数：构造函数中显式 connect，
+    // 不再使用 on_<对象名>_<信号名> 的自动连接（connectSlotsByName）。
+    void onTvFilteredFilesCustomContextMenuRequested(const QPoint &pos);
 
 private:
     Ui::FormPageFilterdFiles *ui;

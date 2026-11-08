@@ -1,6 +1,8 @@
 #include "formcurdirlabels.h"
 #include "ui_formcurdirlabels.h"
 
+#include <QTreeView>
+
 FormCurDirLabels::FormCurDirLabels(QWidget *parent) :
     QWidget(parent),
     ui(new Ui::FormCurDirLabels)
@@ -9,6 +11,9 @@ FormCurDirLabels::FormCurDirLabels(QWidget *parent) :
 
     m_modelLabels = new QStandardItemModel(this);
     ui->treeView->setModel(m_modelLabels);
+
+    // 显式连接标签树点击（此前依赖 on_<对象名>_<信号名> 的自动连接）
+    connect(ui->treeView, &QTreeView::clicked, this, &FormCurDirLabels::onTreeViewClicked);
 }
 
 FormCurDirLabels::~FormCurDirLabels()
@@ -33,7 +38,7 @@ void FormCurDirLabels::onRecvDirAndLabels(QMap<QString, QSet<QString>> mapDirAnd
     }
 }
 
-void FormCurDirLabels::on_treeView_clicked(const QModelIndex &index)
+void FormCurDirLabels::onTreeViewClicked(const QModelIndex &index)
 {
     Q_UNUSED(index);
 

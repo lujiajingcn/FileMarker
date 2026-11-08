@@ -13,7 +13,12 @@ FormPageFilterdFiles::FormPageFilterdFiles(QWidget *parent) :
     m_tvFilteredFiles->setModel(m_modelFilteredFiles);
 
     m_gotoFilePath = new QAction("打开文件所在位置", this);
-    connect(m_gotoFilePath, SIGNAL(triggered(bool)), this, SLOT(onGotoFilePath()));
+    // 显式连接：原先使用 SIGNAL/SLOT 字符串形式的 connect()
+    connect(m_gotoFilePath, &QAction::triggered, this, &FormPageFilterdFiles::onGotoFilePath);
+
+    // 显式连接右键菜单信号（此前依赖 on_<对象名>_<信号名> 的自动连接）
+    connect(m_tvFilteredFiles, &QTreeView::customContextMenuRequested,
+            this, &FormPageFilterdFiles::onTvFilteredFilesCustomContextMenuRequested);
 }
 
 void FormPageFilterdFiles::onShowFilteredFiles(QStringList qLFilteredFiles)
@@ -44,7 +49,7 @@ void FormPageFilterdFiles::onGotoFilePath()
     emit sendGotoFile(sFilePath);
 }
 
-void FormPageFilterdFiles::on_tvFilteredFiles_customContextMenuRequested(const QPoint &pos)
+void FormPageFilterdFiles::onTvFilteredFilesCustomContextMenuRequested(const QPoint &pos)
 {
     QMenu menu(ui->tvFilteredFiles);
     menu.addAction(m_gotoFilePath);
