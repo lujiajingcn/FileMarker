@@ -31,6 +31,51 @@ QFont tagFontFor(const QFont &base)
     return font;
 }
 
+// 文件名按字符换行，最多 maxLines 行；放不下时最后一行加省略号。
+// 之前直接 drawText(TextWordWrap) 会被裁剪且没有省略号，用户看不出名字被截断。
+QStringList nameLinesFor(const QFontMetrics &fm, const QString &text, int width, int maxLines)
+{
+    QStringList lines;
+    if (text.isEmpty() || width <= 0 || maxLines <= 0)
+        return lines;
+
+    QString sRest = text;
+    while (!sRest.isEmpty() && lines.size() < maxLines) {
+        if (fm.horizontalAdvance(sRest) <= width) {
+            lines << sRest;
+            sRest.clear();
+            break;
+        }
+
+        int nLow = 1;
+        int nHigh = sRest.size();
+        int nFit = 1;
+        while (nLow <= nHigh) {
+            const int nMid = (nLow + nHigh) / 2;
+            if (fm.horizontalAdvance(sRest.left(nMid)) <= width) {
+                nFit = nMid;
+                nLow = nMid + 1;
+            } else {
+                nHigh = nMid - 1;
+            }
+        }
+        nFit = qBound(1, nFit, sRest.size());
+
+        if (lines.size() + 1 >= maxLines) {
+            lines << fm.elidedText(sRest, Qt::ElideRight, width);
+            sRest.clear();
+        } else {
+            lines << sRest.left(nFit);
+            sRest = sRest.mid(nFit);
+        }
+    }
+
+    if (!sRest.isEmpty() && !lines.isEmpty())
+        lines.last() = fm.elidedText(lines.last() + QChar(0x2026), Qt::ElideRight, width);
+
+    return lines;
+}
+
 // 按“标签”为最小单位换行（绝不在一个标签中间断开），最多 maxLines 行；
 // 放不下时在最后一行末尾加省略号。这样缩略图里的 "十二" 不会被拆成 "十" + "二"。
 QStringList tagLinesFor(const QFontMetrics &fm, const QString &tagText, int width, int maxLines)
@@ -95,6 +140,16 @@ QStringList tagLinesFor(const QFontMetrics &fm, const QString &tagText, int widt
 }
 
 } // namespace
+
+int EditableDelegate::preferredCellHeight(int iconSize, const QFont &font)
+{
+    const QFontMetrics fm(font);
+    const QFontMetrics tagFm(tagFontFor(font));
+    // 图标 + 两行文件名 + 两行标签 + 内外边距
+    return ITEM_MARGIN + iconSize + ITEM_GAP
+           + 2 * fm.lineSpacing() + ITEM_GAP
+           + 2 * tagFm.lineSpacing() + ITEM_MARGIN;
+}
 
 EditableDelegate::EditableDelegate(QObject *parent)
     : QStyledItemDelegate(parent)
@@ -201,8 +256,10 @@ void EditableDelegate::paint(QPainter *painter, const QStyleOptionViewItem &opti
     // 图标：在 GUI 线程里向缩略图生成器要图（带缓存）。
     // 不用 model 的 DecorationRole，是因为 QFileSystemModel 在后台线程取图标，
     // 而 QPixmap / Shell COM 只能在 GUI 线程安全使用。
+    const qreal dpr = painter->device() != nullptr ? painter->device()->devicePixelRatioF() : 1.0;
     QIcon icon;
     if (m_thumbnailProvider != nullptr) {
+        m_thumbnailProvider->setPaintDevicePixelRatio(dpr);
         const QString sFilePath = index.data(QFileSystemModel::FilePathRole).toString();
         if (!sFilePath.isEmpty())
             icon = m_thumbnailProvider->icon(QFileInfo(sFilePath));
@@ -211,7 +268,6 @@ void EditableDelegate::paint(QPainter *painter, const QStyleOptionViewItem &opti
         icon = index.data(Qt::DecorationRole).value<QIcon>();
 
     if (!icon.isNull()) {
-        const qreal dpr = painter->device() != nullptr ? painter->device()->devicePixelRatioF() : 1.0;
         const int targetPx = qMax(1, qRound(m_iconSize * dpr));
         const QPixmap pixmap = icon.pixmap(QSize(targetPx, targetPx),
                                            selected ? QIcon::Selected : QIcon::Normal);
@@ -227,15 +283,23 @@ void EditableDelegate::paint(QPainter *painter, const QStyleOptionViewItem &opti
         }
     }
 
-    // 文件名：主文字颜色（裁剪到文字区域，超长时不会画到标签/相邻项上）
+    // 文件名：主文字颜色（裁剪到文字区域，超长时加省略号，不会画到标签/相邻项上）
     if (!layout.nameRect.isEmpty()) {
         painter->save();
         painter->setClipRect(layout.nameRect);
         painter->setFont(option.font);
         painter->setPen(selected ? option.palette.color(QPalette::HighlightedText)
                                  : option.palette.color(QPalette::Text));
-        painter->drawText(layout.nameRect, Qt::AlignHCenter | Qt::AlignTop | Qt::TextWordWrap,
-                          index.data(Qt::DisplayRole).toString());
+        const QFontMetrics fm(option.font);
+        const int nMaxLines = qMax(1, layout.nameRect.height() / qMax(1, fm.lineSpacing()));
+        const QStringList nameLines = nameLinesFor(fm, index.data(Qt::DisplayRole).toString(),
+                                                   layout.nameRect.width(), nMaxLines);
+        QRect lineRect(layout.nameRect.left(), layout.nameRect.top(),
+                       layout.nameRect.width(), fm.lineSpacing());
+        for (const QString &sLine : nameLines) {
+            painter->drawText(lineRect, Qt::AlignHCenter | Qt::AlignVCenter, sLine);
+            lineRect.translate(0, fm.lineSpacing());
+        }
         painter->restore();
     }
 

@@ -102,7 +102,6 @@ FormPageFiles::FormPageFiles(QWidget *parent) :
     m_pScanTimer = nullptr;
     m_nScanRow = 0;
     m_nScanTotal = 0;
-    m_nScanGeneration = 0;
 
     m_modelFiles = new MyQFileSystemModel(this);
     // 设置根路径（例如当前目录）
@@ -118,23 +117,34 @@ FormPageFiles::FormPageFiles(QWidget *parent) :
         if (isSameDirPath(sPath, m_sCurDir))
             scanDirLabels(m_sCurDir);
     });
-    // 扫描过程中用户点表头排序会改变行顺序，已扫描的行号会错位；重新扫一遍。
-    connect(m_modelFiles, &QAbstractItemModel::layoutChanged, this, [this]() {
-        if (!m_sCurDir.isEmpty())
+    // 扫描过程中排序/目录内容变化会改变行顺序，已扫描的行号会错位；只有正在扫描时才重启。
+    auto restartScanIfActive = [this]() {
+        if (m_pScanTimer != nullptr && m_pScanTimer->isActive() && !m_sCurDir.isEmpty())
             scanDirLabels(m_sCurDir, true);
+    };
+    connect(m_modelFiles, &QAbstractItemModel::layoutChanged, this, [restartScanIfActive]() {
+        restartScanIfActive();
     });
+    connect(m_modelFiles, &QAbstractItemModel::rowsInserted, this,
+            [restartScanIfActive](const QModelIndex &, int, int) { restartScanIfActive(); });
+    connect(m_modelFiles, &QAbstractItemModel::rowsRemoved, this,
+            [restartScanIfActive](const QModelIndex &, int, int) { restartScanIfActive(); });
+    connect(m_modelFiles, &QAbstractItemModel::modelReset, this,
+            [restartScanIfActive]() { restartScanIfActive(); });
 
     initDetailFileList();
     initThumbnailFileList();
 
     // 恢复上次的列宽/列顺序（窗口大小在 MainWindow 中恢复）
     {
-        QSettings settings(g_sAppDir + QStringLiteral("/FileMarker.ini"), QSettings::IniFormat);
+        QSettings settings(Utility::settingsFilePath(), QSettings::IniFormat);
 #if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
         settings.setIniCodec("UTF-8");
 #endif
         const QByteArray headerState = settings.value(QStringLiteral("view/headerState")).toByteArray();
-        if (!headerState.isEmpty() && m_tvFiles != nullptr && m_tvFiles->header() != nullptr) {
+        const int nSettingsVersion = settings.value(QStringLiteral("settings/version"), 0).toInt();
+        if (nSettingsVersion >= 2 && !headerState.isEmpty()
+                && m_tvFiles != nullptr && m_tvFiles->header() != nullptr) {
             m_tvFiles->header()->restoreState(headerState);
             // 旧版本保存的状态可能把列模式/表头可点击性也恢复成旧值，这里重申当前策略
             QHeaderView *header = m_tvFiles->header();
@@ -185,12 +195,13 @@ FormPageFiles::FormPageFiles(QWidget *parent) :
 FormPageFiles::~FormPageFiles()
 {
     // 保存列宽与上次目录，下次启动恢复
-    QSettings settings(g_sAppDir + QStringLiteral("/FileMarker.ini"), QSettings::IniFormat);
+    QSettings settings(Utility::settingsFilePath(), QSettings::IniFormat);
 #if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
     settings.setIniCodec("UTF-8");
 #endif
     if (m_tvFiles != nullptr && m_tvFiles->header() != nullptr)
         settings.setValue(QStringLiteral("view/headerState"), m_tvFiles->header()->saveState());
+    settings.setValue(QStringLiteral("settings/version"), 2);
     settings.setValue(QStringLiteral("view/sortColumn"), m_nSortColumn);
     settings.setValue(QStringLiteral("view/sortOrder"), static_cast<int>(m_sortOrder));
     if (!m_sCurDir.isEmpty())
@@ -202,7 +213,7 @@ FormPageFiles::~FormPageFiles()
 
 void FormPageFiles::restoreLastDir()
 {
-    QSettings settings(g_sAppDir + QStringLiteral("/FileMarker.ini"), QSettings::IniFormat);
+    QSettings settings(Utility::settingsFilePath(), QSettings::IniFormat);
 #if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
     settings.setIniCodec("UTF-8");
 #endif
@@ -242,11 +253,19 @@ void FormPageFiles::onDeleteLabels()
     if (box.clickedButton() != pBtnDelete)
         return;
 
-    foreach(QString sSelFilePath, qLSelFilePaths)
+    bool bAllOk = true;
+    foreach(const QString &sSelFilePath, qLSelFilePaths)
     {
-        ADSOperation::deleteADSFiles(sSelFilePath);
+        if (!ADSOperation::deleteADSFiles(sSelFilePath))
+            bAllOk = false;
     }
+    emit sendTagsChanged(qLSelFilePaths);
     onBtnRefreshClicked();
+
+    if (!bAllOk) {
+        QMessageBox::warning(this, tr("删除标签失败"),
+                             tr("部分文件的标签未能删除，可能是文件被占用、只读或权限不足。"));
+    }
 }
 
 void FormPageFiles::initDetailFileList()
@@ -392,7 +411,6 @@ void FormPageFiles::scanDirLabels(const QString &sDir, bool bForce)
     if (nRows <= 0)
         return;   // 目录还没加载出内容，等 directoryLoaded 或下一次刷新
 
-    ++m_nScanGeneration;
     m_sScanDir = sDir;
     m_scanRootIndex = rootIndex;
     m_nScanRow = 0;
@@ -423,6 +441,8 @@ void FormPageFiles::continueDirLabelScan()
         const QStringList qLTags = ADSOperation::listADSTagsInOrder(m_modelFiles->filePath(idx));
         for (const QString &sTag : qLTags)
             m_setScanLabels.insert(sTag);
+        // 预热模型缓存：标签列绘制时直接命中，避免首次 paint 同步枚举 ADS
+        m_modelFiles->cacheTagsForFile(m_modelFiles->filePath(idx), qLTags);
     }
 
     if (m_nScanRow < m_nScanTotal)
@@ -504,6 +524,8 @@ void FormPageFiles::navigateToDir(const QString &sPath)
         if (fileIndex.isValid()) {
             m_tvFiles->setCurrentIndex(fileIndex);
             m_lstFiles->setCurrentIndex(fileIndex);
+            m_tvFiles->scrollTo(fileIndex, QAbstractItemView::PositionAtCenter);
+            m_lstFiles->scrollTo(fileIndex, QAbstractItemView::PositionAtCenter);
         }
         return;
     }
@@ -619,18 +641,20 @@ void FormPageFiles::onCustomContextMenuRequested(const QPoint &pos)
                                  ? activeView->viewport()->mapToGlobal(pos)
                                  : QCursor::pos();
 
-    QStringList files = getSelFilePath();
-    if (clickedIndex.isValid()) {
-        const QString sClickedPath = m_modelFiles->filePath(clickedIndex);
-        if (!files.contains(sClickedPath)) {
-            files.clear();
-            files << sClickedPath;
-        }
+    // 右键动作统一作用于鼠标所在项；只有空白处右键才退回当前选中项。
+    // 这样多选时“打开方式/在资源管理器中显示”不会误作用到其它文件。
+    QString targetFile;
+    if (clickedIndex.isValid())
+        targetFile = m_modelFiles->filePath(clickedIndex);
+    if (targetFile.isEmpty()) {
+        const QStringList qLSelFiles = getSelFilePath();
+        if (!qLSelFiles.isEmpty())
+            targetFile = qLSelFiles.first();
     }
 
-    const bool hasSelection = !files.isEmpty();
-    const bool singleSelection = (files.count() == 1);
-    const QString firstFile = hasSelection ? files.first() : QString();
+    const bool hasSelection = !targetFile.isEmpty();
+    const bool singleSelection = hasSelection;
+    const QString firstFile = targetFile;
 
     QMenu menu(this);
 
@@ -714,9 +738,9 @@ void FormPageFiles::onCustomContextMenuRequested(const QPoint &pos)
     menu.addSeparator();
     QAction *actionRefresh = menu.addAction(tr("刷新"));
 
-    connect(actionOpen, &QAction::triggered, this, [files]() {
-        for (const QString &file : files)
-            QDesktopServices::openUrl(QUrl::fromLocalFile(file));
+    connect(actionOpen, &QAction::triggered, this, [targetFile]() {
+        if (!targetFile.isEmpty())
+            QDesktopServices::openUrl(QUrl::fromLocalFile(targetFile));
     });
     connect(actionOpenWith, &QAction::triggered, this, [firstFile]() {
         QProcess::startDetached(QStringLiteral("rundll32.exe"),
@@ -728,8 +752,9 @@ void FormPageFiles::onCustomContextMenuRequested(const QPoint &pos)
                                 QStringList() << (QStringLiteral("/select,")
                                                   + QDir::toNativeSeparators(firstFile)));
     });
-    connect(actionCopyPath, &QAction::triggered, this, [files]() {
-        QApplication::clipboard()->setText(files.join("\n"));
+    connect(actionCopyPath, &QAction::triggered, this, [targetFile]() {
+        if (!targetFile.isEmpty())
+            QApplication::clipboard()->setText(targetFile);
     });
     connect(actionEditTags, &QAction::triggered, this, [this, clickedIndex]() {
         onEditTag(clickedIndex.isValid() ? clickedIndex : currentIndexInActiveView());
@@ -748,8 +773,12 @@ void FormPageFiles::onTvFilesCustomContextMenuRequested(const QPoint &pos)
 
 void FormPageFiles::onBackButtonClicked()
 {
+    if (m_skBackward.isEmpty())
+        return;
     m_skForward.push_back(m_sCurDir);
     QString sDir = m_skBackward.pop();
+    if (sDir.isEmpty())
+        sDir = MY_COMPUTER_NAME;
     bothSetRootIndex(m_modelFiles->index(sDir));
     m_sCurDir = sDir;
     refreshAddressBar();
@@ -759,8 +788,12 @@ void FormPageFiles::onBackButtonClicked()
 
 void FormPageFiles::onForwardButtonClicked()
 {
+    if (m_skForward.isEmpty())
+        return;
     m_skBackward.push_back(m_sCurDir);
     QString sDir = m_skForward.pop();
+    if (sDir.isEmpty())
+        sDir = MY_COMPUTER_NAME;
     bothSetRootIndex(m_modelFiles->index(sDir));
     m_sCurDir = sDir;
     refreshAddressBar();
@@ -786,7 +819,9 @@ void FormPageFiles::onToParentButtonClicked()
         sNewDirectory = dir.absolutePath();
         bothSetRootIndex(m_modelFiles->index(sNewDirectory));
     }
-    m_skBackward.push_back(sFilePath);
+    // 根节点没有“父路径”，不要把空字符串压进后退栈
+    if (!sFilePath.isEmpty())
+        m_skBackward.push_back(sFilePath);
     m_sCurDir = sNewDirectory;
     // 地址栏同步：之前这里漏了更新，导致点上移后地址栏还停留在旧路径。
     rememberPath(sNewDirectory);
@@ -905,19 +940,40 @@ void FormPageFiles::onEditTag(const QModelIndex &index)
         return;
 
     // 先清空该文件全部标签，再按用户输入的顺序重新写入（P2-2）。
-    // 支持英文逗号(,)、中文逗号(，)、顿号(、)、英文分号(;)、中文分号(；) 分隔。
-    // 与行内编辑保持一致：先按 ADS 规则净化标签名，再写盘并转发给标签库，
-    // 避免标签库里出现 "a:b?c" 而磁盘上是 "a_b_c" 的不一致。
+    // 历史标签名可能合法包含 "，、；"：已有标签原样保留，只有新输入的标签才净化。
     QStringList qLLabels;
-    foreach (const QString &sLabel, Utility::splitLabels(sNewTags)) {
+    QStringList qLChanged;
+    foreach (const QString &sLabel, Utility::splitLabelsPreservingExisting(sNewTags, adsNames)) {
+        if (adsNames.contains(sLabel)) {
+            if (!qLLabels.contains(sLabel))
+                qLLabels << sLabel;
+            continue;
+        }
         const QString sSanitized = ADSOperation::sanitizeTagName(sLabel);
-        if (!sSanitized.isEmpty() && !qLLabels.contains(sSanitized))
+        if (!sSanitized.isEmpty() && !qLLabels.contains(sSanitized)) {
             qLLabels << sSanitized;
+            if (sSanitized != sLabel.trimmed())
+                qLChanged << sLabel + QStringLiteral("→") + sSanitized;
+        } else if (sSanitized.isEmpty() && !sLabel.trimmed().isEmpty()) {
+            qLChanged << sLabel + tr("（已忽略）");
+        }
     }
-    ADSOperation::replaceTags(sFilePath, qLLabels);
+    if (!qLChanged.isEmpty())
+        emit sendHintMessage(tr("部分标签名已规范化：%1").arg(qLChanged.join("，")));
+
+    const bool bOk = ADSOperation::replaceTags(sFilePath, qLLabels);
+    emit sendTagsChanged(QStringList() << sFilePath);
+    onBtnRefreshClicked();
+
+    if (!bOk) {
+        QMessageBox::warning(this, tr("保存标签失败"),
+                             tr("标签未能完整写入：%1\n"
+                                "已尝试恢复操作前的标签，请检查文件是否被占用、只读或磁盘空间不足。")
+                                 .arg(sFilePath));
+        return;
+    }
 
     emit sendLabels(sFilePath, qLLabels.join(","));
-    onBtnRefreshClicked();
 }
 
 void FormPageFiles::recvDblClick(const QModelIndex &index)
@@ -982,15 +1038,4 @@ QModelIndex FormPageFiles::currentIndexInActiveView() const
     return m_tvFiles->currentIndex();
 }
 
-QModelIndex FormPageFiles::indexAtCursor() const
-{
-    const QPoint globalPos = QCursor::pos();
 
-    if (m_lstFiles != nullptr && m_lstFiles->isVisible())
-        return m_lstFiles->indexAt(m_lstFiles->viewport()->mapFromGlobal(globalPos));
-
-    if (m_tvFiles != nullptr)
-        return m_tvFiles->indexAt(m_tvFiles->viewport()->mapFromGlobal(globalPos));
-
-    return QModelIndex();
-}

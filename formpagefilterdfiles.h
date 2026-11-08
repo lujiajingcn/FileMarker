@@ -33,6 +33,11 @@ signals:
 public slots:
     void onShowFilteredFiles(QStringList qLFilteredFiles);
     void onGotoFilePath();
+    void setSearchCondition(const QString &sCondition);
+
+protected:
+    void hideEvent(QHideEvent *event) override;
+    void showEvent(QShowEvent *event) override;
 
 private:
     // 双击结果项：直接打开文件
@@ -64,6 +69,7 @@ private:
     QTimer                  *m_pTagScanTimer;
     QStringList              m_qLTagScanPaths;
     int                      m_nTagScanRow;
+    QString                  m_sSearchCondition;
 };
 
 #endif // FORMPAGEFILTERDFILES_H

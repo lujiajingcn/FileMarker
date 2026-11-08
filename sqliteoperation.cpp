@@ -1,6 +1,7 @@
 #include "sqliteoperation.h"
 #include <common.h>
 #include <QDebug>
+#include <QFileInfo>
 #include "utility.h"
 
 SqliteOperation::SqliteOperation()
@@ -67,6 +68,13 @@ void SqliteOperation::createTable()
 
 void SqliteOperation::migrateLegacyLabels()
 {
+    // 用 user_version 记录迁移，避免每次启动都全表 UPDATE
+    QSqlQuery versionQuery(m_sqlDB);
+    if (versionQuery.exec(QStringLiteral("PRAGMA user_version")) && versionQuery.next()
+            && versionQuery.value(0).toInt() >= 1) {
+        return;
+    }
+
     // 旧版本把 FindFirstStreamW 返回的 "tag:$DATA" 原样写进 labels。
     // 新版按 "tag" 搜索时精确比较会全部落空，这里一次性去掉缓存里的后缀。
     QSqlQuery query(m_sqlDB);
@@ -77,6 +85,28 @@ void SqliteOperation::migrateLegacyLabels()
     }
     if (query.numRowsAffected() > 0)
         qInfo() << "已迁移旧标签缓存:" << query.numRowsAffected() << "行";
+
+    QSqlQuery markQuery(m_sqlDB);
+    if (!markQuery.exec(QStringLiteral("PRAGMA user_version = 1")))
+        qWarning() << "写入迁移版本失败:" << markQuery.lastError().text();
+}
+
+void SqliteOperation::invalidateDirCache(const QString &sDir)
+{
+    if (sDir.isEmpty())
+        return;
+
+    QSqlQuery query(m_sqlDB);
+    query.prepare(QString("DELETE FROM %1 WHERE dir=:dir").arg(TABLE_NAME_FILEPATH_TAG));
+    query.bindValue(":dir", sDir);
+    if (!query.exec())
+        qWarning() << "清除文件标签缓存失败:" << sDir << query.lastError().text();
+
+    QSqlQuery dirQuery(m_sqlDB);
+    dirQuery.prepare(QString("DELETE FROM %1 WHERE dir=:dir").arg(TABLE_NAME_DIR));
+    dirQuery.bindValue(":dir", sDir);
+    if (!dirQuery.exec())
+        qWarning() << "清除目录缓存失败:" << sDir << dirQuery.lastError().text();
 }
 
 void SqliteOperation::insertRecord(QMap<QString, FILE_TAGS> dirAndFileTags)
@@ -155,8 +185,8 @@ void SqliteOperation::searchFilesByLabels(QStringList qLSelDirs, QStringList qLL
         return;
     }
 
-    QSet<QString> stSelDirs = qLSelDirs.toSet();
-    QSet<QString> stSearchedDirs = qLSearchedDirs.toSet();
+    QSet<QString> stSelDirs = Utility::toSet(qLSelDirs);
+    QSet<QString> stSearchedDirs = Utility::toSet(qLSearchedDirs);
     QSet<QString> stHitedDirs = stSelDirs.intersect(stSearchedDirs);    // 选中的文件夹命中缓存的部分
     QSet<QString> stNotHitedDirs = stSelDirs.subtract(stSearchedDirs);  // 选中的文件夹未命中缓存的部分，这部分后续直接在磁盘中查找
     for (QSet<QString>::const_iterator cItr = stNotHitedDirs.begin(); cItr != stNotHitedDirs.end(); cItr++)
@@ -180,12 +210,12 @@ void SqliteOperation::searchFilesByLabels(QStringList qLSelDirs, QStringList qLL
             if(nLabelLogic == labelLogic::AND)
             {
                 QStringList qLLabelsOfFilePath = sLabels.split(",");
-                QSet<QString> stLabelsOfFilePath = qLLabelsOfFilePath.toSet();
-                QSet<QString> stConditionLabels = qLLabels.toSet();
+                QSet<QString> stLabelsOfFilePath = Utility::toSet(qLLabelsOfFilePath);
+                QSet<QString> stConditionLabels = Utility::toSet(qLLabels);
                 QSet<QString> stIntersect = stLabelsOfFilePath.intersect(stConditionLabels);
                 QSet<QString> stSubtract = stConditionLabels.subtract(stIntersect);
 
-                if(stSubtract.count() == 0)
+                if(stSubtract.count() == 0 && QFileInfo::exists(sFilePath))
                 {
                     qLFilePaths << sFilePath;
                 }
@@ -193,7 +223,7 @@ void SqliteOperation::searchFilesByLabels(QStringList qLSelDirs, QStringList qLL
             else
             {
                 QStringList qLLabelsOfFile = sLabels.split(",");
-                if(Utility::hasEqualElement(qLLabels, qLLabelsOfFile))
+                if(Utility::hasEqualElement(qLLabels, qLLabelsOfFile) && QFileInfo::exists(sFilePath))
                 {
                     qLFilePaths << sFilePath;
                 }

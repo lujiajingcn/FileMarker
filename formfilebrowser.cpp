@@ -55,33 +55,46 @@ FormFileBrowser::FormFileBrowser(QWidget *parent) :
             });
     // 页面内的提示（如目录文件过多只统计了前 N 个）转发到主窗口状态栏
     connect(ui->pageFiles, &FormPageFiles::sendHintMessage, this, &FormFileBrowser::sendStatusMessage);
+    // 标签写盘后让相关目录的搜索缓存失效，避免按旧标签命中/漏掉新标签
+    connect(ui->pageFiles, &FormPageFiles::sendTagsChanged, this,
+            [this](const QStringList &qLFilePaths) {
+                if (m_sqlOperation == nullptr)
+                    return;
+                QSet<QString> setDirs;
+                for (const QString &sFilePath : qLFilePaths)
+                    setDirs.insert(QFileInfo(sFilePath).absolutePath());
+                for (const QString &sDir : setDirs)
+                    m_sqlOperation->invalidateDirCache(sDir);
+            });
 }
 
 FormFileBrowser::~FormFileBrowser()
 {
     // 退出前先停掉并等待后台线程：QThread 运行中被销毁会触发 Qt 警告/崩溃，
     // 线程还可能继续回调已销毁的 UI 或写 ADS。
-    if (m_threadSearch != nullptr) {
+    // 先对所有线程发停止信号，让它们并行退出，再逐个等待，避免串行等待累计超时。
+    QThread *pSearch = m_threadSearch;
+    QThread *pTraverse = m_threadTraverseDirs;
+    QThread *pAI = m_threadAddLabelByAI;
+
+    if (m_threadSearch != nullptr)
         m_threadSearch->stopThread();
-        if (!m_threadSearch->wait(5000)) {
-            qWarning() << "搜索线程未能在 5 秒内退出，退出时将其分离";
-            m_threadSearch->setParent(nullptr);
-        }
-    }
-    if (m_threadTraverseDirs != nullptr) {
+    if (m_threadTraverseDirs != nullptr)
         m_threadTraverseDirs->stopThread();
-        if (!m_threadTraverseDirs->wait(5000)) {
-            qWarning() << "遍历线程未能在 5 秒内退出，退出时将其分离";
-            m_threadTraverseDirs->setParent(nullptr);
-        }
-    }
-    if (m_threadAddLabelByAI != nullptr) {
+    if (m_threadAddLabelByAI != nullptr)
         m_threadAddLabelByAI->stopThread();
-        if (!m_threadAddLabelByAI->wait(5000)) {
-            qWarning() << "AI 线程未能在 5 秒内退出，退出时将其分离";
-            m_threadAddLabelByAI->setParent(nullptr);
+
+    auto waitThread = [](QThread *pThread, const QString &sName) {
+        if (pThread == nullptr)
+            return;
+        if (!pThread->wait(5000)) {
+            qWarning() << sName << "未能在 5 秒内退出，退出时将其分离";
+            pThread->setParent(nullptr);
         }
-    }
+    };
+    waitThread(pSearch, QStringLiteral("搜索线程"));
+    waitThread(pTraverse, QStringLiteral("遍历线程"));
+    waitThread(pAI, QStringLiteral("AI 线程"));
 
     // P0-3：m_sqlOperation 在构造函数中 new 在堆上，从未释放，导致内存泄漏。
     delete m_sqlOperation;
@@ -202,6 +215,11 @@ void FormFileBrowser::onActionAddLabelByAITriggered()
     connect(m_threadAddLabelByAI, &ThreadAddTagByAI::sendSummary, this, [](QString s){
         qInfo() << "AI 摘要:" << s;
     });
+    connect(m_threadAddLabelByAI, &ThreadAddTagByAI::sendTagChanged, this,
+            [this](QString sFilePath) {
+                if (m_sqlOperation != nullptr)
+                    m_sqlOperation->invalidateDirCache(QFileInfo(sFilePath).absolutePath());
+            });
 
     // 线程结束后自动释放对象并把指针置空，避免反复创建导致对象泄漏以及悬空指针误用。
     connect(m_threadAddLabelByAI, &QThread::finished, m_threadAddLabelByAI, &QObject::deleteLater);
@@ -249,13 +267,29 @@ void FormFileBrowser::onActionAddLabelsTriggered()
         return;
     }
 
+    bool bAllOk = true;
+    QSet<QString> setDirs;
     foreach(const QString &sFilePath, qLFilePaths)
     {
         // 追加而不是覆盖：保留文件已有标签的顺序，新标签按选中顺序追加到末尾
-        ADSOperation::appendTags(sFilePath, m_qLSelLabels);
+        if (!ADSOperation::appendTags(sFilePath, m_qLSelLabels))
+            bAllOk = false;
+        setDirs.insert(QFileInfo(sFilePath).absolutePath());
+    }
+
+    // 标签变化后让搜索缓存失效，避免搜索仍按旧标签命中/漏掉新标签
+    if (m_sqlOperation != nullptr) {
+        for (const QString &sDir : setDirs)
+            m_sqlOperation->invalidateDirCache(sDir);
     }
 
     emit sendRefresh();
+
+    if (!bAllOk) {
+        QMessageBox::warning(this, tr("保存标签失败"),
+                             tr("部分文件或标签未能写入，可能是文件被占用、只读或磁盘空间不足。\n"
+                                "已有标签不会被删除，请检查后重试。"));
+    }
 }
 
 /**
@@ -274,11 +308,16 @@ void FormFileBrowser::onActionSearchFilesbyLabelsTriggered()
         QString sCurDir = ui->pageFiles->getCurDir();
         qLSelDirs.append(sCurDir);
     }
+    // 记录搜索条件（后面缓存未命中的目录会被替换，但界面提示应显示用户原始选择）
+    const QStringList qLSearchDirs = qLSelDirs;
 
     if(m_qLSelLabels.count() == 0){
         QMessageBox::information(this, "提示", "未选中标签！");
         return;
     }
+
+    ui->pageFilteredFiles->setSearchCondition(
+        tr("标签：%1；目录：%2").arg(m_qLSelLabels.join("、"), qLSearchDirs.join("；")));
 
     // 诊断日志：如果以后再次出现搜索界面卡住，可从日志判断搜索范围与是否走了缓存。
     qInfo() << "开始搜索: dirs=" << qLSelDirs << "labels=" << m_qLSelLabels
@@ -406,22 +445,46 @@ void FormFileBrowser::onRecvLabels(QString sFilePath, QString sLabels)
         return;
     }
 
-    // 拆分标签：支持英文逗号、中文逗号、顿号、英文分号、中文分号；空串表示"该文件没有标签"，
-    // 不能当成一个标签传下去（否则会被写成一个无意义的流）。
-    // 随后按 ADS 的规则净化标签名，并再做一次去重：净化可能把不同输入合并成同一个名字
-    // （例如 a:b 和 a_b 都会变成 a_b），这里必须保证库里的名字和磁盘上的流名完全一致。
+    // 拆分标签：支持中英文分隔符；历史标签名可能合法包含 "，、；"，
+    // 用 splitLabelsPreservingExisting 保证已有标签不会被拆开。
+    const QStringList qLExisting = ADSOperation::listADSTagsInOrder(sFilePath);
     QStringList qLLabels;
-    foreach (const QString &sLabel, Utility::splitLabels(sLabels)) {
+    QStringList qLChanged;
+    foreach (const QString &sLabel, Utility::splitLabelsPreservingExisting(sLabels, qLExisting)) {
+        // 旧标签原样保留，不重新净化（否则 "a，b" 会变成 "a_b"）
+        if (qLExisting.contains(sLabel)) {
+            if (!qLLabels.contains(sLabel))
+                qLLabels << sLabel;
+            continue;
+        }
         const QString sSanitized = ADSOperation::sanitizeTagName(sLabel);
-        if (!sSanitized.isEmpty() && !qLLabels.contains(sSanitized))
+        if (!sSanitized.isEmpty() && !qLLabels.contains(sSanitized)) {
             qLLabels << sSanitized;
+            if (sSanitized != sLabel.trimmed())
+                qLChanged << sLabel + QStringLiteral("→") + sSanitized;
+        } else if (sSanitized.isEmpty() && !sLabel.trimmed().isEmpty()) {
+            qLChanged << sLabel + tr("（已忽略）");
+        }
     }
+    if (!qLChanged.isEmpty())
+        emit sendStatusMessage(tr("部分标签名已规范化：%1").arg(qLChanged.join("，")));
 
     // replaceTags 会按 qLLabels 的先后顺序写入，并把顺序号存进流内容，
     // 保证下次显示时仍是用户录入的顺序（NTFS 枚举流本身是按流名排序的）。
-    ADSOperation::replaceTags(sFilePath, qLLabels);
+    const bool bOk = ADSOperation::replaceTags(sFilePath, qLLabels);
+
+    if (m_sqlOperation != nullptr)
+        m_sqlOperation->invalidateDirCache(QFileInfo(sFilePath).absolutePath());
 
     emit sendRefresh();
+
+    if (!bOk) {
+        QMessageBox::warning(this, tr("保存标签失败"),
+                             tr("标签未能完整写入：%1\n"
+                                "已尝试恢复操作前的标签。请检查文件是否被占用、只读或磁盘空间不足。")
+                                 .arg(sFilePath));
+        return;
+    }
 
     // 只把规范化后的非空标签转发给【标签管理】面板
     const QString sNormalizedLabels = qLLabels.join(",");

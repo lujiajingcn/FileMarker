@@ -90,10 +90,36 @@ void FormPageFilterdFiles::onShowFilteredFiles(QStringList qLFilteredFiles)
     }
 
     // 路径列显示完整路径，避免同名文件难区分
-    ui->lblResultCount->setText(tr("搜索结果 %1 项").arg(qLFilteredFiles.size()));
+    QString sCountText = tr("搜索结果 %1 项").arg(qLFilteredFiles.size());
+    if (!m_sSearchCondition.isEmpty())
+        sCountText += QStringLiteral("（") + m_sSearchCondition + QStringLiteral("）");
+    ui->lblResultCount->setText(sCountText);
 
     if (m_pTagScanTimer != nullptr && !m_qLTagScanPaths.isEmpty())
         m_pTagScanTimer->start();
+}
+
+void FormPageFilterdFiles::setSearchCondition(const QString &sCondition)
+{
+    m_sSearchCondition = sCondition;
+}
+
+void FormPageFilterdFiles::hideEvent(QHideEvent *event)
+{
+    // 返回文件页后不要再枚举隐藏页的 ADS
+    if (m_pTagScanTimer != nullptr)
+        m_pTagScanTimer->stop();
+    QWidget::hideEvent(event);
+}
+
+void FormPageFilterdFiles::showEvent(QShowEvent *event)
+{
+    QWidget::showEvent(event);
+    // 标签还没填完就切回来时继续填
+    if (m_pTagScanTimer != nullptr && m_nTagScanRow < m_qLTagScanPaths.size()
+            && !m_pTagScanTimer->isActive()) {
+        m_pTagScanTimer->start();
+    }
 }
 
 void FormPageFilterdFiles::continueFillTags()

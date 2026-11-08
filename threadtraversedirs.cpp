@@ -1,6 +1,7 @@
 #include "threadtraversedirs.h"
 
 #include "adsoperation.h"
+#include "utility.h"
 #include "traversedirectory.h"
 
 ThreadTraverseDirs::ThreadTraverseDirs(QObject *parent) : QThread(parent)
@@ -55,7 +56,7 @@ bool ThreadTraverseDirs::traverseDir(const QFileInfo& fileInfo)
 
     m_fileTags[filePath] = adsFileNames;
 
-    QSet<QString> setAdsNames = adsFileNames.toSet();
+    QSet<QString> setAdsNames = Utility::toSet(adsFileNames);
     m_tags.unite(setAdsNames);
 
     emit sendProcessInfo(filePath);

@@ -75,6 +75,9 @@ signals:
     // 需要显示在状态栏的提示（例如目录文件过多、只统计了前 N 个）
     void sendHintMessage(const QString &sMsg);
 
+    // 标签写盘成功后通知外层让搜索缓存失效
+    void sendTagsChanged(const QStringList &qLFilePaths);
+
 public:
     // 刷新当前目录：既响应【刷新】按钮，也作为 FormFileBrowser::sendRefresh 信号的接收者
     void onBtnRefreshClicked();
@@ -157,9 +160,6 @@ private:
     // 当前可见视图中的当前项（缩略图模式取 listView，否则取 tvFiles）
     QModelIndex currentIndexInActiveView() const;
 
-    // 鼠标位置下的项（右键菜单用，避免误操作到当前项之外的文件）
-    QModelIndex indexAtCursor() const;
-
 private:
 
     QTreeView               *m_tvFiles;             // 详情显示文件列表，由于QListView不能显示表头，故用QTreeView实现列表功能。
@@ -182,7 +182,6 @@ private:
     int                     m_nScanRow;
     int                     m_nScanTotal;
     QSet<QString>           m_setScanLabels;
-    int                     m_nScanGeneration;
     QString                 m_sScanCompletedDir;    // 已完整扫描过的目录（避免 directoryLoaded 重复扫）
 
 private:

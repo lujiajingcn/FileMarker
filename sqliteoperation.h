@@ -30,6 +30,9 @@ public:
     /** 根据给定的标签和逻辑关系，在选中的文件夹中查找文件 */
     void searchFilesByLabels(QStringList qLSelDirs, QStringList qLLabels, int nLabelLogic, QStringList &qLFilePaths, QStringList &qLNotHitedDirs);
 
+    /** 标签变化后让该目录的搜索缓存失效，下次搜索重新遍历，避免按旧标签命中/漏掉新标签 */
+    void invalidateDirCache(const QString &sDir);
+
 public:
     QSqlDatabase    m_sqlDB;
 };

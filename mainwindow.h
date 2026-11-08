@@ -2,6 +2,7 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
+#include <QTimer>
 
 #include "introductionwidget.h"
 #include "common.h"
@@ -20,8 +21,11 @@ public:
 
 protected:
     void initLogMessageHanlder();
+    void moveEvent(QMoveEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
 
 private:
+    void saveWindowGeometry();
     // 菜单动作的处理函数：由构造函数中的 connect 显式连接，
     // 不再使用 on_<对象名>_<信号名> 的自动连接（connectSlotsByName）。
     void onActionHelpTriggered();
@@ -29,6 +33,7 @@ private:
     void onActionAuthorTriggered();
 
     QFile                   m_logFile;
+    QTimer                 *m_pGeometryTimer;
 
     Ui::MainWindow *ui;
 };

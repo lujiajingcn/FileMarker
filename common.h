@@ -16,6 +16,10 @@ enum labelLogic{
 
 #define FILTER_TAG "Zone.Identifier"    // 系统自己生成的标签
 
+// FileMarker 自己的“标签归属清单”流：列出本程序写入的标签名。
+// 有它时只信任清单里的名字，0 字节第三方 ADS 不会被误删/误判。
+#define FM_TAG_MARKER "FileMarker.Owned"
+
 #define NEW_LABEL_NAME "新标签"
 
 extern QString g_sAppDir;

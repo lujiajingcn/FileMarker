@@ -33,7 +33,9 @@ void FormCurDirLabels::onRecvDirAndLabels(QMap<QString, QSet<QString>> mapDirAnd
         m_modelLabels->appendRow(itemDir);
 
         QSet<QString> setLabels = cItr.value();
-        foreach (const QString &sLabel, setLabels)
+        QStringList qLSortedLabels = setLabels.values();
+        qLSortedLabels.sort(Qt::CaseInsensitive);
+        foreach (const QString &sLabel, qLSortedLabels)
             itemDir->appendRow(new QStandardItem(sLabel));
     }
 

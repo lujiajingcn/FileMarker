@@ -4,6 +4,9 @@
 #include <QDateTime>
 #include <QIODevice>
 #include <QRegularExpression>
+#include <QStandardPaths>
+#include <QDir>
+#include <QFile>
 
 Utility::Utility()
 {
@@ -12,6 +15,26 @@ Utility::Utility()
 
 QTextStream Utility::tsLogInfo;
 QMutex Utility::mutex;
+
+QString Utility::settingsFilePath()
+{
+    const QString sAppIni = g_sAppDir + QStringLiteral("/FileMarker.ini");
+
+    // 先探测程序目录是否可写；Program Files 等只读目录回退到用户 AppData
+    QFile testFile(g_sAppDir + QStringLiteral("/.fm_write_test"));
+    if (testFile.open(QIODevice::WriteOnly)) {
+        testFile.close();
+        testFile.remove();
+        return sAppIni;
+    }
+
+    const QString sDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    if (!sDir.isEmpty()) {
+        QDir().mkpath(sDir);
+        return sDir + QStringLiteral("/FileMarker.ini");
+    }
+    return sAppIni;
+}
 
 void Utility::shutdownLog()
 {
@@ -34,19 +57,24 @@ void Utility::myMessageHandler(QtMsgType mType, const QMessageLogContext&, const
     QString sFormatCurTime = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss");
     switch (mType) {
     case QtDebugMsg:
-        tsLogInfo << QString("%1    Debug       %2").arg(sFormatCurTime).arg(sMsg) << endl;
+        tsLogInfo << QString("%1    Debug       %2").arg(sFormatCurTime).arg(sMsg) << '\n';
+        tsLogInfo.flush();
         break;
     case QtInfoMsg:
-        tsLogInfo << QString("%1    Info        %2").arg(sFormatCurTime).arg(sMsg) << endl;
+        tsLogInfo << QString("%1    Info        %2").arg(sFormatCurTime).arg(sMsg) << '\n';
+        tsLogInfo.flush();
         break;
     case QtWarningMsg:
-        tsLogInfo << QString("%1    Warning     %2").arg(sFormatCurTime).arg(sMsg) << endl;
+        tsLogInfo << QString("%1    Warning     %2").arg(sFormatCurTime).arg(sMsg) << '\n';
+        tsLogInfo.flush();
         break;
     case QtCriticalMsg:
-        tsLogInfo << QString("%1    Critical    %2").arg(sFormatCurTime).arg(sMsg) << endl;
+        tsLogInfo << QString("%1    Critical    %2").arg(sFormatCurTime).arg(sMsg) << '\n';
+        tsLogInfo.flush();
         break;
     case QtFatalMsg:
-        tsLogInfo << QString("%1    Fatal       %2").arg(sFormatCurTime).arg(sMsg) << endl;
+        tsLogInfo << QString("%1    Fatal       %2").arg(sFormatCurTime).arg(sMsg) << '\n';
+        tsLogInfo.flush();
         abort();
     }
 }
@@ -88,17 +116,25 @@ QString Utility::createUuid()
     return QUuid::createUuid().toString().remove("{").remove("}").remove("-");
 }
 
+QSet<QString> Utility::toSet(const QStringList &list)
+{
+    QSet<QString> result;
+    for (const QString &sValue : list)
+        result.insert(sValue);
+    return result;
+}
+
 bool Utility::hasEqualElement(const QStringList &list1, const QStringList &list2)
 {
-    QSet<QString> set1 = list1.toSet();
-    QSet<QString> set2 = list2.toSet();
+    QSet<QString> set1 = toSet(list1);
+    QSet<QString> set2 = toSet(list2);
     return !set1.intersect(set2).isEmpty();
 }
 
 bool Utility::isContains(const QStringList &list1, const QStringList &list2)
 {
-    QSet<QString> set1 = list1.toSet();
-    QSet<QString> set2 = list2.toSet();
+    QSet<QString> set1 = toSet(list1);
+    QSet<QString> set2 = toSet(list2);
     return set1.contains(set2);
 }
 
@@ -148,6 +184,65 @@ QStringList Utility::splitLabels(const QString &sLabels)
     return labels;
 }
 
+QStringList Utility::splitLabelsPreservingExisting(const QString &sLabels,
+                                                  const QStringList &existingTags)
+{
+    if (existingTags.isEmpty())
+        return splitLabels(sLabels);
+
+    // 完全相同（未修改）直接返回原列表，避免拆分历史标签
+    if (sLabels == existingTags.join(QLatin1Char(',')))
+        return existingTags;
+
+    // 长的优先，避免 "a" 抢先匹配 "a，b" 的一部分
+    QStringList ordered = existingTags;
+    std::sort(ordered.begin(), ordered.end(), [](const QString &a, const QString &b) {
+        if (a.size() != b.size())
+            return a.size() > b.size();
+        return a < b;
+    });
+
+    auto isSeparator = [](QChar c) {
+        return c == QLatin1Char(',') || c == QLatin1Char(';')
+               || c == QChar(0xFF0C) || c == QChar(0xFF1B) || c == QChar(0x3001);
+    };
+
+    QStringList labels;
+    int i = 0;
+    while (i < sLabels.size()) {
+        while (i < sLabels.size() && (isSeparator(sLabels.at(i)) || sLabels.at(i).isSpace()))
+            ++i;
+        if (i >= sLabels.size())
+            break;
+
+        bool matched = false;
+        for (const QString &sExisting : ordered) {
+            if (sExisting.isEmpty() || sLabels.mid(i, sExisting.size()) != sExisting)
+                continue;
+            const int nAfter = i + sExisting.size();
+            if (nAfter == sLabels.size()
+                    || isSeparator(sLabels.at(nAfter))
+                    || sLabels.at(nAfter).isSpace()) {
+                if (!labels.contains(sExisting))
+                    labels << sExisting;
+                i = nAfter;
+                matched = true;
+                break;
+            }
+        }
+        if (matched)
+            continue;
+
+        const int nStart = i;
+        while (i < sLabels.size() && !isSeparator(sLabels.at(i)))
+            ++i;
+        const QString sToken = sLabels.mid(nStart, i - nStart).trimmed();
+        if (!sToken.isEmpty() && !labels.contains(sToken))
+            labels << sToken;
+    }
+    return labels;
+}
+
 // P2-21：参数改为按值传递。原签名是非 const 引用，函数内部调用 chop() 会修改调用者的字符串，
 // 调用者可能不期望参数被修改。按值传递后函数内部可以自由修改副本。
 bool Utility::isADSNameValid(QString sADSName)
@@ -159,6 +254,11 @@ bool Utility::isADSNameValid(QString sADSName)
     }
     // Windows 流名大小写不敏感，系统标记可能是 zone.identifier 等变体，必须忽略大小写。
     if(QString::compare(sADSName, FILTER_TAG, Qt::CaseInsensitive) == 0)
+    {
+        return false;
+    }
+    // 归属清单本身不是标签
+    if(QString::compare(sADSName, FM_TAG_MARKER, Qt::CaseInsensitive) == 0)
     {
         return false;
     }

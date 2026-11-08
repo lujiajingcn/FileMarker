@@ -10,24 +10,36 @@
 #include <QSettings>
 #include <QStatusBar>
 #include <QTimer>
+#include <QDirIterator>
+#include <QProgressDialog>
+#include <QMessageBox>
+#include <QPushButton>
+#include "adsoperation.h"
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
+    m_pGeometryTimer(nullptr),
     ui(new Ui::MainWindow)
 {
     g_sAppDir = QCoreApplication::applicationDirPath();
 
     ui->setupUi(this);
 
-    // 保证默认窗口下详情列表的“标签”列也能完整显示（列宽策略见 FormPageFiles）。
+    // 窗口移动/缩放后防抖保存，避免崩溃或强杀时丢失窗口状态
+    m_pGeometryTimer = new QTimer(this);
+    m_pGeometryTimer->setSingleShot(true);
+    m_pGeometryTimer->setInterval(500);
+    connect(m_pGeometryTimer, &QTimer::timeout, this, &MainWindow::saveWindowGeometry);
+
+    // 淇濊瘉榛樿绐楀彛涓嬭鎯呭垪琛ㄧ殑鈥滄爣绛锯€濆垪涔熻兘瀹屾暣鏄剧ず锛堝垪瀹界瓥鐣ヨ FormPageFiles锛夈€?
     setMinimumSize(1000, 650);
-    // 默认开大一点：994x663 时名称列会被压得很窄；不超过屏幕可用区域。
+    // 榛樿寮€澶т竴鐐癸細994x663 鏃跺悕绉板垪浼氳鍘嬪緱寰堢獎锛涗笉瓒呰繃灞忓箷鍙敤鍖哄煙銆?
     const QRect rcAvail = QApplication::primaryScreen()->availableGeometry();
     resize(qMin(1280, rcAvail.width() - 80), qMin(820, rcAvail.height() - 80));
 
-    // 恢复上次的窗口大小/位置；恢复上次访问的目录（等窗口显示后执行，保证模型已就绪）
+    // 鎭㈠涓婃鐨勭獥鍙ｅぇ灏?浣嶇疆锛涙仮澶嶄笂娆¤闂殑鐩綍锛堢瓑绐楀彛鏄剧ず鍚庢墽琛岋紝淇濊瘉妯″瀷宸插氨缁級
     {
-        QSettings settings(g_sAppDir + QStringLiteral("/FileMarker.ini"), QSettings::IniFormat);
+        QSettings settings(Utility::settingsFilePath(), QSettings::IniFormat);
 #if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
         settings.setIniCodec("UTF-8");
 #endif
@@ -41,77 +53,163 @@ MainWindow::MainWindow(QWidget *parent) :
 
     initLogMessageHanlder();
 
-    // 显式连接菜单动作（此前依赖 on_<对象名>_<信号名> 的自动连接）
+    // 鏄惧紡杩炴帴鑿滃崟鍔ㄤ綔锛堟鍓嶄緷璧?on_<瀵硅薄鍚?_<淇″彿鍚? 鐨勮嚜鍔ㄨ繛鎺ワ級
     connect(ui->actionHelp, &QAction::triggered, this, &MainWindow::onActionHelpTriggered);
     connect(ui->actionAuthor, &QAction::triggered, this, &MainWindow::onActionAuthorTriggered);
 
-    // 将【标签管理】窗口的工具栏操作添加到主窗口的菜单中
+    // 灏嗐€愭爣绛剧鐞嗐€戠獥鍙ｇ殑宸ュ叿鏍忔搷浣滄坊鍔犲埌涓荤獥鍙ｇ殑鑿滃崟涓?
     ui->dwcLabels->addToolButtonsToMenu(ui->menuLabelManage);
 
-    // 将菜单栏中的动作放到【文件管理】中实现
+    // 清理未使用标签：扫描选中目录（含子目录），把没有任何文件使用的库标签删掉
+    QAction *actionCleanupLabels = ui->menuLabelManage->addAction(tr("清理未使用标签…"));
+    connect(actionCleanupLabels, &QAction::triggered, this, [this]() {
+        const QStringList qLDirs = ui->wFileBrowser->getSelDirs();
+        if (qLDirs.isEmpty())
+            return;
+
+        QSet<QString> setUsedLower;
+        QProgressDialog progress(tr("正在扫描文件标签…"), tr("取消"), 0, 0, this);
+        progress.setWindowModality(Qt::WindowModal);
+        progress.setMinimumDuration(0);
+
+        int nScanned = 0;
+        bool bCanceled = false;
+        for (const QString &sDir : qLDirs) {
+            QDirIterator it(sDir, QDir::Files | QDir::NoSymLinks, QDirIterator::Subdirectories);
+            while (it.hasNext()) {
+                const QString sFilePath = it.next();
+                if ((++nScanned % 100) == 0) {
+                    progress.setLabelText(tr("正在扫描文件标签…\n%1").arg(sFilePath));
+                    QCoreApplication::processEvents();
+                    if (progress.wasCanceled()) {
+                        bCanceled = true;
+                        break;
+                    }
+                }
+                const QStringList qLTags = ADSOperation::listADSFileName(sFilePath);
+                for (const QString &sTag : qLTags)
+                    setUsedLower.insert(sTag.toLower());
+            }
+            if (bCanceled)
+                break;
+        }
+        progress.close();
+
+        if (bCanceled)
+            return;
+
+        QStringList qLUnused;
+        const QStringList qLLibrary = ui->dwcLabels->allLabels();
+        for (const QString &sLabel : qLLibrary) {
+            if (!setUsedLower.contains(sLabel.toLower()) && !qLUnused.contains(sLabel))
+                qLUnused << sLabel;
+        }
+
+        if (qLUnused.isEmpty()) {
+            QMessageBox::information(this, tr("清理未使用标签"),
+                                     tr("扫描了 %1 个文件，没有发现未使用的标签。").arg(nScanned));
+            return;
+        }
+
+        QString sPreview = qLUnused.mid(0, 30).join("、");
+        if (qLUnused.size() > 30)
+            sPreview += tr("…等 %1 个").arg(qLUnused.size());
+
+        QMessageBox box(this);
+        box.setWindowTitle(tr("清理未使用标签"));
+        box.setIcon(QMessageBox::Warning);
+        box.setText(tr("扫描了 %1 个文件，以下 %2 个标签没有被任何文件使用：\n\n%3\n\n"
+                       "从标签库删除后不可撤销，是否继续？")
+                        .arg(nScanned).arg(qLUnused.size()).arg(sPreview));
+        QPushButton *pDelete = box.addButton(tr("删除"), QMessageBox::DestructiveRole);
+        QPushButton *pCancel = box.addButton(tr("取消"), QMessageBox::RejectRole);
+        box.setDefaultButton(pCancel);
+        box.exec();
+        if (box.clickedButton() == pDelete)
+            ui->dwcLabels->removeLabels(qLUnused);
+    });
+
+    // 灏嗚彍鍗曟爮涓殑鍔ㄤ綔鏀惧埌銆愭枃浠剁鐞嗐€戜腑瀹炵幇
     ui->wFileBrowser->setActions(ui->actionAddLabelbyAI, ui->actionAddLabels, ui->actionDelLabels, ui->actionSearchFilesbyLabels, ui->actionTraverseSelDirs, ui->actionSearchConfig);
 
-    // 【标签管理】中选中的标签，同步到【文件管理】中
+    // 銆愭爣绛剧鐞嗐€戜腑閫変腑鐨勬爣绛撅紝鍚屾鍒般€愭枃浠剁鐞嗐€戜腑
     connect(ui->dwcLabels, &FormLabels::sendSelLabels, ui->wFileBrowser, &FormFileBrowser::onRecvSelLabels);
 
-    // 【当前目录标签】中选中的标签，同步到【文件管理类】中
+    // 銆愬綋鍓嶇洰褰曟爣绛俱€戜腑閫変腑鐨勬爣绛撅紝鍚屾鍒般€愭枃浠剁鐞嗙被銆戜腑
     connect(ui->dwcCurDirLabels, &FormCurDirLabels::sendSelLabels, ui->wFileBrowser, &FormFileBrowser::onRecvSelLabels);
 
-    // 遍历选中文件夹，检索出其中文件的所有标签，显示在【当前目录标签】
+    // 閬嶅巻閫変腑鏂囦欢澶癸紝妫€绱㈠嚭鍏朵腑鏂囦欢鐨勬墍鏈夋爣绛撅紝鏄剧ず鍦ㄣ€愬綋鍓嶇洰褰曟爣绛俱€?
     connect(ui->wFileBrowser, &FormFileBrowser::sendDirAndLabels, ui->dwcCurDirLabels, &FormCurDirLabels::onRecvDirAndLabels);
 
-    // 切换目录时先清空【当前目录标签】，再显示新目录的标签
+    // 鍒囨崲鐩綍鏃跺厛娓呯┖銆愬綋鍓嶇洰褰曟爣绛俱€戯紝鍐嶆樉绀烘柊鐩綍鐨勬爣绛?
     connect(ui->wFileBrowser, &FormFileBrowser::sendClearDirLabels, ui->dwcCurDirLabels, &FormCurDirLabels::clearLabels);
 
-    // 搜索/遍历等耗时操作的文字反馈（状态栏）
+    // 鎼滅储/閬嶅巻绛夎€楁椂鎿嶄綔鐨勬枃瀛楀弽棣堬紙鐘舵€佹爮锛?
     connect(ui->wFileBrowser, &FormFileBrowser::sendStatusMessage, this, [this](const QString &sMsg) {
         statusBar()->showMessage(sMsg, 5000);
     });
 
-    // 手动编辑【标签】列内容后，将编辑后的内容传递给【标签管理】
-    // 编辑后的标签由英文逗号分隔，形如 照片,故宫,2025
-    // todo 传递路径过长，应该是结构不合理，后续改进
+    // 鎵嬪姩缂栬緫銆愭爣绛俱€戝垪鍐呭鍚庯紝灏嗙紪杈戝悗鐨勫唴瀹逛紶閫掔粰銆愭爣绛剧鐞嗐€?
+    // 缂栬緫鍚庣殑鏍囩鐢辫嫳鏂囬€楀彿鍒嗛殧锛屽舰濡?鐓х墖,鏁呭,2025
+    // todo 浼犻€掕矾寰勮繃闀匡紝搴旇鏄粨鏋勪笉鍚堢悊锛屽悗缁敼杩?
     connect(ui->wFileBrowser, &FormFileBrowser::sendLabels, ui->dwcLabels, &FormLabels::onRecvLabels);
 
-    // AI根据文件信息自动生成的标签，添加到【标签管理】中的“AI自动生成标签”
+    // AI鏍规嵁鏂囦欢淇℃伅鑷姩鐢熸垚鐨勬爣绛撅紝娣诲姞鍒般€愭爣绛剧鐞嗐€戜腑鐨勨€淎I鑷姩鐢熸垚鏍囩鈥?
     connect(ui->wFileBrowser, &FormFileBrowser::sendLabelsGeneratedByAI, ui->dwcLabels, &FormLabels::onRecvLabelsGeneratedByAI);
 }
 
 MainWindow::~MainWindow()
 {
     // 保存窗口几何信息，下次启动恢复
-    {
-        QSettings settings(g_sAppDir + QStringLiteral("/FileMarker.ini"), QSettings::IniFormat);
-#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
-        settings.setIniCodec("UTF-8");
-#endif
-        settings.setValue(QStringLiteral("window/geometry"), saveGeometry());
-    }
+    saveWindowGeometry();
 
-    // 先销毁界面（析构过程中产生的日志仍写入文件），再把日志落盘并断开设备，
-    // 最后恢复默认 handler：否则窗口销毁后 Qt 收尾阶段的日志会写进已关闭的
-    // 文件，出现 "QIODevice::write (QObject): device not open"。
+    // 鍏堥攢姣佺晫闈紙鏋愭瀯杩囩▼涓骇鐢熺殑鏃ュ織浠嶅啓鍏ユ枃浠讹級锛屽啀鎶婃棩蹇楄惤鐩樺苟鏂紑璁惧锛?
+    // 鏈€鍚庢仮澶嶉粯璁?handler锛氬惁鍒欑獥鍙ｉ攢姣佸悗 Qt 鏀跺熬闃舵鐨勬棩蹇椾細鍐欒繘宸插叧闂殑
+    // 鏂囦欢锛屽嚭鐜?"QIODevice::write (QObject): device not open"銆?
     delete ui;
 
-    // 在锁内 flush 并摘掉日志设备，避免与工作线程日志竞争
+    // 鍦ㄩ攣鍐?flush 骞舵憳鎺夋棩蹇楄澶囷紝閬垮厤涓庡伐浣滅嚎绋嬫棩蹇楃珵浜?
     Utility::shutdownLog();
     qInstallMessageHandler(nullptr);
+}
+
+void MainWindow::saveWindowGeometry()
+{
+    QSettings settings(Utility::settingsFilePath(), QSettings::IniFormat);
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+    settings.setIniCodec("UTF-8");
+#endif
+    settings.setValue(QStringLiteral("window/geometry"), saveGeometry());
+}
+
+void MainWindow::moveEvent(QMoveEvent *event)
+{
+    QMainWindow::moveEvent(event);
+    if (m_pGeometryTimer != nullptr)
+        m_pGeometryTimer->start();
+}
+
+void MainWindow::resizeEvent(QResizeEvent *event)
+{
+    QMainWindow::resizeEvent(event);
+    if (m_pGeometryTimer != nullptr)
+        m_pGeometryTimer->start();
 }
 
 void MainWindow::initLogMessageHanlder()
 {
     m_logFile.setFileName(g_sAppDir + "/" + LOG_FILE);
     if (!m_logFile.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
-        // 例如程序装在 C:\Program Files 这类只读目录时打开会失败；
-        // 此时不绑定日志设备，所有日志静默丢弃（不崩溃），仅给出警告。
-        qWarning() << "无法打开日志文件，日志将不写入文件:" << m_logFile.fileName();
+        // 渚嬪绋嬪簭瑁呭湪 C:\Program Files 杩欑被鍙鐩綍鏃舵墦寮€浼氬け璐ワ紱
+        // 姝ゆ椂涓嶇粦瀹氭棩蹇楄澶囷紝鎵€鏈夋棩蹇楅潤榛樹涪寮冿紙涓嶅穿婧冿級锛屼粎缁欏嚭璀﹀憡銆?
+        qWarning() << "鏃犳硶鎵撳紑鏃ュ織鏂囦欢锛屾棩蹇楀皢涓嶅啓鍏ユ枃浠?" << m_logFile.fileName();
         return;
     }
     Utility::tsLogInfo.setDevice(&m_logFile);
     qInstallMessageHandler(Utility::myMessageHandler);
 }
 
-// 参考了qt creator的 UI Tour功能，原始代码为 https://github.com/qt-creator/qt-creator/blob/qds/4.5/src/plugins/welcome/introductionwidget.cpp
+// 鍙傝€冧簡qt creator鐨?UI Tour鍔熻兘锛屽師濮嬩唬鐮佷负 https://github.com/qt-creator/qt-creator/blob/qds/4.5/src/plugins/welcome/introductionwidget.cpp
 void MainWindow::onActionHelpTriggered()
 {
     auto *wIntroduction = new IntroductionWidget(this);

@@ -141,6 +141,16 @@ void MyQFileSystemModel::clearTagCache()
     m_tagCache.clear();
 }
 
+void MyQFileSystemModel::cacheTagsForFile(const QString &sFilePath, const QStringList &tags)
+{
+    if (sFilePath.isEmpty())
+        return;
+    const qint64 mtime = QFileInfo(sFilePath).lastModified().toMSecsSinceEpoch();
+    if (m_tagCache.size() > 2000)
+        m_tagCache.clear();
+    m_tagCache[sFilePath] = qMakePair(mtime, tags);
+}
+
 // 让第4列【标签】可编辑
 Qt::ItemFlags MyQFileSystemModel::flags(const QModelIndex &index) const
 {

@@ -39,6 +39,9 @@ public:
     void setIconSize(int iconSize);
     int iconSize() const { return m_iconSize; }
 
+    /** 按当前字体计算缩略图格子所需高度，避免大字体/文本缩放时内容溢出 */
+    static int preferredCellHeight(int iconSize, const QFont &font);
+
     /** 设置当前鼠标悬停的项，为空表示没有悬停项 */
     void setHoveredIndex(const QModelIndex &index);
 

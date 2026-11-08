@@ -13,6 +13,7 @@
 #include <QSettings>
 #include <QTimer>
 #include <functional>
+#include <algorithm>
 #include "adsoperation.h"
 
 #include <libxml/parser.h>
@@ -22,12 +23,24 @@
 #include "common.h"
 #include "utility.h"
 
+namespace {
+bool labelExistsCaseInsensitive(const QSet<QString> &set, const QString &sLabel)
+{
+    for (const QString &sExisting : set) {
+        if (QString::compare(sExisting, sLabel, Qt::CaseInsensitive) == 0)
+            return true;
+    }
+    return false;
+}
+}
+
 FormLabels::FormLabels(QWidget *parent) :
     QWidget(parent),
     ui(new Ui::FormLabels)
 {
     ui->setupUi(this);
 
+    m_bPromptShowing = false;
     m_tvAllLabels = ui->treeView;
     m_modelAllLabels = new QStandardItemModel(this);
     m_tvAllLabels->setModel(m_modelAllLabels);
@@ -64,6 +77,72 @@ void FormLabels::addToolButtonsToMenu(QMenu *menuLabelManage)
     menuLabelManage->addAction(ui->actionMoveDown);
     menuLabelManage->addAction(ui->actionMoveLeft);
     menuLabelManage->addAction(ui->actionMoveRight);
+    menuLabelManage->addSeparator();
+    QAction *actionResetPrompt = menuLabelManage->addAction(tr("恢复“新标签”询问"));
+    connect(actionResetPrompt, &QAction::triggered, this, []() {
+        QSettings settings(Utility::settingsFilePath(), QSettings::IniFormat);
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+        settings.setIniCodec("UTF-8");
+#endif
+        settings.setValue(QStringLiteral("labels/autoAddFromFiles"), 0);
+    });
+}
+
+QStringList FormLabels::allLabels() const
+{
+    QStringList qLResult;
+    std::function<void(QStandardItem*)> collect = [&](QStandardItem *parent) {
+        if (parent == nullptr)
+            return;
+        for (int i = 0; i < parent->rowCount(); ++i) {
+            QStandardItem *item = parent->child(i);
+            if (item == nullptr)
+                continue;
+            // AI 分组只是界面节点，不参与“未使用标签”清理
+            if (QString::compare(item->text(), LABEL_NAME_AI) != 0)
+                qLResult << item->text();
+            collect(item);
+        }
+    };
+    collect(m_modelAllLabels->invisibleRootItem());
+    return qLResult;
+}
+
+bool FormLabels::removeLabels(const QStringList &qLLabels)
+{
+    if (qLLabels.isEmpty())
+        return false;
+
+    std::function<bool(QStandardItem*)> removeFrom = [&](QStandardItem *parent) {
+        bool bRemoved = false;
+        for (int i = parent->rowCount() - 1; i >= 0; --i) {
+            QStandardItem *item = parent->child(i);
+            if (item == nullptr)
+                continue;
+
+            bool bMatch = false;
+            for (const QString &sLabel : qLLabels) {
+                if (QString::compare(item->text(), sLabel, Qt::CaseInsensitive) == 0) {
+                    bMatch = true;
+                    break;
+                }
+            }
+            if (bMatch) {
+                parent->removeRow(i);
+                bRemoved = true;
+            } else if (removeFrom(item)) {
+                bRemoved = true;
+            }
+        }
+        return bRemoved;
+    };
+
+    const bool bRemoved = removeFrom(m_modelAllLabels->invisibleRootItem());
+    if (bRemoved) {
+        resyncSets();
+        saveLabelToXmlFile();
+    }
+    return bRemoved;
 }
 
 void FormLabels::setToolButtonDefaultAction()
@@ -106,6 +185,11 @@ QStringList FormLabels::getSelLabels()
     // 这里按选中行的顺序逐个追加并去重，保证返回顺序与树上看到的顺序一致
     // （原先用 QSet::values() 会打乱顺序，导致批量添加标签时顺序随机）。
     QModelIndexList selectedIndexes = selectionModel->selectedRows(0);
+    // Qt 不保证 selectedRows 的顺序；按界面可见位置排序，保证批量添加顺序稳定
+    std::sort(selectedIndexes.begin(), selectedIndexes.end(),
+              [this](const QModelIndex &a, const QModelIndex &b) {
+                  return m_tvAllLabels->visualRect(a).top() < m_tvAllLabels->visualRect(b).top();
+              });
     foreach (const QModelIndex &index, selectedIndexes)
     {
         QStandardItem *item = m_modelAllLabels->itemFromIndex(index);
@@ -448,7 +532,7 @@ int FormLabels::countLabelOccurrences(const QString &name) const
     std::function<void(QStandardItem*)> walk = [&](QStandardItem *it) {
         for (int i = 0; i < it->rowCount(); ++i) {
             QStandardItem *child = it->child(i);
-            if (child->text() == name)
+            if (QString::compare(child->text(), name, Qt::CaseInsensitive) == 0)
                 ++n;
             walk(child);
         }
@@ -543,7 +627,7 @@ void FormLabels::onRecvLabels(QString sLabels)
     QStringList qLNewLabels;
     foreach (const QString &sLabel, Utility::splitLabels(sLabels))
     {
-        if(!m_setLabels.contains(sLabel) && !qLNewLabels.contains(sLabel))
+        if(!labelExistsCaseInsensitive(m_setLabels, sLabel) && !qLNewLabels.contains(sLabel))
             qLNewLabels << sLabel;
     }
 
@@ -554,9 +638,29 @@ void FormLabels::onRecvLabels(QString sLabels)
     QTimer::singleShot(0, this, [this, qLNewLabels]() { promptAddNewLabels(qLNewLabels); });
 }
 
-void FormLabels::promptAddNewLabels(const QStringList &qLNewLabels)
+void FormLabels::promptAddNewLabels(const QStringList &qLInputLabels)
 {
-    QSettings settings(g_sAppDir + QStringLiteral("/FileMarker.ini"), QSettings::IniFormat);
+    if (m_bPromptShowing)
+        return;
+
+    // 排队期间标签可能已经被前一个弹窗加入，显示前再过滤一次
+    QStringList qLNewLabels;
+    foreach (const QString &sLabel, qLInputLabels) {
+        if (!labelExistsCaseInsensitive(m_setLabels, sLabel)
+                && !qLNewLabels.contains(sLabel)) {
+            qLNewLabels << sLabel;
+        }
+    }
+    if (qLNewLabels.isEmpty())
+        return;
+
+    struct PromptGuard {
+        bool &b;
+        explicit PromptGuard(bool &value) : b(value) { b = true; }
+        ~PromptGuard() { b = false; }
+    } guard(m_bPromptShowing);
+
+    QSettings settings(Utility::settingsFilePath(), QSettings::IniFormat);
 #if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
     settings.setIniCodec("UTF-8");
 #endif
@@ -595,7 +699,7 @@ void FormLabels::promptAddNewLabels(const QStringList &qLNewLabels)
     // 弹窗期间标签库可能已经变化，再检查一次
     foreach (const QString &sLabel, qLNewLabels)
     {
-        if (m_setLabels.contains(sLabel))
+        if (labelExistsCaseInsensitive(m_setLabels, sLabel))
             continue;
         QStandardItem *newItem = createLabelItem(sLabel);
         m_modelAllLabels->appendRow(newItem);

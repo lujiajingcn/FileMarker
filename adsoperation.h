@@ -11,8 +11,8 @@ public:
     ADSOperation();
 
 public :
-    static void writeADSFile(const QString &filePath, const QString& streamName, const QString& text, bool isDeleteOldAds = false);
-    static void deleteADSFiles(const QString &filePath);
+    /** 删除本程序写入的全部标签流（保留第三方 ADS / Zone.Identifier），返回是否全部成功 */
+    static bool deleteADSFiles(const QString &filePath);
     static QStringList listADSFileName(const QString &filePath);
     static bool isHostFile(const QString &sFilePath, const QStringList &tags, labelLogic logic);
 
@@ -32,11 +32,11 @@ public :
      **/
     static QStringList listADSTagsInOrder(const QString &filePath);
 
-    /** 用给定顺序重写文件的全部标签（先清空，再按顺序写入，顺序号写入流内容） */
-    static void replaceTags(const QString &filePath, const QStringList &tags);
+    /** 用给定顺序重写文件的全部标签；失败时尽量回滚并返回 false */
+    static bool replaceTags(const QString &filePath, const QStringList &tags);
 
-    /** 在已有标签之后追加新标签（去重），保留已有标签的顺序，新标签按给定顺序追加 */
-    static void appendTags(const QString &filePath, const QStringList &tags);
+    /** 在已有标签之后追加新标签（去重），失败返回 false；已有标签不会因失败丢失 */
+    static bool appendTags(const QString &filePath, const QStringList &tags);
 };
 
 #endif // ADSOPERATION_H

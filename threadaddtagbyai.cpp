@@ -143,9 +143,12 @@ bool ThreadAddTagByAI::addTag(const QFileInfo& info)
                 }
             }
             // 追加到已有标签之后，保留文件原有标签顺序（AI 生成的标签按模型给出的顺序排在其后）
-            ADSOperation::appendTags(filePath, listTags);
+            const bool bOk = ADSOperation::appendTags(filePath, listTags);
+            emit sendTagChanged(filePath);
+            if (!bOk)
+                emit sendProcessInfo(QString("%1      标签写入不完整（已有标签未丢失，请检查占用/权限）").arg(filePath));
             tags = listTags.join(",");
-            if(!tags.isEmpty())
+            if (bOk && !tags.isEmpty())
                 emit sendTags(tags);
         }
         // #10：之前解析出 summary 却直接丢弃，这里通过信号上报，不再浪费模型输出。

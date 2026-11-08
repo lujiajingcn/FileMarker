@@ -40,6 +40,12 @@ public:
     // 刷新全部标签列表
     void updateAllLabelList(QVector<QString> vtAllLabels);
 
+    /** 返回标签库中所有标签名（跳过 AI 分组节点本身，包含其子标签） */
+    QStringList allLabels() const;
+
+    /** 从标签库删除指定名字的标签（大小写不敏感），返回是否删除了内容 */
+    bool removeLabels(const QStringList &qLLabels);
+
 signals:
     void sendSelLabels(QStringList qLSelLabels);
 
@@ -97,6 +103,7 @@ private:
     QSet<QString>           m_setLabels;
     // 每个节点最近一次“提交成功”的文本，按持久索引记录；用于重命名去重与回退原名。
     QMap<QPersistentModelIndex, QString> m_committedText;
+    bool m_bPromptShowing;
 
     enum { LabelUuidRole = Qt::UserRole + 1 };
 };

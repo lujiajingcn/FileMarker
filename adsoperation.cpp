@@ -6,6 +6,9 @@
 #include <QPair>
 #include <QRegularExpression>
 #include <QSet>
+#include <QThread>
+#include <QDataStream>
+#include <QCoreApplication>
 #include <algorithm>
 #include <string>
 #include "common.h"
@@ -42,6 +45,7 @@ public:
     explicit FileTimeGuard(const QString &filePath)
         : m_hFile(INVALID_HANDLE_VALUE)
         , m_bTimeSaved(false)
+        , m_bCaptured(false)
     {
         m_hFile = ::CreateFileW(win32APIPath(filePath).c_str(),
                                 FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES,
@@ -51,12 +55,42 @@ public:
             m_bTimeSaved = ::GetFileTime(m_hFile, &m_ftCreation, &m_ftAccess, &m_ftWrite) != FALSE;
     }
 
+    // 在所有写操作结束后调用：记录“本次操作造成的时间”。
+    // 析构时如果发现时间又变了，说明期间有外部程序修改，不能盲目恢复，避免掩盖别人的改动。
+    void captureCurrentTimes()
+    {
+        if (m_hFile == INVALID_HANDLE_VALUE)
+            return;
+        FILETIME ftCreation, ftAccess, ftWrite;
+        if (::GetFileTime(m_hFile, &ftCreation, &ftAccess, &ftWrite)) {
+            m_ftAfterCreation = ftCreation;
+            m_ftAfterWrite = ftWrite;
+            m_bCaptured = true;
+        }
+    }
+
     ~FileTimeGuard()
     {
         if (m_hFile == INVALID_HANDLE_VALUE)
             return;
-        if (m_bTimeSaved)
-            ::SetFileTime(m_hFile, &m_ftCreation, &m_ftAccess, &m_ftWrite);
+
+        bool bExternalChange = false;
+        if (m_bCaptured) {
+            FILETIME ftCreation, ftAccess, ftWrite;
+            if (::GetFileTime(m_hFile, &ftCreation, &ftAccess, &ftWrite)) {
+                if (ftWrite.dwLowDateTime != m_ftAfterWrite.dwLowDateTime
+                        || ftWrite.dwHighDateTime != m_ftAfterWrite.dwHighDateTime
+                        || ftCreation.dwLowDateTime != m_ftAfterCreation.dwLowDateTime
+                        || ftCreation.dwHighDateTime != m_ftAfterCreation.dwHighDateTime) {
+                    bExternalChange = true;
+                }
+            }
+        }
+
+        // 有外部修改时不恢复，避免把对方的时间戳覆盖掉。
+        // 访问时间不恢复：读标签不应掩盖真实的文件访问。
+        if (m_bTimeSaved && !bExternalChange)
+            ::SetFileTime(m_hFile, &m_ftCreation, nullptr, &m_ftWrite);
         ::CloseHandle(m_hFile);
     }
 
@@ -65,7 +99,10 @@ private:
     FILETIME m_ftCreation;
     FILETIME m_ftAccess;
     FILETIME m_ftWrite;
+    FILETIME m_ftAfterCreation;
+    FILETIME m_ftAfterWrite;
     bool m_bTimeSaved;
+    bool m_bCaptured;
 };
 } // namespace
 
@@ -89,7 +126,7 @@ static bool readStreamHeader(const QString &filePath, const QString &streamName,
 }
 
 // 只把“内容为空（旧版标签）或纯数字（新版顺序号）”的命名流当作标签。
-// 这样文件上的第三方 ADS 会被保留，不会在编辑标签时被误删或改写成数字。
+// 这只在没有归属清单的旧文件上使用；新文件以 FM_TAG_MARKER 为准。
 static bool isFileMarkerTagStream(const QString &filePath, const QString &streamName)
 {
     if (!Utility::isADSNameValid(streamName))
@@ -106,11 +143,81 @@ static bool isFileMarkerTagStream(const QString &filePath, const QString &stream
     return reOrder.match(sContent).hasMatch();
 }
 
+// 读取标签归属清单（FM_TAG_MARKER）。
+// bMarkerFound 仅在清单确实存在且成功解析时为 true；解析失败时回退旧版启发式。
+static QStringList readOwnedTagNames(const QString &filePath, bool &bMarkerFound)
+{
+    bMarkerFound = false;
+    QFile f(filePath + ":" + FM_TAG_MARKER);
+    if (!f.exists() || !f.open(QIODevice::ReadOnly))
+        return QStringList();
+
+    const QByteArray data = f.readAll();
+    f.close();
+
+    QDataStream stream(data);
+    QStringList names;
+    stream >> names;
+    if (stream.status() != QDataStream::Ok)
+        return QStringList();
+
+    bMarkerFound = true;
+    QStringList cleaned;
+    foreach (const QString &sName, names) {
+        if (!Utility::isADSNameValid(sName))
+            continue;
+        if (QString::compare(sName, FM_TAG_MARKER, Qt::CaseInsensitive) == 0)
+            continue;
+        bool bDuplicate = false;
+        for (const QString &sExisting : cleaned) {
+            if (QString::compare(sExisting, sName, Qt::CaseInsensitive) == 0) {
+                bDuplicate = true;
+                break;
+            }
+        }
+        if (!bDuplicate)
+            cleaned << sName;
+    }
+    return cleaned;
+}
+
+// 写标签归属清单；列表为空时删除清单流。
+static bool writeOwnedTagNames(const QString &filePath, const QStringList &names)
+{
+    const QString sMarkerPath = filePath + ":" + FM_TAG_MARKER;
+
+    if (names.isEmpty()) {
+        DeleteFileW(win32APIPath(sMarkerPath).c_str());
+        return true;
+    }
+
+    QByteArray data;
+    {
+        QDataStream stream(&data, QIODevice::WriteOnly);
+        stream << names;
+    }
+
+    QFile f(sMarkerPath);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        qWarning() << "写入标签归属清单失败:" << sMarkerPath << f.errorString();
+        return false;
+    }
+    const qint64 nWritten = f.write(data);
+    f.close();
+    if (nWritten != data.size()) {
+        qWarning() << "标签归属清单写入不完整:" << sMarkerPath;
+        return false;
+    }
+    return true;
+}
+
 // 写入 ADS 的实际实现，返回是否成功，供 replaceTags 做失败回滚。
 static bool writeADSFileInternal(const QString &filePath, const QString &streamName,
-                                 const QString &text)
+                                 const QString &text, bool bPreserveName = false)
 {
-    const QString sStreamName = ADSOperation::sanitizeTagName(streamName);
+    // 历史标签名可能合法包含 "，、；"；编辑时原样保留，不能再次净化
+    const QString sStreamName = bPreserveName ? streamName
+                                              : ADSOperation::sanitizeTagName(streamName);
     if (sStreamName.isEmpty())
         return false;
 
@@ -121,7 +228,9 @@ static bool writeADSFileInternal(const QString &filePath, const QString &streamN
         bOpened = f.open(QIODevice::WriteOnly | QIODevice::Truncate);
         if (!bOpened) {
             f.close();
-            ::Sleep(10);
+            // GUI 线程里不要 Sleep：失败重试会拖慢整个界面，只在工作线程短暂退避
+            if (QThread::currentThread() != qApp->thread())
+                ::Sleep(10);
         }
     }
     if (!bOpened) {
@@ -197,6 +306,11 @@ QString ADSOperation::sanitizeTagName(const QString &name)
         qWarning() << "拒绝把系统流名当标签:" << name;
         return QString();
     }
+    // 归属清单是内部保留流，不能作为标签名
+    if (QString::compare(s, FM_TAG_MARKER, Qt::CaseInsensitive) == 0) {
+        qWarning() << "拒绝把归属清单名当标签:" << name;
+        return QString();
+    }
 
     // 纯分隔符/非法字符（例如 "," "???"）净化后会变成 "_"，不应凭空造出一个 "_" 标签。
     {
@@ -215,41 +329,55 @@ QString ADSOperation::sanitizeTagName(const QString &name)
     return s;
 }
 
-void ADSOperation::writeADSFile(const QString &filePath, const QString &streamName, const QString &text, bool isDeleteOldAds)
-{
-    if(isDeleteOldAds)
-        deleteADSFiles(filePath);   // 只删除标签流，保留第三方 ADS
-
-    if (!writeADSFileInternal(filePath, streamName, text)) {
-        if (sanitizeTagName(streamName).isEmpty())
-            qWarning() << "忽略空/保留标签，未写入 ADS:" << filePath;
-    }
-}
-
-// 删除指定文件的所有关联的ads文件
-void ADSOperation::deleteADSFiles(const QString &filePath)
+// 删除本程序写入的标签流（含归属清单），保留第三方 ADS / Zone.Identifier。
+bool ADSOperation::deleteADSFiles(const QString &filePath)
 {
     // 删除流会更新文件的“修改日期”，这里保存/恢复文件时间（对外只应表现为标签变化）。
     FileTimeGuard timeGuard(filePath);
 
-    QStringList adsFileNames = listADSFileName(filePath);
-    foreach(QString adsName, adsFileNames)
+    bool bOk = true;
+    const QStringList adsFileNames = listADSFileName(filePath);
+    foreach(const QString &adsName, adsFileNames)
     {
-        QString adsFilePath = filePath + ":" + adsName;
-        // P2-23：检查 DeleteFile 返回值，失败时记录警告。
+        const QString adsFilePath = filePath + ":" + adsName;
         if (!DeleteFileW(win32APIPath(adsFilePath).c_str())) {
             qWarning() << "删除 ADS 失败:" << adsFilePath << "GetLastError:" << GetLastError();
+            bOk = false;
         }
     }
+
+    // 清单最后删除；不存在时 DeleteFile 会报 ERROR_FILE_NOT_FOUND，忽略即可
+    const QString sMarkerPath = filePath + ":" + FM_TAG_MARKER;
+    if (!DeleteFileW(win32APIPath(sMarkerPath).c_str())) {
+        if (GetLastError() != ERROR_FILE_NOT_FOUND)
+            qWarning() << "删除标签归属清单失败:" << sMarkerPath << "GetLastError:" << GetLastError();
+    }
+
+    timeGuard.captureCurrentTimes();
+    return bOk;
 }
 
 // 列出该文件上属于 FileMarker 的标签流（不包含第三方 ADS、Zone.Identifier）。
-// 判定规则见 isFileMarkerTagStream：内容为空或纯数字顺序号。
+// 有归属清单时只信任清单；没有清单的旧文件才按“内容为空/纯数字”启发式判断。
 QStringList ADSOperation::listADSFileName(const QString &filePath)
 {
     QStringList fileNames;
-    WIN32_FIND_STREAM_DATA findData;
 
+    bool bMarkerFound = false;
+    const QStringList ownedNames = readOwnedTagNames(filePath, bMarkerFound);
+    if (bMarkerFound) {
+        foreach (const QString &sName, ownedNames) {
+            if (!Utility::isADSNameValid(sName))
+                continue;
+            // 清单里的名字可能已被其它工具手动删除，确认流还在
+            if (!QFile(filePath + ":" + sName).exists())
+                continue;
+            fileNames << sName;
+        }
+        return fileNames;
+    }
+
+    WIN32_FIND_STREAM_DATA findData;
     HANDLE hFind = FindFirstStreamW(win32APIPath(filePath).c_str(), FindStreamInfoStandard, &findData, 0);
     if (hFind == INVALID_HANDLE_VALUE)
         return fileNames;
@@ -320,29 +448,41 @@ QStringList ADSOperation::listADSTagsInOrder(const QString &filePath)
 
 // 用给定顺序重写文件的全部标签：先清空，再按顺序写入。
 // 顺序号写进流内容（标签本身不需要内容），供 listADSTagsInOrder() 还原顺序。
-// 写入失败时尽量把操作前的标签恢复回去，避免“删掉了旧的、新的没写进去”。
-void ADSOperation::replaceTags(const QString &filePath, const QStringList &tags)
+// 写入失败时尽量把操作前的标签恢复回去，并通过返回值让界面提示用户。
+bool ADSOperation::replaceTags(const QString &filePath, const QStringList &tags)
 {
     // 最外层保护：内部 deleteADSFiles 也会保护一次，但写流同样会改时间，
     // 这里在整个“先删后写”结束后统一恢复到操作前的时间。
     FileTimeGuard timeGuard(filePath);
 
-    // 统一净化、去空、大小写不敏感去重（Windows 流名不区分大小写）
+    // 先取旧标签：历史标签名可能含 "，、；"，编辑时要原样保留，不能重新净化
+    const QStringList oldTags = listADSTagsInOrder(filePath);
+
+    // 统一净化、去空、大小写不敏感去重（Windows 流名不区分大小写）。
+    // 不同输入净化后撞成同一个流名（"a:b" 与 "a_b"）时报错，避免静默覆盖。
     QStringList newTags;
-    QSet<QString> setNewLower;
+    QMap<QString, QString> mapSanitizedToRaw;
+    bool bCollision = false;
     foreach (const QString &sTag, tags) {
-        const QString sSanitized = sanitizeTagName(sTag);
-        if (sSanitized.isEmpty())
+        const bool bExistingTag = oldTags.contains(sTag);
+        const QString sActual = bExistingTag ? sTag : sanitizeTagName(sTag);
+        if (sActual.isEmpty())
             continue;
-        const QString sLower = sSanitized.toLower();
-        if (setNewLower.contains(sLower))
+        const QString sLower = sActual.toLower();
+        if (mapSanitizedToRaw.contains(sLower)) {
+            if (mapSanitizedToRaw.value(sLower).trimmed() != sTag.trimmed()) {
+                qWarning() << "标签净化后重名，拒绝写入:" << mapSanitizedToRaw.value(sLower) << sTag;
+                bCollision = true;
+            }
             continue;
-        setNewLower.insert(sLower);
-        newTags << sSanitized;
+        }
+        mapSanitizedToRaw.insert(sLower, sTag);
+        newTags << sActual;
     }
+    if (bCollision)
+        return false;
 
     // 备份旧标签及其顺序内容，写入失败时回滚
-    const QStringList oldTags = listADSTagsInOrder(filePath);
     QMap<QString, QString> mapOldContents;
     foreach (const QString &sOld, oldTags) {
         QString sContent;
@@ -356,7 +496,8 @@ void ADSOperation::replaceTags(const QString &filePath, const QStringList &tags)
 
     bool bOk = true;
     for (int i = 0; i < newTags.count(); ++i) {
-        if (!writeADSFileInternal(filePath, newTags.at(i), QString::number(i))) {
+        const bool bExistingTag = oldTags.contains(newTags.at(i));
+        if (!writeADSFileInternal(filePath, newTags.at(i), QString::number(i), bExistingTag)) {
             bOk = false;
             break;
         }
@@ -366,15 +507,22 @@ void ADSOperation::replaceTags(const QString &filePath, const QStringList &tags)
         qWarning() << "标签写入失败，正在回滚:" << filePath;
         deleteADSFiles(filePath);   // 清掉写了一半的新标签（仍保留第三方 ADS）
         for (auto it = mapOldContents.constBegin(); it != mapOldContents.constEnd(); ++it)
-            writeADSFileInternal(filePath, it.key(), it.value());
+            writeADSFileInternal(filePath, it.key(), it.value(), true);
+        writeOwnedTagNames(filePath, oldTags);
+        timeGuard.captureCurrentTimes();
         qWarning() << "已尝试恢复操作前的标签:" << filePath;
+        return false;
     }
+
+    const bool bMarkerOk = writeOwnedTagNames(filePath, newTags);
+    timeGuard.captureCurrentTimes();
+    return bMarkerOk;
 }
 
 // 在已有标签之后追加：保留已有标签的顺序，新标签按传入顺序追加，重复的跳过。
 // 追加只写缺失的流，不删除/重写已有标签，也不会碰第三方 ADS；
 // 因此中途失败最多是少加几个新标签，不会丢失旧标签。
-void ADSOperation::appendTags(const QString &filePath, const QStringList &tags)
+bool ADSOperation::appendTags(const QString &filePath, const QStringList &tags)
 {
     FileTimeGuard timeGuard(filePath);
 
@@ -384,6 +532,8 @@ void ADSOperation::appendTags(const QString &filePath, const QStringList &tags)
         setExistingLower.insert(sName.toLower());
 
     QStringList toAdd;
+    QMap<QString, QString> mapSanitizedToRaw;
+    bool bCollision = false;
     foreach (const QString &sTag, tags) {
         const QString sTrimmed = sTag.trimmed();
         if (sTrimmed.isEmpty())
@@ -399,9 +549,21 @@ void ADSOperation::appendTags(const QString &filePath, const QStringList &tags)
         const QString sLower = sSanitized.toLower();
         if (setExistingLower.contains(sLower))
             continue;
+
+        if (mapSanitizedToRaw.contains(sLower)
+                && mapSanitizedToRaw.value(sLower).trimmed() != sTrimmed) {
+            qWarning() << "标签净化后重名，拒绝追加:" << mapSanitizedToRaw.value(sLower) << sTrimmed;
+            bCollision = true;
+        }
+        if (mapSanitizedToRaw.contains(sLower))
+            continue;
+
+        mapSanitizedToRaw.insert(sLower, sTag);
         setExistingLower.insert(sLower);
         toAdd << sSanitized;
     }
+    if (bCollision)
+        return false;
 
     // 兼容旧标签：它们的内容为空，会排在所有带顺序号的标签之后。
     // 如果直接给新标签写 existing.size()，新标签会排到旧标签前面（看起来不是“追加”）。
@@ -422,20 +584,34 @@ void ADSOperation::appendTags(const QString &filePath, const QStringList &tags)
         else
             legacyTags << sName;
     }
+    bool bOk = true;
     foreach (const QString &sLegacy, legacyTags) {
         // 写入失败则不要占用这个序号（旧标签本身仍在，只是继续排在末尾）
-        if (!writeADSFileInternal(filePath, sLegacy, QString::number(++nMaxOrder)))
+        if (!writeADSFileInternal(filePath, sLegacy, QString::number(++nMaxOrder), true)) {
             --nMaxOrder;
+            bOk = false;
+        }
     }
 
+    QStringList finalNames = existing;
     int nOrder = nMaxOrder + 1;
     foreach (const QString &sTag, toAdd) {
         if (!writeADSFileInternal(filePath, sTag, QString::number(nOrder))) {
             qWarning() << "追加标签失败（已有标签未受影响）:" << filePath << sTag;
+            bOk = false;
             continue;
         }
+        finalNames << sTag;
         ++nOrder;
     }
+
+    // 无论是否完全成功，都把当前实际存在的标签写入归属清单：
+    // 这样下次操作就不会再碰第三方空流。
+    if (!writeOwnedTagNames(filePath, finalNames))
+        bOk = false;
+
+    timeGuard.captureCurrentTimes();
+    return bOk;
 }
 
 // 根据标签和标签的逻辑关系，判断给定的文件是否是目标文件

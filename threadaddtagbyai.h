@@ -20,6 +20,8 @@ signals:
     void sendProcessInfo(QString sProcessedFilePath);
     void sendTags(QString tags);
     void sendSummary(QString summary);
+    /** 某个文件的标签已写入磁盘，主线程据此让搜索缓存失效 */
+    void sendTagChanged(QString sFilePath);
 
 protected:
     void run();

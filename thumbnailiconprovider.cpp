@@ -90,8 +90,20 @@ static qreal currentDevicePixelRatio()
 
 ThumbnailIconProvider::ThumbnailIconProvider(int iconSize)
     : m_iconSize(iconSize > 0 ? iconSize : ICON_SIZE)
+    , m_paintDpr(0.0)
 {
     m_cache.setMaxCost(256);
+}
+
+void ThumbnailIconProvider::setPaintDevicePixelRatio(qreal dpr) const
+{
+    if (dpr > 0.0)
+        m_paintDpr = dpr;
+}
+
+qreal ThumbnailIconProvider::effectiveDpr() const
+{
+    return m_paintDpr > 0.0 ? m_paintDpr : currentDevicePixelRatio();
 }
 
 void ThumbnailIconProvider::setIconSize(int iconSize)
@@ -101,11 +113,23 @@ void ThumbnailIconProvider::setIconSize(int iconSize)
 
     m_iconSize = iconSize;
     m_cache.clear();
+    m_failureTime.clear();
 }
 
 QIcon ThumbnailIconProvider::icon(const QFileInfo &info) const
 {
-    const qreal dpr = currentDevicePixelRatio();
+    const qreal dpr = effectiveDpr();
+    const qint64 nNow = QDateTime::currentMSecsSinceEpoch();
+    const qint64 nFailureTtlMs = 30000;
+
+    auto failureIsFresh = [this, nNow, nFailureTtlMs](const QString &key) {
+        const auto it = m_failureTime.constFind(key);
+        return it != m_failureTime.constEnd() && (nNow - it.value()) < nFailureTtlMs;
+    };
+    auto dropFailure = [this](const QString &key) {
+        m_cache.remove(key);
+        m_failureTime.remove(key);
+    };
 
     if (info.isDir()) {
         // 文件夹也缓存：滚动/悬停会反复取图标，QFileIconProvider 每次都要查 Shell。
@@ -114,15 +138,22 @@ QIcon ThumbnailIconProvider::icon(const QFileInfo &info) const
                                 .arg(m_iconSize)
                                 .arg(dpr);
         if (const QPixmap *cached = m_cache.object(key)) {
-            if (cached->isNull())
+            if (!cached->isNull())
+                return QIcon(*cached);
+            if (failureIsFresh(key))
                 return QFileIconProvider::icon(info);
-            return QIcon(*cached);
+            dropFailure(key);
         }
 
         const QIcon dirIcon = QFileIconProvider::icon(info);
         const QPixmap dirPixmap = dirIcon.pixmap(QSize(m_iconSize, m_iconSize));
+        if (dirPixmap.isNull()) {
+            m_cache.insert(key, new QPixmap(), 1);
+            m_failureTime.insert(key, nNow);
+            return dirIcon;
+        }
         m_cache.insert(key, new QPixmap(dirPixmap), 1);
-        return dirPixmap.isNull() ? dirIcon : QIcon(dirPixmap);
+        return QIcon(dirPixmap);
     }
 
     const QString key = QStringLiteral("%1|%2|%3|%4")
@@ -132,10 +163,12 @@ QIcon ThumbnailIconProvider::icon(const QFileInfo &info) const
                             .arg(dpr);
 
     if (const QPixmap *cached = m_cache.object(key)) {
-        // 之前已确认缩略图/大图标都取不到：直接回退，避免每次重绘都重试 Shell。
-        if (cached->isNull())
+        if (!cached->isNull())
+            return QIcon(*cached);
+        // 失败结果只缓存一小段时间，过后重新尝试（例如文件不再被占用）
+        if (failureIsFresh(key))
             return QFileIconProvider::icon(info);
-        return QIcon(*cached);
+        dropFailure(key);
     }
 
     QPixmap thumbnail = loadImageThumbnail(info);
@@ -151,12 +184,14 @@ QIcon ThumbnailIconProvider::icon(const QFileInfo &info) const
     }
 
     if (thumbnail.isNull()) {
-        // 连文件类型图标都取不到：缓存空结果，避免每帧重复 QImageReader + Shell 调用
+        // 连文件类型图标都取不到：短 TTL 缓存失败结果，避免每帧重复 QImageReader + Shell 调用
         m_cache.insert(key, new QPixmap(), 1);
+        m_failureTime.insert(key, nNow);
         return QFileIconProvider::icon(info);
     }
 
     m_cache.insert(key, new QPixmap(thumbnail), 1);
+    m_failureTime.remove(key);
     return QIcon(thumbnail);
 }
 
@@ -171,7 +206,7 @@ QPixmap ThumbnailIconProvider::loadImageThumbnail(const QFileInfo &info) const
     if (!reader.canRead())
         return QPixmap();
 
-    const qreal dpr = currentDevicePixelRatio();
+    const qreal dpr = effectiveDpr();
     const int targetPx = qMax(1, qRound(m_iconSize * dpr));
 
     // 以目标尺寸直接解码，避免先把整张大图载入内存再缩放
@@ -232,7 +267,7 @@ static QPixmap loadShellImage(const QString &filePath, int targetPx, DWORD flags
 
 QPixmap ThumbnailIconProvider::loadShellThumbnail(const QFileInfo &info) const
 {
-    const qreal dpr = currentDevicePixelRatio();
+    const qreal dpr = effectiveDpr();
     const int targetPx = qMax(1, qRound(m_iconSize * dpr));
 
     // 只要真正的缩略图（没有就失败），不要系统图标放大图
@@ -247,7 +282,7 @@ QPixmap ThumbnailIconProvider::loadShellThumbnail(const QFileInfo &info) const
 // 比 QFileIconProvider 默认的小图标清晰，也能让图标铺满缩略图区域。
 QPixmap ThumbnailIconProvider::loadShellIcon(const QFileInfo &info) const
 {
-    const qreal dpr = currentDevicePixelRatio();
+    const qreal dpr = effectiveDpr();
     const int targetPx = qMax(1, qRound(m_iconSize * dpr));
 
     QPixmap pixmap = loadShellImage(info.filePath(), targetPx, SIIGBF_ICONONLY);
