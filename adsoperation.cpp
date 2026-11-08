@@ -15,13 +15,14 @@ ADSOperation::ADSOperation()
 static QString sanitizeStreamName(const QString &name)
 {
     QString s = name;
-    // 同时禁止逗号：标签以逗号 join/split 在缓存入库、缓存查找、AI 上报、标签导入中传递，
-    // 含逗号的标签名会被错误拆成多个幻影标签（见 P1-1）。
-    static const QRegularExpression re("[/\\\\:*?\"<>|,]");
+    // 同时禁止逗号、顿号和分号：标签以分隔符 join/split 在缓存入库、缓存查找、AI 上报、
+    // 标签导入以及用户手工编辑中传递（见 P1-1）。五个分隔符（, ， 、 ; ；）都算边界，
+    // 标签名里若含它们会被错误拆成多个幻影标签，故统一替换为下划线。
+    static const QRegularExpression re("[/\\\\:*?\"<>|,，、;；]");
     s.replace(re, "_");
     s = s.trimmed();
-    if (s.isEmpty())
-        s = "tag";
+    // 空名字保持为空，由 writeADSFile 直接跳过。
+    // 以前这里兜底成 "tag"，导致"把标签清空"反而凭空写入一个 tag 标签。
     return s;
 }
 
@@ -30,7 +31,14 @@ void ADSOperation::writeADSFile(const QString &filePath, const QString &streamNa
     if(isDeleteOldAds)
         deleteADSFiles(filePath);
 
-    QString sFullFileName = filePath + ":" + sanitizeStreamName(streamName);
+    const QString sStreamName = sanitizeStreamName(streamName);
+    if (sStreamName.isEmpty()) {
+        // 空标签（含只有空格、或净化后为空）不写流：清空标签就应该是"没有标签"。
+        qWarning() << "忽略空标签，未写入 ADS:" << filePath;
+        return ;
+    }
+
+    QString sFullFileName = filePath + ":" + sStreamName;
     QFile f(sFullFileName);
     if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
         qWarning() << "写入 ADS 失败:" << sFullFileName;
@@ -67,8 +75,10 @@ QStringList ADSOperation::listADSFileName(const QString &filePath)
     do {
         QString streamName = QString::fromWCharArray(findData.cStreamName);
         streamName = streamName.mid(1); // Remove the leading ":"
+        // FindFirstStreamW 返回形如 "::tag:$DATA"，去掉前导冒号后是 "tag:$DATA"，
+        // 必须再剥掉 ":$DATA" 才是标签名，否则标签列会显示成 "tag:$DATA"。
         if(Utility::isADSNameValid(streamName))
-            fileNames << streamName;
+            fileNames << Utility::adsNameWithoutType(streamName);
     } while (FindNextStreamW(hFind, &findData));
 
     FindClose(hFind);
@@ -89,6 +99,10 @@ bool ADSOperation::isHostFile(const QString &sFilePath, const QStringList &tags,
         QString adsName = QString::fromWCharArray(findStreamData.cStreamName + 1);
         if(!Utility::isADSNameValid(adsName))
             continue;
+
+        // 去掉 ":$DATA" 后缀后再与标签名比较：流名是 "tag:$DATA"，标签名是 "tag"，
+        // 不剥离则 OR/AND 两种逻辑都永远匹配不到（搜索会返回空结果）。
+        adsName = Utility::adsNameWithoutType(adsName);
 
         if(logic == labelLogic::OR) {
             if(tags.contains(adsName)) {

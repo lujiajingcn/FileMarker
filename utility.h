@@ -33,6 +33,15 @@ public:
     static bool isContains(const QStringList &list1, const QStringList &list2);
 
     static bool isADSNameValid(QString sADSName);
+
+    /** 去掉 NTFS 流名末尾的 ":$DATA"（FindFirstStreamW 返回的形式），得到真正的标签名 */
+    static QString adsNameWithoutType(QString sADSName);
+
+    /**
+     ** 拆分标签字符串，兼容英文逗号(,)、中文逗号(，)、顿号(、)、英文分号(;)、中文分号(；)
+     ** 结果已去除首尾空白、空项和重复项，保持原有先后顺序。
+     **/
+    static QStringList splitLabels(const QString &sLabels);
 };
 
 #endif // UTILITY_H

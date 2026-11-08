@@ -517,12 +517,9 @@ void FormLabels::onTreeViewClicked(const QModelIndex &index)
 
 void FormLabels::onRecvLabels(QString sLabels)
 {
-    QStringList qLLabels = sLabels.split(",");
-    foreach (QString sLabel , qLLabels)
+    // 支持中英文逗号/分号分隔，splitLabels 已做 trim、去空、去重
+    foreach (const QString &sLabel, Utility::splitLabels(sLabels))
     {
-        sLabel = sLabel.trimmed();
-        if (sLabel.isEmpty())
-            continue;
         if(!m_setLabels.contains(sLabel))
         {
             QStandardItem *newItem = createLabelItem(sLabel);
@@ -555,12 +552,9 @@ void FormLabels::onRecvLabelsGeneratedByAI(QString sLabels)
         registerItem(itemLabelsGeneratedByAI);
     }
 
-    QStringList qLLabels = sLabels.split(",");
-    foreach (QString sLabel , qLLabels)
+    // 支持中英文逗号/分号分隔，splitLabels 已做 trim、去空、去重
+    foreach (const QString &sLabel, Utility::splitLabels(sLabels))
     {
-        sLabel = sLabel.trimmed();
-        if (sLabel.isEmpty())
-            continue;
         if(!m_setLabels.contains(sLabel))
         {
             QStandardItem *newItem = createLabelItem(sLabel);

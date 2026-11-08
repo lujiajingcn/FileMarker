@@ -8,6 +8,7 @@
 #include "adsoperation.h"
 #include "configoperation.h"
 #include "dlgsearchconfig.h"
+#include "utility.h"
 
 FormFileBrowser::FormFileBrowser(QWidget *parent) :
     QWidget(parent),
@@ -339,7 +340,10 @@ void FormFileBrowser::onRecvLabels(QString sFilePath, QString sLabels)
         return;
     }
 
-    QStringList qLLabels = sLabels.split(",");
+    // 拆分标签：支持英文逗号、中文逗号、顿号、英文分号、中文分号；空串表示"该文件没有标签"，
+    // 不能当成一个标签传下去（否则会被写成一个无意义的流）。
+    const QStringList qLLabels = Utility::splitLabels(sLabels);
+
     ADSOperation::deleteADSFiles(sFilePath);
     foreach(const QString &sSelLabel, qLLabels)
     {
@@ -348,8 +352,10 @@ void FormFileBrowser::onRecvLabels(QString sFilePath, QString sLabels)
 
     emit sendRefresh();
 
-    if(!sLabels.isEmpty())
-        emit sendLabels(sLabels);   // 转发给【标签管理】面板
+    // 只把规范化后的非空标签转发给【标签管理】面板
+    const QString sNormalizedLabels = qLLabels.join(",");
+    if(!sNormalizedLabels.isEmpty())
+        emit sendLabels(sNormalizedLabels);
 }
 
 // 设置菜单和工具栏中动作的状态（可用/不可用）

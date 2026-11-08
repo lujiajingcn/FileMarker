@@ -9,6 +9,7 @@
 #include "common.h"
 #include "traversedirectory.h"
 #include "adsoperation.h"
+#include "utility.h"
 
 ThreadAddTagByAI::ThreadAddTagByAI(QObject *parent) : QThread(parent)
 {
@@ -131,8 +132,13 @@ bool ThreadAddTagByAI::addTag(const QFileInfo& info)
         if (obj.contains("tags") && obj.value("tags").isArray()) {
             QJsonArray arr = obj.value("tags").toArray();
             for (auto v : arr) {
-                ADSOperation::writeADSFile(filePath, v.toString(), "");
-                listTags.append(v.toString());
+                // 模型可能把多个标签写在一个数组元素里（中文 comma/分号等），
+                // 按统一规则再拆一次，避免把 "a，b" 整体写成一个标签。
+                const QStringList tagsInItem = Utility::splitLabels(v.toString());
+                foreach (const QString &sTag, tagsInItem) {
+                    ADSOperation::writeADSFile(filePath, sTag, "");
+                    listTags.append(sTag);
+                }
             }
             tags = listTags.join(",");
             if(!tags.isEmpty())

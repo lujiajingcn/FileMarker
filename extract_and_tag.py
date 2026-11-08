@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import base64
 import json
@@ -161,8 +162,8 @@ def tag_text_qwen(text: str):
         if "response" in obj:
             full_resp += obj["response"]
 
-    # 清理格式，转换为列表
-    tags = [tag.strip() for tag in full_resp.split(",") if tag.strip()]
+    # 清理格式，转换为列表。模型可能用中文逗号/顿号/英文分号/中文分号分隔，统一拆分
+    tags = [tag.strip() for tag in re.split(r"[,，、;；]", full_resp) if tag.strip()]
     return tags
 
 def tag_image_qwen(file_path: str):
@@ -207,8 +208,8 @@ def tag_image_qwen(file_path: str):
         if "response" in obj:
             full_resp += obj["response"]
 
-    # 清理格式，转换为列表
-    tags = [tag.strip() for tag in full_resp.split(",") if tag.strip()]
+    # 清理格式，转换为列表。模型可能用中文逗号/顿号/英文分号/中文分号分隔，统一拆分
+    tags = [tag.strip() for tag in re.split(r"[,，、;；]", full_resp) if tag.strip()]
     return tags
 
 TEXT_MODEL = "qwen2.5:7b"

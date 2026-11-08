@@ -2,6 +2,7 @@
 
 #include <QUuid>
 #include <QDateTime>
+#include <QRegularExpression>
 
 Utility::Utility()
 {
@@ -86,14 +87,42 @@ bool Utility::isContains(const QStringList &list1, const QStringList &list2)
     return set1.contains(set2);
 }
 
-// P2-21：参数改为按值传递。原签名是非 const 引用，函数内部调用 chop() 会修改调用者的字符串，
-// 调用者可能不期望参数被修改。按值传递后函数内部可以自由修改副本。
-bool Utility::isADSNameValid(QString sADSName)
+// 去掉 FindFirstStreamW 返回的流名后缀 ":$DATA"，得到真正的标签名。
+// 例：FindFirstStreamW 返回 "::tag:$DATA"，调用方去掉前导冒号后为 "tag:$DATA"，
+// 本函数返回 "tag"。缺少这一步会让标签在界面上显示成 "tag:$DATA"，
+// 并且用 "tag" 查找文件时永远匹配不到。
+QString Utility::adsNameWithoutType(QString sADSName)
 {
     if(sADSName.endsWith(ADS_TAIL))
     {
         sADSName.chop(strlen(ADS_TAIL));
     }
+    return sADSName;
+}
+
+// 拆分标签字符串：英文逗号、中文逗号、顿号、英文分号、中文分号都算，
+// 方便中文输入法下直接敲"，"、"、"或"；"。split() 保留空项，这里统一 trim + 过滤空项 + 去重。
+QStringList Utility::splitLabels(const QString &sLabels)
+{
+    static const QRegularExpression re("[,，、;；]");
+
+    QStringList labels;
+    const QStringList parts = sLabels.split(re);
+    foreach (const QString &sPart, parts)
+    {
+        const QString sLabel = sPart.trimmed();
+        if (sLabel.isEmpty() || labels.contains(sLabel))
+            continue;
+        labels << sLabel;
+    }
+    return labels;
+}
+
+// P2-21：参数改为按值传递。原签名是非 const 引用，函数内部调用 chop() 会修改调用者的字符串，
+// 调用者可能不期望参数被修改。按值传递后函数内部可以自由修改副本。
+bool Utility::isADSNameValid(QString sADSName)
+{
+    sADSName = adsNameWithoutType(sADSName);
     if(sADSName.isEmpty())
     {
         return false;

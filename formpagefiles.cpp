@@ -10,6 +10,7 @@
 #include "adsoperation.h"
 #include "thumbnailiconprovider.h"
 #include "editablefiledelegate.h"
+#include "utility.h"
 
 FormPageFiles::FormPageFiles(QWidget *parent) :
     QWidget(parent),
@@ -361,19 +362,18 @@ void FormPageFiles::onEditTag(const QModelIndex &index)
     QStringList adsNames = ADSOperation::listADSFileName(sFilePath);
     bool ok = false;
     QString sNewTags = QInputDialog::getText(this, tr("编辑标签"),
-                                             tr("用逗号分隔多个标签："),
+                                             tr("多个标签用逗号、顿号或分号分隔（支持中英文）："),
                                              QLineEdit::Normal,
                                              adsNames.join(","), &ok);
     if (!ok)
         return;
 
-    // 先清空该文件全部标签，再按用户输入重新写入（P2-2）
+    // 先清空该文件全部标签，再按用户输入重新写入（P2-2）。
+    // 支持英文逗号(,)、中文逗号(，)、顿号(、)、英文分号(;)、中文分号(；) 分隔。
     ADSOperation::deleteADSFiles(sFilePath);
-    QStringList qLLabels = sNewTags.split(",");
+    const QStringList qLLabels = Utility::splitLabels(sNewTags);
     foreach (const QString &sLabel, qLLabels) {
-        QString sTrim = sLabel.trimmed();
-        if (!sTrim.isEmpty())
-            ADSOperation::writeADSFile(sFilePath, sTrim, "");
+        ADSOperation::writeADSFile(sFilePath, sLabel, "");
     }
 
     emit sendLabels(sFilePath, qLLabels.join(","));
