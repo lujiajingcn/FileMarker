@@ -1,0 +1,27 @@
+# ---- qmake / uic 生成物（构建时自动生成，不应入库）----
+/Makefile
+/Makefile.Debug
+/Makefile.Release
+/.qmake.stash
+/ui_*.h
+/moc_*.cpp
+/moc_*.h
+/qrc_*.cpp
+/FileMarker_resource.rc
+
+# ---- Qt Creator 本地配置 ----
+*.pro.user
+*.pro.user.*
+
+# ---- 编译中间产物与输出目录 ----
+/debug/
+/release/
+*.o
+*.obj
+*.res
+
+# ---- 程序运行时写在 exe 同目录的数据 ----
+/FileMarker.db
+/FileMarker.log
+/labels.xml
+/config.ini
