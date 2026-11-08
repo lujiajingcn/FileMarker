@@ -17,12 +17,14 @@
 #include <QAction>
 #include <QStandardItemModel>
 #include <QEvent>
+#include <QSet>
 
 #include "myqfilesystemmodel.h"
 #include "sqliteoperation.h"
 
 class EditableDelegate;
 class ThumbnailIconProvider;
+class QTimer;
 
 namespace Ui {
 class FormPageFiles;
@@ -60,9 +62,18 @@ public:
 
     QString getCurDir();
 
+    // 启动时恢复上次访问的目录（FormFileBrowser/MainWindow 在窗口显示后调用）
+    void restoreLastDir();
+
 signals:
 
     void sendLabels(QString sFilePath, QString sLabels);
+
+    // 当前目录直接子文件里出现的标签集合（进入目录/刷新后立即发送，供【当前目录标签】面板显示）
+    void sendDirLabels(const QString &sDir, const QSet<QString> &labels);
+
+    // 需要显示在状态栏的提示（例如目录文件过多、只统计了前 N 个）
+    void sendHintMessage(const QString &sMsg);
 
 public:
     // 刷新当前目录：既响应【刷新】按钮，也作为 FormFileBrowser::sendRefresh 信号的接收者
@@ -117,6 +128,23 @@ private:
     // 切换缩略图尺寸档位（小/中/大）
     void setThumbnailSize(int iconSize);
 
+    // 地址栏（lookInCombo）输入路径后回车/选择历史项时导航
+    void onLookInComboReturnPressed();
+
+    // 统一的路径导航入口：校验目录存在后刷新两个视图并记录历史
+    void navigateToDir(const QString &sPath);
+
+    // 把地址栏文本恢复成当前目录（输入非法或导航失败时使用）
+    void refreshAddressBar();
+
+    // 记录到地址栏下拉历史（最近 20 个，去重）
+    void rememberPath(const QString &sPath);
+
+    // 扫描指定目录的直接子文件，读出它们的标签并发送给【当前目录标签】面板。
+    // 分片执行（每片约 15ms），避免一次性枚举上千个文件的 ADS 卡住界面。
+    void scanDirLabels(const QString &sDir, bool bForce = false);
+    void continueDirLabelScan();
+
     // 缩略图列表的悬停项变化
     void onThumbnailHoverChanged(const QModelIndex &index);
 
@@ -143,6 +171,16 @@ private:
     int                     m_nIconSize;            // 当前缩略图边长（逻辑像素）
     int                     m_nSortColumn;          // 当前排序列
     Qt::SortOrder           m_sortOrder;            // 当前排序方向
+
+    // 【当前目录标签】分片扫描状态
+    QTimer                 *m_pScanTimer;
+    QString                 m_sScanDir;
+    QModelIndex             m_scanRootIndex;
+    int                     m_nScanRow;
+    int                     m_nScanTotal;
+    QSet<QString>           m_setScanLabels;
+    int                     m_nScanGeneration;
+    QString                 m_sScanCompletedDir;    // 已完整扫描过的目录（避免 directoryLoaded 重复扫）
 
 private:
     Ui::FormPageFiles *ui;

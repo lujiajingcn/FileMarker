@@ -30,6 +30,9 @@ signals:
 public slots:
     void onRecvDirAndLabels(QMap<QString, QSet<QString>> mapDirAndLabels);
 
+    // 清空面板（切换目录时先清掉上一个目录的内容）
+    void clearLabels();
+
 private:
     // 标签树点击处理：构造函数中显式 connect，
     // 不再使用 on_<对象名>_<信号名> 的自动连接（connectSlotsByName）。

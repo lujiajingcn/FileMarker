@@ -15,6 +15,8 @@ namespace Ui {
 class FormPageFilterdFiles;
 }
 
+class QTimer;
+
 class FormPageFilterdFiles : public QWidget
 {
     Q_OBJECT
@@ -25,15 +27,29 @@ public:
 
 signals:
     void sendGotoFile(QString sFilePath);
+    // 用户点击“返回目录”时，通知外层切回文件列表页面
+    void sendBackRequested();
 
 public slots:
     void onShowFilteredFiles(QStringList qLFilteredFiles);
     void onGotoFilePath();
 
 private:
+    // 双击结果项：直接打开文件
+    void onTvFilteredFilesDoubleClicked(const QModelIndex &index);
+
+    // 复制选中项的路径
+    void onCopyFilePath();
+
     // 右键菜单处理函数：构造函数中显式 connect，
     // 不再使用 on_<对象名>_<信号名> 的自动连接（connectSlotsByName）。
     void onTvFilteredFilesCustomContextMenuRequested(const QPoint &pos);
+
+    // 取当前选中行对应文件的完整路径（第 2 列）
+    QString currentFilePath() const;
+
+    // 分片读取结果的标签列，避免一次枚举上千条结果卡住界面
+    void continueFillTags();
 
 private:
     Ui::FormPageFilterdFiles *ui;
@@ -41,6 +57,13 @@ private:
     QTreeView               *m_tvFilteredFiles;
     QStandardItemModel      *m_modelFilteredFiles;
     QAction                 *m_gotoFilePath;
+    QAction                 *m_openFile;
+    QAction                 *m_copyFilePath;
+
+    // 标签列分片填充状态
+    QTimer                  *m_pTagScanTimer;
+    QStringList              m_qLTagScanPaths;
+    int                      m_nTagScanRow;
 };
 
 #endif // FORMPAGEFILTERDFILES_H

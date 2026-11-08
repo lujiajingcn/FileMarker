@@ -85,6 +85,9 @@ private:
 
     void onTreeViewClicked(const QModelIndex &index);
 
+    // 询问是否把“从文件编辑产生的新标签”加入标签库（是否加入由 QSettings 记住）
+    void promptAddNewLabels(const QStringList &qLNewLabels);
+
 private:
     Ui::FormLabels *ui;
 

@@ -32,6 +32,42 @@ static std::wstring win32APIPath(const QString &filePath)
     return sNative.toStdWString();
 }
 
+// 标签操作只应改变 ADS，不应改变文件的“修改日期”。
+// Windows 在写入/删除流时会更新文件时间，这里在操作前保存、操作后恢复。
+namespace {
+class FileTimeGuard
+{
+public:
+    explicit FileTimeGuard(const QString &filePath)
+        : m_hFile(INVALID_HANDLE_VALUE)
+        , m_bTimeSaved(false)
+    {
+        m_hFile = ::CreateFileW(win32APIPath(filePath).c_str(),
+                                FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES,
+                                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
+        if (m_hFile != INVALID_HANDLE_VALUE)
+            m_bTimeSaved = ::GetFileTime(m_hFile, &m_ftCreation, &m_ftAccess, &m_ftWrite) != FALSE;
+    }
+
+    ~FileTimeGuard()
+    {
+        if (m_hFile == INVALID_HANDLE_VALUE)
+            return;
+        if (m_bTimeSaved)
+            ::SetFileTime(m_hFile, &m_ftCreation, &m_ftAccess, &m_ftWrite);
+        ::CloseHandle(m_hFile);
+    }
+
+private:
+    HANDLE m_hFile;
+    FILETIME m_ftCreation;
+    FILETIME m_ftAccess;
+    FILETIME m_ftWrite;
+    bool m_bTimeSaved;
+};
+} // namespace
+
 // NTFS 流名不允许包含 : / \ * ? " < > |，且不能为空。
 // 标签作为流名使用时需做净化，否则 QFile::open 会静默失败导致标签“看似加上实则没写”。
 QString ADSOperation::sanitizeTagName(const QString &name)
@@ -122,6 +158,9 @@ void ADSOperation::writeADSFile(const QString &filePath, const QString &streamNa
 // 删除指定文件的所有关联的ads文件
 void ADSOperation::deleteADSFiles(const QString &filePath)
 {
+    // 删除流会更新文件的“修改日期”，这里保存/恢复文件时间（对外只应表现为标签变化）。
+    FileTimeGuard timeGuard(filePath);
+
     QStringList adsFileNames = listADSFileName(filePath);
     foreach(QString adsName, adsFileNames)
     {
@@ -204,6 +243,10 @@ QStringList ADSOperation::listADSTagsInOrder(const QString &filePath)
 // 顺序号写进流内容（标签本身不需要内容），供 listADSTagsInOrder() 还原顺序。
 void ADSOperation::replaceTags(const QString &filePath, const QStringList &tags)
 {
+    // 最外层保护：内部 deleteADSFiles 也会保护一次，但写流同样会改时间，
+    // 这里在整个“先删后写”结束后统一恢复到操作前的时间。
+    FileTimeGuard timeGuard(filePath);
+
     deleteADSFiles(filePath);
 
     for (int i = 0; i < tags.count(); ++i)

@@ -51,6 +51,9 @@ public:
 
     QStringList getSelDirs();
 
+    // 启动时恢复上次访问的目录
+    void restoreLastDir();
+
 signals:
     void sendStop();
     void sendShowFilteredFiles(QStringList qLFilteredFiles);
@@ -58,6 +61,8 @@ signals:
     void sendGotoFile(QString sFilePath);
     void sendNavigationClicked(const QModelIndex &index);
     void sendDirAndLabels(QMap<QString, QSet<QString>> mapDirAndLabel);
+    void sendClearDirLabels();
+    void sendStatusMessage(const QString &sMsg);
     void sendLabels(QString sLabels);
     void sendLabelsGeneratedByAI(QString sLabels);
 

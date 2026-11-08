@@ -39,7 +39,12 @@ QStringList tagLinesFor(const QFontMetrics &fm, const QString &tagText, int widt
     if (tagText.isEmpty() || width <= 0 || maxLines <= 0)
         return lines;
 
+    // Qt 5.14+ 使用 Qt::SkipEmptyParts；Qt6 已移除 QString::SkipEmptyParts。
+#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
+    const QStringList tags = tagText.split(QLatin1Char(','), Qt::SkipEmptyParts);
+#else
     const QStringList tags = tagText.split(QLatin1Char(','), QString::SkipEmptyParts);
+#endif
     QString current;
     bool truncated = false;
 

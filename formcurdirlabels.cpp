@@ -36,6 +36,14 @@ void FormCurDirLabels::onRecvDirAndLabels(QMap<QString, QSet<QString>> mapDirAnd
         foreach (const QString &sLabel, setLabels)
             itemDir->appendRow(new QStandardItem(sLabel));
     }
+
+    // 展开目录节点，用户一眼就能看到当前目录有哪些标签（之前需要手动展开）
+    ui->treeView->expandAll();
+}
+
+void FormCurDirLabels::clearLabels()
+{
+    m_modelLabels->clear();
 }
 
 void FormCurDirLabels::onTreeViewClicked(const QModelIndex &index)

@@ -30,6 +30,43 @@
     <number>0</number>
    </property>
    <item row="0" column="0">
+    <layout class="QHBoxLayout" name="topBar">
+     <property name="spacing">
+      <number>8</number>
+     </property>
+     <item>
+      <widget class="QToolButton" name="btnBack">
+       <property name="text">
+        <string>← 返回目录</string>
+       </property>
+       <property name="toolButtonStyle">
+        <enum>Qt::ToolButtonTextOnly</enum>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="lblResultCount">
+       <property name="text">
+        <string>搜索结果 0 项</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer name="spacerTop">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+    </layout>
+   </item>
+   <item row="1" column="0">
     <widget class="QTreeView" name="tvFilteredFiles">
      <property name="contextMenuPolicy">
       <enum>Qt::CustomContextMenu</enum>
@@ -37,12 +74,15 @@
      <property name="editTriggers">
       <set>QAbstractItemView::NoEditTriggers</set>
      </property>
-     <property name="headerHidden">
+     <property name="alternatingRowColors">
       <bool>true</bool>
      </property>
-     <attribute name="headerVisible">
+     <property name="selectionMode">
+      <enum>QAbstractItemView::ExtendedSelection</enum>
+     </property>
+     <property name="rootIsDecorated">
       <bool>false</bool>
-     </attribute>
+     </property>
     </widget>
    </item>
   </layout>

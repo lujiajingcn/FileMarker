@@ -5,9 +5,13 @@
 #include <QSpacerItem>
 #include <QHBoxLayout>
 #include <QMessageBox>
+#include <QPushButton>
 #include <QDebug>
 #include <QAction>
 #include <QMenu>
+#include <QCheckBox>
+#include <QSettings>
+#include <QTimer>
 #include <functional>
 
 #include <libxml/parser.h>
@@ -522,14 +526,66 @@ void FormLabels::onTreeViewClicked(const QModelIndex &index)
 void FormLabels::onRecvLabels(QString sLabels)
 {
     // 支持中英文逗号/分号分隔，splitLabels 已做 trim、去空、去重
+    QStringList qLNewLabels;
     foreach (const QString &sLabel, Utility::splitLabels(sLabels))
     {
-        if(!m_setLabels.contains(sLabel))
-        {
-            QStandardItem *newItem = createLabelItem(sLabel);
-            m_modelAllLabels->appendRow(newItem);
-            registerItem(newItem);
-        }
+        if(!m_setLabels.contains(sLabel) && !qLNewLabels.contains(sLabel))
+            qLNewLabels << sLabel;
+    }
+
+    if (qLNewLabels.isEmpty())
+        return;
+
+    // 排队弹窗/入库：不要在 model->setData() 的调用栈里直接 exec()，避免重入
+    QTimer::singleShot(0, this, [this, qLNewLabels]() { promptAddNewLabels(qLNewLabels); });
+}
+
+void FormLabels::promptAddNewLabels(const QStringList &qLNewLabels)
+{
+    QSettings settings(g_sAppDir + QStringLiteral("/FileMarker.ini"), QSettings::IniFormat);
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+    settings.setIniCodec("UTF-8");
+#endif
+    // 0=每次询问，1=总是加入，2=从不加入
+    const int nMode = settings.value(QStringLiteral("labels/autoAddFromFiles"), 0).toInt();
+    if (nMode == 2)
+        return;
+
+    bool bAdd = (nMode == 1);
+    if (nMode == 0)
+    {
+        QString sPreview = qLNewLabels.mid(0, 10).join("，");
+        if (qLNewLabels.size() > 10)
+            sPreview += tr("…等 %1 个").arg(qLNewLabels.size());
+
+        QMessageBox box(this);
+        box.setWindowTitle(tr("标签库"));
+        box.setIcon(QMessageBox::Question);
+        box.setText(tr("发现 %1 个新标签，是否加入标签库？\n\n%2").arg(qLNewLabels.size()).arg(sPreview));
+        QPushButton *pBtnAdd = box.addButton(tr("加入"), QMessageBox::AcceptRole);
+        QPushButton *pBtnSkip = box.addButton(tr("不加入"), QMessageBox::RejectRole);
+        QCheckBox *pRemember = new QCheckBox(tr("记住我的选择"), &box);
+        box.setCheckBox(pRemember);
+        box.setDefaultButton(pBtnAdd);
+        box.setEscapeButton(pBtnSkip);
+        box.exec();
+
+        bAdd = (box.clickedButton() == pBtnAdd);
+        if (pRemember->isChecked())
+            settings.setValue(QStringLiteral("labels/autoAddFromFiles"), bAdd ? 1 : 2);
+    }
+
+    if (!bAdd)
+        return;
+
+    // 弹窗期间标签库可能已经变化，再检查一次
+    foreach (const QString &sLabel, qLNewLabels)
+    {
+        if (m_setLabels.contains(sLabel))
+            continue;
+        QStandardItem *newItem = createLabelItem(sLabel);
+        m_modelAllLabels->appendRow(newItem);
+        registerItem(newItem);
     }
     saveLabelToXmlFile();   // #11 外部写入标签后立即持久化
 }

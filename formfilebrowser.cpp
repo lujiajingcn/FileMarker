@@ -31,6 +31,10 @@ FormFileBrowser::FormFileBrowser(QWidget *parent) :
     connect(this, &FormFileBrowser::sendNavigationClicked, ui->pageFiles, &FormPageFiles::onTvNavigationClicked);
 
     connect(ui->pageFilteredFiles, &FormPageFilterdFiles::sendGotoFile, this, &FormFileBrowser::onGotoFilePath);
+    // 查询结果页的“返回目录”按钮：切回文件列表页面
+    connect(ui->pageFilteredFiles, &FormPageFilterdFiles::sendBackRequested, this, [this]() {
+        showFilesWidget();
+    });
     connect(this, &FormFileBrowser::sendGotoFile, ui->pageFiles, &FormPageFiles::recvGotoFile);
 
     connect(this, &FormFileBrowser::sendShowFilteredFiles, ui->pageFilteredFiles, &FormPageFilterdFiles::onShowFilteredFiles);
@@ -38,6 +42,19 @@ FormFileBrowser::FormFileBrowser(QWidget *parent) :
     connect(ui->pageProgressInfo, &FormPageProgressInfo::sendStop, this, &FormFileBrowser::onRecvStopSearch);
 
     connect(ui->pageFiles, &FormPageFiles::sendLabels, this, &FormFileBrowser::onRecvLabels);
+
+    // 进入目录后立即把该目录的标签送到【当前目录标签】面板（不再依赖先执行“遍历文件”）。
+    connect(ui->pageFiles, &FormPageFiles::sendDirLabels, this,
+            [this](const QString &sDir, const QSet<QString> &setLabels) {
+                emit sendClearDirLabels();
+                if (sDir.isEmpty())
+                    return;
+                QMap<QString, QSet<QString>> mapDirAndLabels;
+                mapDirAndLabels.insert(sDir, setLabels);
+                emit sendDirAndLabels(mapDirAndLabels);
+            });
+    // 页面内的提示（如目录文件过多只统计了前 N 个）转发到主窗口状态栏
+    connect(ui->pageFiles, &FormPageFiles::sendHintMessage, this, &FormFileBrowser::sendStatusMessage);
 }
 
 FormFileBrowser::~FormFileBrowser()
@@ -89,6 +106,11 @@ QStringList FormFileBrowser::getSelDirs()
     return ui->pageFiles->getSelDirs();
 }
 
+void FormFileBrowser::restoreLastDir()
+{
+    ui->pageFiles->restoreLastDir();
+}
+
 void FormFileBrowser::showProcessPage(RUNNINGTHREAD rt)
 {
     ui->stackedWidget->setCurrentWidget(ui->pageProgressInfo);
@@ -112,6 +134,8 @@ void FormFileBrowser::showFilteredFile(QStringList qLFilteredFiles)
     ui->stackedWidget->setCurrentWidget(ui->pageFilteredFiles);
     emit sendShowFilteredFiles(qLFilteredFiles);
     ui->pageProgressInfo->clear();
+
+    qInfo() << "搜索完成: results=" << qLFilteredFiles.size();
 }
 
 void FormFileBrowser::onGotoFilePath(QString sFilePath)
@@ -229,6 +253,10 @@ void FormFileBrowser::onActionSearchFilesbyLabelsTriggered()
         return;
     }
 
+    // 诊断日志：如果以后再次出现搜索界面卡住，可从日志判断搜索范围与是否走了缓存。
+    qInfo() << "开始搜索: dirs=" << qLSelDirs << "labels=" << m_qLSelLabels
+            << "useCache=" << ConfigOperation::readSearchConfig(g_sAppDir + "/" + SEARCH_CONFIG_FILE).bFromCache;
+
     SearchConfig sc = ConfigOperation::readSearchConfig(g_sAppDir + "/" + SEARCH_CONFIG_FILE);
 
     if(sc.bFromCache){
@@ -278,6 +306,8 @@ void FormFileBrowser::onActionTraverseSelDirsTriggered()
     }
 
     showProcessPage(RUNNINGTHREAD::TRAVERSEDIR);
+    emit sendStatusMessage(tr("正在遍历 %1 个目录…").arg(selDirs.count()));
+    qInfo() << "开始遍历: dirs=" << selDirs;
 
     m_threadTraverseDirs = new ThreadTraverseDirs(this);
     m_threadTraverseDirs->setSelDirs(selDirs);
@@ -302,6 +332,17 @@ void FormFileBrowser::onRecvTraverseResult(QMap<QString, FILE_TAGS> dirAndFileTa
     setActionState(TRAVERER_FINISH);
     emit sendDirAndLabels(dirAndTags);
     ui->pageProgressInfo->clear();
+
+    // 遍历完成提示：小目录时进度页一闪而过，用户需要明确的完成反馈。
+    int nFiles = 0;
+    for (auto it = dirAndFileTags.constBegin(); it != dirAndFileTags.constEnd(); ++it)
+        nFiles += it.value().size();
+    int nLabels = 0;
+    for (auto it = dirAndTags.constBegin(); it != dirAndTags.constEnd(); ++it)
+        nLabels += it.value().size();
+    emit sendStatusMessage(tr("遍历完成：%1 个目录，%2 个文件，%3 个标签")
+                               .arg(dirAndTags.size()).arg(nFiles).arg(nLabels));
+    qInfo() << "遍历完成: dirs=" << dirAndTags.size() << "files=" << nFiles << "labels=" << nLabels;
 }
 
 void FormFileBrowser::onActionSearchConfigTriggered()

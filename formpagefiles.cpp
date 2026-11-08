@@ -11,12 +11,16 @@
 #include <QClipboard>
 #include <QCursor>
 #include <QDir>
+#include <QFileInfo>
 #include <QHeaderView>
 #include <QProcess>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QLineEdit>
 #include <QStyledItemDelegate>
+#include <QTimer>
+#include <QSettings>
+#include <QElapsedTimer>
 
 #include "adsoperation.h"
 #include "thumbnailiconprovider.h"
@@ -24,6 +28,26 @@
 #include "utility.h"
 
 namespace {
+
+// 虚拟根节点（“我的电脑”）的显示名：QFileSystemModel::myComputer() 返回的是英文
+// "My Computer"，和界面上的名称不同，这里统一使用界面名并兼容英文写法。
+const QString MY_COMPUTER_NAME = QStringLiteral("我的电脑");
+
+bool isMyComputerName(const QString &sName)
+{
+    const QString s = sName.trimmed();
+    return s.isEmpty()
+           || s.compare(MY_COMPUTER_NAME, Qt::CaseInsensitive) == 0
+           || s.compare(QStringLiteral("My Computer"), Qt::CaseInsensitive) == 0;
+}
+
+// Windows 下同一路径可能以不同分隔符/盘符大小写出现（模型 vs QDir），统一比较
+bool isSameDirPath(const QString &sLeft, const QString &sRight)
+{
+    if (sLeft.isEmpty() || sRight.isEmpty())
+        return sLeft == sRight;
+    return QDir::cleanPath(sLeft).compare(QDir::cleanPath(sRight), Qt::CaseInsensitive) == 0;
+}
 
 // 详情视图第 5 列（标签列）专用代理：
 // 默认代理的编辑器在标签列上只按文字宽度显示，输入长标签时几乎不可用；
@@ -75,13 +99,39 @@ FormPageFiles::FormPageFiles(QWidget *parent) :
     m_nIconSize = ICON_SIZE;
     m_nSortColumn = 0;
     m_sortOrder = Qt::AscendingOrder;
+    m_pScanTimer = nullptr;
+    m_nScanRow = 0;
+    m_nScanTotal = 0;
+    m_nScanGeneration = 0;
 
     m_modelFiles = new MyQFileSystemModel(this);
     // 设置根路径（例如当前目录）
     m_modelFiles->setRootPath("");
 
+    // 当前目录标签的分片扫描定时器：每片最多 15ms，避免一次枚举上千个文件卡住界面
+    m_pScanTimer = new QTimer(this);
+    m_pScanTimer->setInterval(0);
+    connect(m_pScanTimer, &QTimer::timeout, this, &FormPageFiles::continueDirLabelScan);
+
+    // 目录内容异步加载完成后再扫一次标签（导航时立刻扫描时 rowCount 可能还是 0）
+    connect(m_modelFiles, &QFileSystemModel::directoryLoaded, this, [this](const QString &sPath) {
+        if (isSameDirPath(sPath, m_sCurDir))
+            scanDirLabels(m_sCurDir);
+    });
+
     initDetailFileList();
     initThumbnailFileList();
+
+    // 恢复上次的列宽/列顺序（窗口大小在 MainWindow 中恢复）
+    {
+        QSettings settings(g_sAppDir + QStringLiteral("/FileMarker.ini"), QSettings::IniFormat);
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+        settings.setIniCodec("UTF-8");
+#endif
+        const QByteArray headerState = settings.value(QStringLiteral("view/headerState")).toByteArray();
+        if (!headerState.isEmpty() && m_tvFiles != nullptr && m_tvFiles->header() != nullptr)
+            m_tvFiles->header()->restoreState(headerState);
+    }
 
     // 显式连接工具栏按钮与文件列表信号（此前依赖 on_<对象名>_<信号名> 的自动连接）
     connect(ui->backButton, &QToolButton::clicked, this, &FormPageFiles::onBackButtonClicked);
@@ -99,13 +149,44 @@ FormPageFiles::FormPageFiles(QWidget *parent) :
     // todo 后续将已经访问过的路径都添加上
     ui->lookInCombo->setEditText(m_sCurDir);
 
+    // 地址栏是可编辑的（.ui 中 editable=true）：回车或选择历史项时按路径导航。
+    connect(ui->lookInCombo->lineEdit(), &QLineEdit::returnPressed,
+            this, &FormPageFiles::onLookInComboReturnPressed);
+    connect(ui->lookInCombo, QOverload<int>::of(&QComboBox::activated), this, [this](int index) {
+        if (index >= 0)
+            navigateToDir(ui->lookInCombo->itemText(index));
+    });
+
     connect(m_modelFiles, &MyQFileSystemModel::sendLabels, this, &FormPageFiles::onRecvLabels);
 }
 
 FormPageFiles::~FormPageFiles()
 {
+    // 保存列宽与上次目录，下次启动恢复
+    QSettings settings(g_sAppDir + QStringLiteral("/FileMarker.ini"), QSettings::IniFormat);
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+    settings.setIniCodec("UTF-8");
+#endif
+    if (m_tvFiles != nullptr && m_tvFiles->header() != nullptr)
+        settings.setValue(QStringLiteral("view/headerState"), m_tvFiles->header()->saveState());
+    if (!m_sCurDir.isEmpty())
+        settings.setValue(QStringLiteral("view/lastDir"), m_sCurDir);
+
     delete m_iconProvider;   // 非 QObject，需要手动释放
     delete ui;
+}
+
+void FormPageFiles::restoreLastDir()
+{
+    QSettings settings(g_sAppDir + QStringLiteral("/FileMarker.ini"), QSettings::IniFormat);
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+    settings.setIniCodec("UTF-8");
+#endif
+    const QString sLastDir = settings.value(QStringLiteral("view/lastDir")).toString();
+    if (sLastDir.isEmpty() || isMyComputerName(sLastDir))
+        return;
+    if (QDir(sLastDir).exists())
+        navigateToDir(sLastDir);
 }
 
 void FormPageFiles::setAction(QAction *actionDeleteLabels)
@@ -177,14 +258,23 @@ void FormPageFiles::initDetailFileList()
     // 根据实际数据稍作修改，增加了列的宽度
     QHeaderView *treeHeader = m_tvFiles->header();
     QFontMetrics fm(m_tvFiles->font());
-    treeHeader->resizeSection(0, fm.horizontalAdvance(QLatin1String("wwwwwwwwwwwwwwwwwwwwwwwwww")));
+    treeHeader->setMinimumSectionSize(60);
+    // 名称列吃掉剩余宽度，其余数据列固定宽度，标签列给一个可用宽度并可拖动。
+    // 这样窗口较窄时优先压缩名称列，而不是把“标签”列挤出可视区（默认 994x663 时
+    // 以前必须横向滚动才能看到标签）。
+    treeHeader->setSectionResizeMode(0, QHeaderView::Stretch);
+    // 其余列保持可拖动（之前设为 Fixed 会让用户无法再调整大小/类型/日期列宽）
+    treeHeader->setSectionResizeMode(1, QHeaderView::Interactive);
+    treeHeader->setSectionResizeMode(2, QHeaderView::Interactive);
+    treeHeader->setSectionResizeMode(3, QHeaderView::Interactive);
+    treeHeader->setSectionResizeMode(4, QHeaderView::Interactive);
     treeHeader->resizeSection(1, fm.horizontalAdvance(QLatin1String("128.88 GB")) + 15);
     treeHeader->resizeSection(2, fm.horizontalAdvance(QLatin1String("mp3Folder")) + 35);
     treeHeader->resizeSection(3, fm.horizontalAdvance(QLatin1String("10/29/1981 02:02PM")) + 5);
-    treeHeader->resizeSection(4, fm.horizontalAdvance(QLatin1String("10/29/1981 02:02PM")));
+    treeHeader->resizeSection(4, 180);
     treeHeader->setContextMenuPolicy(Qt::ActionsContextMenu);
 
-    m_sCurDir = "我的电脑";
+    m_sCurDir = MY_COMPUTER_NAME;
 }
 
 void FormPageFiles::initThumbnailFileList()
@@ -241,12 +331,175 @@ void FormPageFiles::initThumbnailFileList()
 
 void FormPageFiles::curDirChanged(QString sCurDir)
 {
-    ui->lookInCombo->setEditText(sCurDir);
     m_skBackward.push_back(m_sCurDir);
     m_skForward.clear();
     m_sCurDir = sCurDir;
+    // 同步地址栏并把路径记入下拉历史
+    rememberPath(sCurDir);
     // P2-16：导航栈变化时直接更新按钮状态，不再依赖 event() 拦截 Paint。
     updateToolButtons();
+
+    // 进入目录后立即更新【当前目录标签】面板：先清空旧内容，再在文件模型加载完成后扫描。
+    emit sendDirLabels(sCurDir, QSet<QString>());
+    QTimer::singleShot(150, this, [this, sCurDir]() { scanDirLabels(sCurDir); });
+}
+
+void FormPageFiles::scanDirLabels(const QString &sDir, bool bForce)
+{
+    if (sDir.isEmpty() || !isSameDirPath(sDir, m_sCurDir))
+        return;
+    // 已经完整扫过且不是强制刷新（例如 directoryLoaded 的重复通知）就不再扫
+    if (!bForce && m_sScanCompletedDir == sDir)
+        return;
+
+    const QModelIndex rootIndex = m_modelFiles->index(sDir);
+    if (!rootIndex.isValid())
+        return;
+
+    const int nRows = m_modelFiles->rowCount(rootIndex);
+    if (nRows <= 0)
+        return;   // 目录还没加载出内容，等 directoryLoaded 或下一次刷新
+
+    ++m_nScanGeneration;
+    m_sScanDir = sDir;
+    m_scanRootIndex = rootIndex;
+    m_nScanRow = 0;
+    m_nScanTotal = qMin(nRows, 2000);
+    m_setScanLabels.clear();
+    m_sScanCompletedDir.clear();
+
+    if (m_pScanTimer != nullptr)
+        m_pScanTimer->start();
+}
+
+void FormPageFiles::continueDirLabelScan()
+{
+    if (!isSameDirPath(m_sScanDir, m_sCurDir)) {
+        if (m_pScanTimer != nullptr)
+            m_pScanTimer->stop();
+        return;
+    }
+
+    // 每片最多约 15ms（实测约 0.37ms/文件，即每片约 40 个文件），保证界面仍可响应
+    QElapsedTimer budget;
+    budget.start();
+    while (m_nScanRow < m_nScanTotal && budget.elapsed() < 15) {
+        const QModelIndex idx = m_modelFiles->index(m_nScanRow, 0, m_scanRootIndex);
+        ++m_nScanRow;
+        if (!idx.isValid() || m_modelFiles->isDir(idx))
+            continue;
+        const QStringList qLTags = ADSOperation::listADSTagsInOrder(m_modelFiles->filePath(idx));
+        for (const QString &sTag : qLTags)
+            m_setScanLabels.insert(sTag);
+    }
+
+    if (m_nScanRow < m_nScanTotal)
+        return;
+
+    if (m_pScanTimer != nullptr)
+        m_pScanTimer->stop();
+
+    if (!isSameDirPath(m_sScanDir, m_sCurDir))
+        return;
+
+    emit sendDirLabels(m_sScanDir, m_setScanLabels);
+    m_sScanCompletedDir = m_sScanDir;
+
+    // 目录文件数超过上限时明确提示，避免用户误以为面板内容完整
+    if (m_modelFiles->rowCount(m_scanRootIndex) > m_nScanTotal) {
+        emit sendHintMessage(tr("目录文件过多，仅统计了前 %1 个文件的标签").arg(m_nScanTotal));
+    }
+}
+
+// 把地址栏文本恢复成当前目录（用户输入非法路径、或导航失败时使用）
+void FormPageFiles::refreshAddressBar()
+{
+    ui->lookInCombo->setCurrentIndex(-1);
+    ui->lookInCombo->setEditText(m_sCurDir);
+    if (ui->lookInCombo->lineEdit())
+        ui->lookInCombo->lineEdit()->setCursorPosition(0);
+}
+
+void FormPageFiles::rememberPath(const QString &sPath)
+{
+    // 最近访问的 20 个路径，去重后放到下拉框最前面
+    ui->lookInCombo->blockSignals(true);
+    const int nExist = ui->lookInCombo->findText(sPath);
+    if (nExist >= 0)
+        ui->lookInCombo->removeItem(nExist);
+    ui->lookInCombo->insertItem(0, sPath);
+    while (ui->lookInCombo->count() > 20)
+        ui->lookInCombo->removeItem(ui->lookInCombo->count() - 1);
+    ui->lookInCombo->setCurrentIndex(-1);
+    ui->lookInCombo->setEditText(sPath);
+    ui->lookInCombo->blockSignals(false);
+}
+
+void FormPageFiles::navigateToDir(const QString &sPath)
+{
+    QString sTarget = sPath.trimmed();
+    // 支持直接粘贴资源管理器的带引号路径
+    if (sTarget.size() >= 2 && sTarget.startsWith(QLatin1Char('"')) && sTarget.endsWith(QLatin1Char('"')))
+        sTarget = sTarget.mid(1, sTarget.size() - 2).trimmed();
+    if (sTarget.isEmpty()) {
+        refreshAddressBar();
+        return;
+    }
+    sTarget.replace(QLatin1Char('/'), QLatin1Char('\\'));
+
+    // “我的电脑”是虚拟根节点，不是真实目录，不能走 QDir::exists 校验。
+    // 注意 QFileSystemModel::myComputer() 返回的是英文 "My Computer"，所以两种名字都接受。
+    if (isMyComputerName(sTarget)) {
+        bothSetRootIndex(m_modelFiles->index(QString()));
+        curDirChanged(MY_COMPUTER_NAME);
+        return;
+    }
+
+    // 输入的是文件而不是目录：进入其所在目录并选中该文件
+    const QFileInfo targetInfo(sTarget);
+    if (targetInfo.exists() && targetInfo.isFile()) {
+        const QString sParentDir = targetInfo.absolutePath();
+        const QModelIndex parentIndex = m_modelFiles->index(sParentDir);
+        if (!parentIndex.isValid()) {
+            QMessageBox::warning(this, tr("无法打开路径"),
+                                 tr("无法定位到该目录：\n%1").arg(sParentDir));
+            refreshAddressBar();
+            return;
+        }
+        bothSetRootIndex(parentIndex);
+        curDirChanged(QDir::cleanPath(sParentDir));
+        const QModelIndex fileIndex = m_modelFiles->index(targetInfo.absoluteFilePath());
+        if (fileIndex.isValid()) {
+            m_tvFiles->setCurrentIndex(fileIndex);
+            m_lstFiles->setCurrentIndex(fileIndex);
+        }
+        return;
+    }
+
+    const QDir dir(sTarget);
+    if (!dir.exists()) {
+        QMessageBox::warning(this, tr("无法打开路径"),
+                             tr("路径不存在或无法访问：\n%1").arg(sPath));
+        refreshAddressBar();
+        return;
+    }
+
+    const QString sAbs = QDir::cleanPath(dir.absolutePath());
+    const QModelIndex targetIndex = m_modelFiles->index(sAbs);
+    if (!targetIndex.isValid()) {
+        QMessageBox::warning(this, tr("无法打开路径"),
+                             tr("无法定位到该目录：\n%1").arg(sAbs));
+        refreshAddressBar();
+        return;
+    }
+
+    bothSetRootIndex(targetIndex);
+    curDirChanged(sAbs);
+}
+
+void FormPageFiles::onLookInComboReturnPressed()
+{
+    navigateToDir(ui->lookInCombo->currentText());
 }
 
 // P2-16 删除：不再需要拦截 Paint 事件来更新工具按钮。
@@ -357,24 +610,26 @@ void FormPageFiles::onCustomContextMenuRequested(const QPoint &pos)
     actionDetail->setChecked(ui->stackedWidget->currentIndex() == FILEPAGE::DETAIL);
     actionThumbnail->setChecked(ui->stackedWidget->currentIndex() == FILEPAGE::THUMBNAIL);
 
-    // 缩略图尺寸档位
-    QMenu *sizeMenu = menu.addMenu(tr("缩略图大小"));
-    QActionGroup *sizeGroup = new QActionGroup(sizeMenu);
-    sizeGroup->setExclusive(true);
-    const QList<QPair<QString, int>> sizeOptions = {
-        { tr("小"), ICON_SIZE_SMALL },
-        { tr("中"), ICON_SIZE_MEDIUM },
-        { tr("大"), ICON_SIZE_LARGE },
-    };
-    for (const QPair<QString, int> &option : sizeOptions) {
-        QAction *action = sizeMenu->addAction(option.first);
-        action->setCheckable(true);
-        action->setChecked(option.second == m_nIconSize);
-        action->setData(option.second);
-        sizeGroup->addAction(action);
-        connect(action, &QAction::triggered, this, [this, action]() {
-            setThumbnailSize(action->data().toInt());
-        });
+    // 缩略图尺寸档位（只在缩略图视图有意义，详情视图不显示，避免误导）
+    if (ui->stackedWidget->currentIndex() == FILEPAGE::THUMBNAIL) {
+        QMenu *sizeMenu = menu.addMenu(tr("缩略图大小"));
+        QActionGroup *sizeGroup = new QActionGroup(sizeMenu);
+        sizeGroup->setExclusive(true);
+        const QList<QPair<QString, int>> sizeOptions = {
+            { tr("小"), ICON_SIZE_SMALL },
+            { tr("中"), ICON_SIZE_MEDIUM },
+            { tr("大"), ICON_SIZE_LARGE },
+        };
+        for (const QPair<QString, int> &option : sizeOptions) {
+            QAction *action = sizeMenu->addAction(option.first);
+            action->setCheckable(true);
+            action->setChecked(option.second == m_nIconSize);
+            action->setData(option.second);
+            sizeGroup->addAction(action);
+            connect(action, &QAction::triggered, this, [this, action]() {
+                setThumbnailSize(action->data().toInt());
+            });
+        }
     }
 
     // 排序：名称/大小/类型/修改日期 + 升降序
@@ -450,8 +705,8 @@ void FormPageFiles::onBackButtonClicked()
     m_skForward.push_back(m_sCurDir);
     QString sDir = m_skBackward.pop();
     bothSetRootIndex(m_modelFiles->index(sDir));
-    ui->lookInCombo->setEditText(sDir);
     m_sCurDir = sDir;
+    refreshAddressBar();
     updateToolButtons();  // P2-16：导航栈变化后直接更新按钮
 }
 
@@ -460,8 +715,8 @@ void FormPageFiles::onForwardButtonClicked()
     m_skBackward.push_back(m_sCurDir);
     QString sDir = m_skForward.pop();
     bothSetRootIndex(m_modelFiles->index(sDir));
-    ui->lookInCombo->setEditText(sDir);
     m_sCurDir = sDir;
+    refreshAddressBar();
     updateToolButtons();  // P2-16：导航栈变化后直接更新按钮
 }
 
@@ -471,18 +726,22 @@ void FormPageFiles::onToParentButtonClicked()
     QString sFilePath = m_modelFiles->filePath(rootIndex);
     QDir dir(sFilePath);
     QString sNewDirectory;
-    if (dir.isRoot())
+    if (sFilePath.isEmpty() || dir.isRoot())
     {
-        sNewDirectory = m_modelFiles->myComputer().toString();
+        // 已经到盘符根：再上一级是虚拟根“我的电脑”，用空路径表示
+        sNewDirectory = MY_COMPUTER_NAME;
+        bothSetRootIndex(m_modelFiles->index(QString()));
     }
     else
     {
         dir.cdUp();
         sNewDirectory = dir.absolutePath();
+        bothSetRootIndex(m_modelFiles->index(sNewDirectory));
     }
-    bothSetRootIndex(m_modelFiles->index(sNewDirectory));
     m_skBackward.push_back(sFilePath);
     m_sCurDir = sNewDirectory;
+    // 地址栏同步：之前这里漏了更新，导致点上移后地址栏还停留在旧路径。
+    rememberPath(sNewDirectory);
     updateToolButtons();  // P2-16：导航栈变化后直接更新按钮
 }
 
@@ -499,6 +758,10 @@ void FormPageFiles::onBtnRefreshClicked()
     }
     m_tvFiles->viewport()->update();
     m_lstFiles->viewport()->update();
+
+    // 标签可能刚被编辑过：同步刷新【当前目录标签】面板（强制重扫）
+    emit sendDirLabels(m_sCurDir, QSet<QString>());
+    QTimer::singleShot(100, this, [this]() { scanDirLabels(m_sCurDir, true); });
 }
 
 void FormPageFiles::recvGotoFile(QString sFilePath)
