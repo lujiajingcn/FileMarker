@@ -152,13 +152,16 @@ void EditableDelegate::paint(QPainter *painter, const QStyleOptionViewItem &opti
         }
     }
 
-    // 文件名：主文字颜色
+    // 文件名：主文字颜色（裁剪到文字区域，超长时不会画到标签/相邻项上）
     if (!layout.nameRect.isEmpty()) {
+        painter->save();
+        painter->setClipRect(layout.nameRect);
         painter->setFont(option.font);
         painter->setPen(selected ? option.palette.color(QPalette::HighlightedText)
                                  : option.palette.color(QPalette::Text));
         painter->drawText(layout.nameRect, Qt::AlignHCenter | Qt::AlignTop | Qt::TextWordWrap,
                           index.data(Qt::DisplayRole).toString());
+        painter->restore();
     }
 
     // 标签：次要样式（小一号、半透明），与文件名区分层次
@@ -167,10 +170,13 @@ void EditableDelegate::paint(QPainter *painter, const QStyleOptionViewItem &opti
                                    : option.palette.color(QPalette::Text);
         tagColor.setAlpha(selected ? 230 : 150);
 
+        painter->save();
+        painter->setClipRect(layout.customRect);
         painter->setFont(tagFontFor(option.font));
         painter->setPen(tagColor);
         painter->drawText(layout.customRect, Qt::AlignHCenter | Qt::AlignTop | Qt::TextWordWrap,
                           index.sibling(index.row(), 4).data(Qt::DisplayRole).toString());
+        painter->restore();
     }
 
     painter->restore();
@@ -205,21 +211,33 @@ bool EditableDelegate::editorEvent(QEvent *event, QAbstractItemModel *model, con
 
 QWidget *EditableDelegate::createEditor(QWidget *parent, const QStyleOptionViewItem &option, const QModelIndex &index) const
 {
-    if (m_editTarget == TargetCustomData)
+    const EditTarget target = m_editTarget;
+    // 编辑意图只对本次创建编辑器有效，用掉即清空，
+    // 否则之后按 F2 等其它方式编辑时还会沿用上一次“编辑标签”的目标。
+    m_editTarget = TargetNone;
+
+    if (target == TargetCustomData)
     {
         QLineEdit *editor = new QLineEdit(parent);
         editor->setFont(tagFontFor(option.font));
         editor->setPlaceholderText(index.sibling(index.row(), 4).data(Qt::DisplayRole).toString());
+        editor->setProperty("fmEditTarget", int(TargetCustomData));
         return editor;
     }
     // 否则返回默认编辑器（文件名）
     return QStyledItemDelegate::createEditor(parent, option, index);
 }
 
+// 编辑器的编辑目标记录在编辑器自身的属性上，避免成员变量残留影响后续编辑
+static bool isTagEditor(const QWidget *editor)
+{
+    return editor != nullptr && editor->property("fmEditTarget").toInt() == int(TargetCustomData);
+}
+
 // 从第 5 列（标签列）加载数据到编辑器
 void EditableDelegate::setEditorData(QWidget *editor, const QModelIndex &index) const
 {
-    if (m_editTarget == TargetCustomData)
+    if (isTagEditor(editor))
     {
         QLineEdit *lineEdit = qobject_cast<QLineEdit*>(editor);
         if (lineEdit)
@@ -232,7 +250,7 @@ void EditableDelegate::setEditorData(QWidget *editor, const QModelIndex &index) 
 // 把编辑器内容写回第 5 列（标签列），由模型通知 FormFileBrowser 写 ADS
 void EditableDelegate::setModelData(QWidget *editor, QAbstractItemModel *model, const QModelIndex &index) const
 {
-    if (m_editTarget == TargetCustomData)
+    if (isTagEditor(editor))
     {
         QLineEdit *lineEdit = qobject_cast<QLineEdit*>(editor);
         if (lineEdit)
@@ -246,7 +264,7 @@ void EditableDelegate::setModelData(QWidget *editor, QAbstractItemModel *model, 
 void EditableDelegate::updateEditorGeometry(QWidget *editor, const QStyleOptionViewItem &option, const QModelIndex &index) const
 {
     const LayoutRects layout = calculateRects(option, index);
-    if (m_editTarget == TargetCustomData) {
+    if (isTagEditor(editor)) {
         editor->setGeometry(layout.customRect.isEmpty() ? layout.nameRect : layout.customRect);
         return;
     }

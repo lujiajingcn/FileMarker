@@ -9,7 +9,9 @@
 #include <QActionGroup>
 #include <QApplication>
 #include <QClipboard>
+#include <QCursor>
 #include <QDir>
+#include <QHeaderView>
 #include <QProcess>
 
 #include "adsoperation.h"
@@ -90,8 +92,20 @@ void FormPageFiles::initDetailFileList()
     m_tvFiles->setModel(m_modelFiles);
 
     m_tvFiles->setRootIndex(m_modelFiles->index(""));
-    m_tvFiles->setSortingEnabled(true);
-    m_tvFiles->header()->setSortIndicator(0, Qt::AscendingOrder);
+    // 排序统一由 applySort 控制：表头可点击排序，但“标签”列（第 5 列）不参与，
+    // 否则 QFileSystemModel 会按名称兜底排序，与表头指示不一致。
+    m_tvFiles->setSortingEnabled(false);
+    m_tvFiles->header()->setSortIndicatorShown(true);
+    m_tvFiles->header()->setSortIndicator(m_nSortColumn, m_sortOrder);
+    m_modelFiles->sort(m_nSortColumn, m_sortOrder);
+    connect(m_tvFiles->header(), &QHeaderView::sectionClicked, this, [this](int section) {
+        if (section < 0 || section > 3)
+            return;
+        const Qt::SortOrder order = (section == m_nSortColumn && m_sortOrder == Qt::AscendingOrder)
+                                        ? Qt::DescendingOrder
+                                        : Qt::AscendingOrder;
+        applySort(section, order);
+    });
 
     // 设置不能展开节点，以使得QTreeView表现的像QListView一样。
     m_tvFiles->setItemsExpandable(false);
@@ -242,7 +256,17 @@ void FormPageFiles::onCustomContextMenuRequested(const QPoint &pos)
 {
     Q_UNUSED(pos);
 
-    const QStringList files = getSelFilePath();
+    // 右键位置下的项：若它未被选中，则把菜单操作对象指向它
+    const QModelIndex clickedIndex = indexAtCursor();
+    QStringList files = getSelFilePath();
+    if (clickedIndex.isValid()) {
+        const QString sClickedPath = m_modelFiles->filePath(clickedIndex);
+        if (!files.contains(sClickedPath)) {
+            files.clear();
+            files << sClickedPath;
+        }
+    }
+
     const bool hasSelection = !files.isEmpty();
     const bool singleSelection = (files.count() == 1);
     const QString firstFile = hasSelection ? files.first() : QString();
@@ -344,8 +368,8 @@ void FormPageFiles::onCustomContextMenuRequested(const QPoint &pos)
     connect(actionCopyPath, &QAction::triggered, this, [files]() {
         QApplication::clipboard()->setText(files.join("\n"));
     });
-    connect(actionEditTags, &QAction::triggered, this, [this]() {
-        onEditTag(currentIndexInActiveView());
+    connect(actionEditTags, &QAction::triggered, this, [this, clickedIndex]() {
+        onEditTag(clickedIndex.isValid() ? clickedIndex : currentIndexInActiveView());
     });
     connect(actionDetail, &QAction::triggered, this, &FormPageFiles::onTbDetailClicked);
     connect(actionThumbnail, &QAction::triggered, this, &FormPageFiles::onTbThumbnailClicked);
@@ -447,6 +471,12 @@ void FormPageFiles::onTbThumbnailClicked()
 
 void FormPageFiles::onDoubleClicked(const QModelIndex &index)
 {
+    // 第 5 列（标签列）的双击语义是“就地编辑标签”，不能同时打开文件/进入目录。
+    // 说明：0aead52 之前该列的 FilePathRole 会误返回标签字符串，openUrl 打开失败，
+    // 看起来像“没有打开文件”；修正 FilePathRole 后必须在这里显式排除标签列。
+    if (index.column() == 4)
+        return;
+
     QFileInfo fileInfo = m_modelFiles->fileInfo(index);
     QString path = index.data(QFileSystemModel::FilePathRole).toString();
     if(fileInfo.isDir())
@@ -563,4 +593,17 @@ QModelIndex FormPageFiles::currentIndexInActiveView() const
     if (m_lstFiles != nullptr && m_lstFiles->isVisible())
         return m_lstFiles->currentIndex();
     return m_tvFiles->currentIndex();
+}
+
+QModelIndex FormPageFiles::indexAtCursor() const
+{
+    const QPoint globalPos = QCursor::pos();
+
+    if (m_lstFiles != nullptr && m_lstFiles->isVisible())
+        return m_lstFiles->indexAt(m_lstFiles->viewport()->mapFromGlobal(globalPos));
+
+    if (m_tvFiles != nullptr)
+        return m_tvFiles->indexAt(m_tvFiles->viewport()->mapFromGlobal(globalPos));
+
+    return QModelIndex();
 }

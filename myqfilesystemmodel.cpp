@@ -77,13 +77,21 @@ QVariant MyQFileSystemModel::data(const QModelIndex & index, int role) const
 
     if (index.column() == 4)
     {
+        // 只有显示/编辑/提示角色返回标签文本。
+        // 特别注意不能对 Qt::CheckStateRole 返回有效值：item delegate 会据此认为
+        // 该项可勾选，在标签列画出一个没有实际作用的复选框。
+        if (role != Qt::DisplayRole && role != Qt::EditRole && role != Qt::ToolTipRole)
+            return QVariant();
+
         if (sName.isEmpty() || sFilePath.isEmpty() || sFilePath.endsWith(":/"))
             return QVariant();
 
         const QStringList tags = tagListForFile(sFilePath);
         if (tags.isEmpty())
             return QVariant();
-        return QVariant(tags.join(","));
+
+        return QVariant(tags.join(role == Qt::ToolTipRole ? QStringLiteral(", ")
+                                                          : QStringLiteral(",")));
     }
 
     return QFileSystemModel::data(index, role);

@@ -126,6 +126,9 @@ private:
     // 当前可见视图中的当前项（缩略图模式取 listView，否则取 tvFiles）
     QModelIndex currentIndexInActiveView() const;
 
+    // 鼠标位置下的项（右键菜单用，避免误操作到当前项之外的文件）
+    QModelIndex indexAtCursor() const;
+
 private:
 
     QTreeView               *m_tvFiles;             // 详情显示文件列表，由于QListView不能显示表头，故用QTreeView实现列表功能。
