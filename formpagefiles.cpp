@@ -13,11 +13,56 @@
 #include <QDir>
 #include <QHeaderView>
 #include <QProcess>
+#include <QMessageBox>
+#include <QPushButton>
+#include <QLineEdit>
+#include <QStyledItemDelegate>
 
 #include "adsoperation.h"
 #include "thumbnailiconprovider.h"
 #include "editablefiledelegate.h"
 #include "utility.h"
+
+namespace {
+
+// 详情视图第 5 列（标签列）专用代理：
+// 默认代理的编辑器在标签列上只按文字宽度显示，输入长标签时几乎不可用；
+// 这里让编辑器铺满整个单元格，其余行为与默认代理一致（写回模型第 5 列）。
+class TagColumnDelegate : public QStyledItemDelegate
+{
+public:
+    explicit TagColumnDelegate(QObject *parent = nullptr) : QStyledItemDelegate(parent) {}
+
+    QWidget *createEditor(QWidget *parent, const QStyleOptionViewItem &option, const QModelIndex &index) const override
+    {
+        Q_UNUSED(option);
+        QLineEdit *editor = new QLineEdit(parent);
+        editor->setPlaceholderText(index.data(Qt::DisplayRole).toString());
+        return editor;
+    }
+
+    void setEditorData(QWidget *editor, const QModelIndex &index) const override
+    {
+        QLineEdit *lineEdit = qobject_cast<QLineEdit *>(editor);
+        if (lineEdit)
+            lineEdit->setText(index.data(Qt::EditRole).toString());
+    }
+
+    void setModelData(QWidget *editor, QAbstractItemModel *model, const QModelIndex &index) const override
+    {
+        QLineEdit *lineEdit = qobject_cast<QLineEdit *>(editor);
+        if (lineEdit)
+            model->setData(index, lineEdit->text(), Qt::EditRole);
+    }
+
+    void updateEditorGeometry(QWidget *editor, const QStyleOptionViewItem &option, const QModelIndex &index) const override
+    {
+        Q_UNUSED(index);
+        editor->setGeometry(option.rect.adjusted(1, 1, -1, -1));
+    }
+};
+
+} // namespace
 
 FormPageFiles::FormPageFiles(QWidget *parent) :
     QWidget(parent),
@@ -77,6 +122,21 @@ QString FormPageFiles::getCurDir()
 void FormPageFiles::onDeleteLabels()
 {
     QStringList qLSelFilePaths = getSelFilePath();
+    if (qLSelFilePaths.isEmpty())
+        return;
+
+    // 删除标签是不可撤销的破坏性操作：先让用户确认，避免误点工具栏就清空全部标签。
+    QMessageBox box(this);
+    box.setWindowTitle(tr("删除标签"));
+    box.setIcon(QMessageBox::Warning);
+    box.setText(tr("将删除选中 %1 个文件的全部标签，且无法撤销。\n是否继续？").arg(qLSelFilePaths.size()));
+    QPushButton *pBtnDelete = box.addButton(tr("删除"), QMessageBox::DestructiveRole);
+    QPushButton *pBtnCancel = box.addButton(tr("取消"), QMessageBox::RejectRole);
+    box.setDefaultButton(pBtnCancel);
+    box.exec();
+    if (box.clickedButton() != pBtnDelete)
+        return;
+
     foreach(QString sSelFilePath, qLSelFilePaths)
     {
         ADSOperation::deleteADSFiles(sSelFilePath);
@@ -90,6 +150,8 @@ void FormPageFiles::initDetailFileList()
      // 设置可以选中多行
     m_tvFiles->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_tvFiles->setModel(m_modelFiles);
+    // 标签列单独装代理，保证行内编辑器铺满单元格（见 TagColumnDelegate）。
+    m_tvFiles->setItemDelegateForColumn(4, new TagColumnDelegate(m_tvFiles));
 
     m_tvFiles->setRootIndex(m_modelFiles->index(""));
     // 排序统一由 applySort 控制：表头可点击排序，但“标签”列（第 5 列）不参与，
@@ -526,7 +588,14 @@ void FormPageFiles::onEditTag(const QModelIndex &index)
 
     // 先清空该文件全部标签，再按用户输入的顺序重新写入（P2-2）。
     // 支持英文逗号(,)、中文逗号(，)、顿号(、)、英文分号(;)、中文分号(；) 分隔。
-    const QStringList qLLabels = Utility::splitLabels(sNewTags);
+    // 与行内编辑保持一致：先按 ADS 规则净化标签名，再写盘并转发给标签库，
+    // 避免标签库里出现 "a:b?c" 而磁盘上是 "a_b_c" 的不一致。
+    QStringList qLLabels;
+    foreach (const QString &sLabel, Utility::splitLabels(sNewTags)) {
+        const QString sSanitized = ADSOperation::sanitizeTagName(sLabel);
+        if (!sSanitized.isEmpty() && !qLLabels.contains(sSanitized))
+            qLLabels << sSanitized;
+    }
     ADSOperation::replaceTags(sFilePath, qLLabels);
 
     emit sendLabels(sFilePath, qLLabels.join(","));

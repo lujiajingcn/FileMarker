@@ -340,7 +340,14 @@ void FormFileBrowser::onRecvLabels(QString sFilePath, QString sLabels)
 
     // 拆分标签：支持英文逗号、中文逗号、顿号、英文分号、中文分号；空串表示"该文件没有标签"，
     // 不能当成一个标签传下去（否则会被写成一个无意义的流）。
-    const QStringList qLLabels = Utility::splitLabels(sLabels);
+    // 随后按 ADS 的规则净化标签名，并再做一次去重：净化可能把不同输入合并成同一个名字
+    // （例如 a:b 和 a_b 都会变成 a_b），这里必须保证库里的名字和磁盘上的流名完全一致。
+    QStringList qLLabels;
+    foreach (const QString &sLabel, Utility::splitLabels(sLabels)) {
+        const QString sSanitized = ADSOperation::sanitizeTagName(sLabel);
+        if (!sSanitized.isEmpty() && !qLLabels.contains(sSanitized))
+            qLLabels << sSanitized;
+    }
 
     // replaceTags 会按 qLLabels 的先后顺序写入，并把顺序号存进流内容，
     // 保证下次显示时仍是用户录入的顺序（NTFS 枚举流本身是按流名排序的）。

@@ -31,6 +31,64 @@ QFont tagFontFor(const QFont &base)
     return font;
 }
 
+// 按“标签”为最小单位换行（绝不在一个标签中间断开），最多 maxLines 行；
+// 放不下时在最后一行末尾加省略号。这样缩略图里的 "十二" 不会被拆成 "十" + "二"。
+QStringList tagLinesFor(const QFontMetrics &fm, const QString &tagText, int width, int maxLines)
+{
+    QStringList lines;
+    if (tagText.isEmpty() || width <= 0 || maxLines <= 0)
+        return lines;
+
+    const QStringList tags = tagText.split(QLatin1Char(','), QString::SkipEmptyParts);
+    QString current;
+    bool truncated = false;
+
+    for (int i = 0; i < tags.size(); ++i) {
+        const QString &sTag = tags.at(i);
+        const QString sNext = current.isEmpty() ? sTag : current + QLatin1Char(',') + sTag;
+
+        if (fm.horizontalAdvance(sNext) <= width) {
+            current = sNext;
+        } else if (current.isEmpty()) {
+            // 单个标签本身就超宽：独占一行并省略
+            lines << fm.elidedText(sTag, Qt::ElideRight, width);
+            if (lines.size() >= maxLines) {
+                truncated = (i + 1 < tags.size());
+                break;
+            }
+        } else {
+            lines << current;
+            current.clear();
+            if (lines.size() >= maxLines) {
+                truncated = true;
+                break;
+            }
+            if (fm.horizontalAdvance(sTag) <= width) {
+                current = sTag;
+            } else {
+                lines << fm.elidedText(sTag, Qt::ElideRight, width);
+                if (lines.size() >= maxLines) {
+                    truncated = (i + 1 < tags.size());
+                    break;
+                }
+            }
+        }
+    }
+
+    if (!current.isEmpty()) {
+        if (lines.size() < maxLines)
+            lines << current;
+        else
+            truncated = true;
+    }
+
+    // 还有没显示完的标签：在最后一行末尾补省略号
+    if (truncated && !lines.isEmpty())
+        lines.last() = fm.elidedText(lines.last() + QChar(0x2026), Qt::ElideRight, width);
+
+    return lines;
+}
+
 } // namespace
 
 EditableDelegate::EditableDelegate(QObject *parent)
@@ -69,7 +127,8 @@ LayoutRects EditableDelegate::calculateRects(const QStyleOptionViewItem &option,
     const QString tags = index.sibling(index.row(), 4).data(Qt::DisplayRole).toString();
 
     const int nameHeight = textHeightFor(nameFm, name, width, 2);
-    const int tagHeight = textHeightFor(tagFm, tags, width, 2);
+    const QStringList tagLines = tagLinesFor(tagFm, tags, width, 2);
+    const int tagHeight = tagLines.size() * tagFm.lineSpacing();
 
     const int totalHeight = m_iconSize
                             + (nameHeight > 0 ? ITEM_GAP + nameHeight : 0)
@@ -87,6 +146,17 @@ LayoutRects EditableDelegate::calculateRects(const QStyleOptionViewItem &option,
     }
     if (tagHeight > 0)
         layout.customRect = QRect(option.rect.left() + ITEM_MARGIN, y, width, tagHeight);
+
+    // 标签编辑区域：有标签时就是标签文字区；没有标签时放在文件名下方的一行，
+    // 这样还没打标签的文件在缩略图里也能双击这个位置进入编辑。
+    if (!layout.customRect.isEmpty()) {
+        layout.tagEditRect = layout.customRect;
+    } else {
+        const int editTop = layout.nameRect.isEmpty()
+                                ? layout.iconRect.bottom() + ITEM_GAP
+                                : layout.nameRect.bottom() + ITEM_GAP;
+        layout.tagEditRect = QRect(option.rect.left() + ITEM_MARGIN, editTop, width, tagFm.lineSpacing());
+    }
 
     return layout;
 }
@@ -164,18 +234,30 @@ void EditableDelegate::paint(QPainter *painter, const QStyleOptionViewItem &opti
         painter->restore();
     }
 
-    // 标签：次要样式（小一号、半透明），与文件名区分层次
+    // 标签：次要样式（小一号、半透明），与文件名区分层次。
+    // 按标签边界换行（不会把一个标签拆到两行），最多两行，超出部分省略。
     if (!layout.customRect.isEmpty()) {
         QColor tagColor = selected ? option.palette.color(QPalette::HighlightedText)
                                    : option.palette.color(QPalette::Text);
         tagColor.setAlpha(selected ? 230 : 150);
 
+        const QFont tagFont = tagFontFor(option.font);
+        const QFontMetrics tagFm(tagFont);
+        const QStringList tagLines = tagLinesFor(tagFm,
+                                                 index.sibling(index.row(), 4).data(Qt::DisplayRole).toString(),
+                                                 layout.customRect.width(), 2);
+
         painter->save();
         painter->setClipRect(layout.customRect);
-        painter->setFont(tagFontFor(option.font));
+        painter->setFont(tagFont);
         painter->setPen(tagColor);
-        painter->drawText(layout.customRect, Qt::AlignHCenter | Qt::AlignTop | Qt::TextWordWrap,
-                          index.sibling(index.row(), 4).data(Qt::DisplayRole).toString());
+        for (int i = 0; i < tagLines.size(); ++i) {
+            const QRect lineRect(layout.customRect.left(),
+                                 layout.customRect.top() + i * tagFm.lineSpacing(),
+                                 layout.customRect.width(),
+                                 tagFm.lineSpacing());
+            painter->drawText(lineRect, Qt::AlignHCenter | Qt::AlignTop, tagLines.at(i));
+        }
         painter->restore();
     }
 
@@ -190,8 +272,8 @@ bool EditableDelegate::editorEvent(QEvent *event, QAbstractItemModel *model, con
         const LayoutRects layout = calculateRects(option, index);
         const QPoint mousePos = me->pos();
 
-        // 双击标签区域：切换为“就地编辑标签”，交给视图打开第 5 列的编辑器
-        if (!layout.customRect.isEmpty() && layout.customRect.contains(mousePos)) {
+        // 双击标签区域（没标签时是文件名下方那一行）：切换为“就地编辑标签”，交给视图打开第 5 列的编辑器
+        if (layout.tagEditRect.contains(mousePos)) {
             m_editTarget = TargetCustomData;
             return false;
         }
@@ -260,12 +342,19 @@ void EditableDelegate::setModelData(QWidget *editor, QAbstractItemModel *model, 
     QStyledItemDelegate::setModelData(editor, model, index);
 }
 
-// 让编辑器正好覆盖在对应的文字上
+// 让编辑器铺满标签列宽度（标签文字区可能只有一行高，但输入框需要足够宽）
 void EditableDelegate::updateEditorGeometry(QWidget *editor, const QStyleOptionViewItem &option, const QModelIndex &index) const
 {
     const LayoutRects layout = calculateRects(option, index);
     if (isTagEditor(editor)) {
-        editor->setGeometry(layout.customRect.isEmpty() ? layout.nameRect : layout.customRect);
+        const int width = qMax(1, option.rect.width() - 2 * ITEM_MARGIN);
+        QRect editorRect(option.rect.left() + ITEM_MARGIN,
+                         layout.tagEditRect.top(),
+                         width,
+                         qMax(layout.tagEditRect.height(), editor->sizeHint().height()));
+        if (editorRect.bottom() > option.rect.bottom())
+            editorRect.moveTop(option.rect.bottom() - editorRect.height() + 1);
+        editor->setGeometry(editorRect);
         return;
     }
     editor->setGeometry(layout.nameRect);

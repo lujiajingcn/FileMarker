@@ -25,7 +25,8 @@ enum EditTarget { TargetNone, TargetFileName, TargetCustomData };
 struct LayoutRects {
     QRect iconRect;
     QRect nameRect;
-    QRect customRect;
+    QRect customRect;    // 标签文字区域（没有标签时为空）
+    QRect tagEditRect;   // 标签编辑区域：没有标签时是文件名下方的一行，保证仍可双击编辑
 };
 
 class EditableDelegate : public QStyledItemDelegate {

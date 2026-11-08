@@ -34,7 +34,7 @@ static std::wstring win32APIPath(const QString &filePath)
 
 // NTFS 流名不允许包含 : / \ * ? " < > |，且不能为空。
 // 标签作为流名使用时需做净化，否则 QFile::open 会静默失败导致标签“看似加上实则没写”。
-static QString sanitizeStreamName(const QString &name)
+QString ADSOperation::sanitizeTagName(const QString &name)
 {
     QString s = name;
 
@@ -92,7 +92,7 @@ void ADSOperation::writeADSFile(const QString &filePath, const QString &streamNa
     if(isDeleteOldAds)
         deleteADSFiles(filePath);
 
-    const QString sStreamName = sanitizeStreamName(streamName);
+    const QString sStreamName = sanitizeTagName(streamName);
     if (sStreamName.isEmpty()) {
         // 空标签（含只有空格、或净化后为空）不写流：清空标签就应该是"没有标签"。
         qWarning() << "忽略空标签，未写入 ADS:" << filePath;

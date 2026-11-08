@@ -17,6 +17,15 @@ public :
     static bool isHostFile(const QString &sFilePath, const QStringList &tags, labelLogic logic);
 
     /**
+     ** 把用户输入的标签名净化为合法的 NTFS 流名：
+     ** 替换 / \ : * ? " < > | 及五个分隔符为下划线，控制字符替换为下划线，
+     ** 去掉未配对的代理项、首尾空白，并截断到 255 个字符。
+     ** 界面层在把标签写入【标签库】时也必须调用它，否则库里会出现
+     ** "a:b?c" 而磁盘上是 "a_b_c" 的不一致（标签名对不上）。
+     **/
+    static QString sanitizeTagName(const QString &name);
+
+    /**
      ** 按用户录入的顺序列出标签。
      ** NTFS 枚举流时按流名排序，无法反映录入顺序，因此写入时把顺序号存进流内容；
      ** 本函数读取顺序号后排序，没有顺序号的历史标签排在后面、内部按流名排序。
