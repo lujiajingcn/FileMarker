@@ -901,7 +901,8 @@ void FormPageFiles::setCommandActions(const QList<QAction *> &actions)
         m_commandBar->setMovable(false);
         m_commandBar->setFloatable(false);
         m_commandBar->setIconSize(QSize(18, 18));
-        m_commandBar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+        // 只显示图标：文字全部收进 tooltip（悬停提示），命令条更紧凑
+        m_commandBar->setToolButtonStyle(Qt::ToolButtonIconOnly);
         // 放在地址栏那一行上方：ui->verticalLayout 的第 0 项
         ui->verticalLayout->insertWidget(0, m_commandBar);
     }

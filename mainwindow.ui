@@ -182,6 +182,9 @@
    <property name="text">
     <string>设置查找条件</string>
    </property>
+   <property name="toolTip">
+    <string>设置查找条件：多个标签之间用「与」还是「或」，以及从缓存数据库还是直接从磁盘查找</string>
+   </property>
   </action>
   <action name="actionAddLabelbyAI">
    <property name="icon">
@@ -190,6 +193,9 @@
    </property>
    <property name="text">
     <string>AI自动生成标签</string>
+   </property>
+   <property name="toolTip">
+    <string>调用 AI 分析选中的文件并自动生成标签（需要 python 与程序目录下的 extract_and_tag.py）</string>
    </property>
   </action>
  </widget>
