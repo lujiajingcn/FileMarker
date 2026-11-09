@@ -753,13 +753,15 @@ void FormPageFiles::onCustomContextMenuRequested(const QPoint &pos)
     const bool hasSelection = !targetFile.isEmpty();
     const bool singleSelection = hasSelection;
     const QString firstFile = targetFile;
+    // 选中的是文件夹时："打开"要在本程序里进去，"打开方式"无意义
+    const bool bTargetIsDir = hasSelection && QFileInfo(targetFile).isDir();
 
     QMenu menu(this);
 
     QAction *actionOpen = menu.addAction(tr("打开"));
     actionOpen->setEnabled(hasSelection);
     QAction *actionOpenWith = menu.addAction(tr("打开方式…"));
-    actionOpenWith->setEnabled(singleSelection);
+    actionOpenWith->setEnabled(singleSelection && !bTargetIsDir);
     QAction *actionReveal = menu.addAction(tr("在资源管理器中显示"));
     actionReveal->setEnabled(hasSelection);
     QAction *actionCopyPath = menu.addAction(tr("复制路径"));
@@ -839,9 +841,15 @@ void FormPageFiles::onCustomContextMenuRequested(const QPoint &pos)
     menu.addSeparator();
     QAction *actionRefresh = menu.addAction(tr("刷新"));
 
-    connect(actionOpen, &QAction::triggered, this, [targetFile]() {
-        if (!targetFile.isEmpty())
-            QDesktopServices::openUrl(QUrl::fromLocalFile(targetFile));
+    connect(actionOpen, &QAction::triggered, this, [this, targetFile, bTargetIsDir]() {
+        if (targetFile.isEmpty())
+            return;
+        // 文件夹：在当前面板里进入该目录（和双击一致），不再弹系统资源管理器
+        if (bTargetIsDir) {
+            navigateToDir(targetFile);
+            return;
+        }
+        QDesktopServices::openUrl(QUrl::fromLocalFile(targetFile));
     });
     connect(actionOpenWith, &QAction::triggered, this, [firstFile]() {
         QProcess::startDetached(QStringLiteral("rundll32.exe"),
