@@ -158,6 +158,9 @@
              <property name="enabled">
               <bool>true</bool>
              </property>
+             <property name="toolTip">
+              <string>刷新</string>
+             </property>
              <property name="text">
               <string>...</string>
              </property>
