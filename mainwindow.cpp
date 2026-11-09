@@ -136,14 +136,14 @@ MainWindow::MainWindow(QWidget *parent) :
             ui->dwcLabels->removeLabels(qLUnused);
     });
 
-    // 【C16】撤销上一次标签操作：标签写盘不可撤销，至少要能给"刚才那一步"兜底
+    // 撤销上一次标签操作：标签写盘不可撤销，至少要能给"刚才那一步"兜底
     QAction *actionUndoTag = ui->menuFileManage->addAction(tr("撤销上一次标签操作"));
     actionUndoTag->setShortcut(QKeySequence::Undo);
     actionUndoTag->setEnabled(false);
     connect(actionUndoTag, &QAction::triggered, ui->wFileBrowser, &FormFileBrowser::undoLastTagOperation);
     connect(ui->wFileBrowser, &FormFileBrowser::sendUndoStateChanged, actionUndoTag, &QAction::setEnabled);
 
-    // 【C15】AI 打标依赖外部 Python 脚本与依赖库，给个自检入口，免得只能看到运行失败
+    // AI 打标依赖外部 Python 脚本与依赖库，给个自检入口，免得只能看到运行失败
     QAction *actionCheckAI = ui->menuHelp->addAction(tr("检查 AI 打标环境…"));
     connect(actionCheckAI, &QAction::triggered, this, &MainWindow::checkAIEnvironment);
 
@@ -153,13 +153,13 @@ MainWindow::MainWindow(QWidget *parent) :
     // 【标签库】中选中的标签，同步给文件浏览页（用于添加标签/查找）
     connect(ui->dwcLabels, &FormLabels::sendSelLabels, ui->wFileBrowser, &FormFileBrowser::onRecvSelLabels);
 
-    // A4: search treats a selected parent label as "this label + all of its children".
+    // search treats a selected parent label as "this label + all of its children".
     // Must be connected AFTER the line above (which resets groups to singletons).
     connect(ui->dwcLabels, &FormLabels::sendSelLabels, this, [this](QStringList) {
         ui->wFileBrowser->onRecvLabelGroups(ui->dwcLabels->getSelLabelGroups());
     });
 
-    // A2: give the label library the cache DB so rename/delete can report
+    // give the label library the cache DB so rename/delete can report
     // how many files use the label and optionally sync the change to files.
     ui->dwcLabels->setSqlOperation(ui->wFileBrowser->sqlOperation());
 
@@ -250,7 +250,7 @@ void MainWindow::onActionAuthorTriggered()
     dlgAuthor.exec();
 }
 
-/** 【C15】AI 打标环境自检：脚本 / Python / 依赖库 三项，逐项给结果。 */
+/** AI 打标环境自检：脚本 / Python / 依赖库 三项，逐项给结果。 */
 void MainWindow::checkAIEnvironment()
 {
     const QString sScript = g_sAppDir + "/extract_and_tag.py";

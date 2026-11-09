@@ -28,7 +28,7 @@ void ThreadSearch::run()
     };
 
     QStringList hostFiles;
-    TraverseDirectory::resetStop();   // 每个搜索任务开头复位一次停止标志（多目录搜索也能正确响应停止，P1-3）
+    TraverseDirectory::resetStop();   // 每个搜索任务开头复位一次停止标志（多目录搜索也能正确响应停止）
     foreach(QString selDir, m_selDirs)
         TraverseDirectory::traverseDirectory(selDir, func, true);
 
@@ -45,7 +45,7 @@ bool ThreadSearch::searchFile(const QFileInfo& fileInfo)
         m_filePaths << sFilePath;
 
     emit sendProcessInfo(sFilePath);
-//    QThread::msleep(1);//睡眠1ms可以让界面上的进度输出顺畅，但是，整个操作耗时太多
+// QThread::msleep(1);//睡眠1ms可以让界面上的进度输出顺畅，但是，整个操作耗时太多
 
     return true;
 }

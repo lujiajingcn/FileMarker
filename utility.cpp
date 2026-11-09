@@ -211,7 +211,7 @@ QStringList Utility::splitLabelsPreservingExisting(const QString &sLabels,
     return labels;
 }
 
-// P2-21：参数改为按值传递。原签名是非 const 引用，函数内部调用 chop() 会修改调用者的字符串，
+// 参数改为按值传递。原签名是非 const 引用，函数内部调用 chop() 会修改调用者的字符串，
 // 调用者可能不期望参数被修改。按值传递后函数内部可以自由修改副本。
 bool Utility::isADSNameValid(QString sADSName)
 {

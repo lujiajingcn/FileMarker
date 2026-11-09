@@ -278,7 +278,7 @@ QString ADSOperation::sanitizeTagName(const QString &name)
     }
 
     // 同时禁止逗号、顿号和分号：标签以分隔符 join/split 在缓存入库、缓存查找、AI 上报、
-    // 标签导入以及用户手工编辑中传递（见 P1-1）。五个分隔符（, ， 、 ; ；）都算边界，
+    // 标签导入以及用户手工编辑中传递。五个分隔符（, ， 、 ; ；）都算边界，
     // 标签名里若含它们会被错误拆成多个幻影标签，故统一替换为下划线。
     static const QRegularExpression re("[/\\\\:*?\"<>|,，、;；]");
     s.replace(re, "_");
@@ -686,7 +686,7 @@ bool ADSOperation::isHostFile(const QString &sFilePath, const QList<QSet<QString
     for (const QString &sName : adsNames)
         setAdsNames.insert(sName);
 
-    // A4：每个组 = 一个选中标签 + 它的全部子标签，组内 OR、组间按 AND/OR 组合。
+    // 每个组 = 一个选中标签 + 它的全部子标签，组内 OR、组间按 AND/OR 组合。
     if (logic == labelLogic::OR) {
         for (const QSet<QString> &setGroup : qLLabelGroups) {
             for (QSet<QString>::const_iterator cItr = setGroup.cbegin(); cItr != setGroup.cend(); ++cItr) {

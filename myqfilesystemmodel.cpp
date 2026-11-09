@@ -32,7 +32,7 @@ QVariant MyQFileSystemModel::headerData(int section, Qt::Orientation orientation
         return Qt::AlignLeft;
     }
 
-    // 【B7/C10】表头提示：标签列不能排序、但双击可编辑，提示出来免得用户以为坏了
+    // 表头提示：标签列不能排序、但双击可编辑，提示出来免得用户以为坏了
     if (orientation == Qt::Horizontal && role == Qt::ToolTipRole) {
         if (section == 4)
             return tr("双击标签列可编辑该文件的标签；标签列不支持排序");
@@ -98,7 +98,7 @@ QVariant MyQFileSystemModel::data(const QModelIndex & index, int role) const
         const QStringList tags = tagListForFile(sFilePath);
         if (tags.isEmpty())
             return role == Qt::DisplayRole && QFileSystemModel::isDir(nameIndex)
-                       ? QVariant(QStringLiteral("—"))   // 【D19】目录没有标签，给个占位符而不是空格子
+                       ? QVariant(QStringLiteral("—"))   // 目录没有标签，给个占位符而不是空格子
                        : QVariant();
 
         return QVariant(tags.join(role == Qt::ToolTipRole ? QStringLiteral(", ")
@@ -169,10 +169,10 @@ Qt::ItemFlags MyQFileSystemModel::flags(const QModelIndex &index) const
     if (!index.isValid())
         return f;
 
-    // P1-8 / P2-20：只有"文件"的标签列才可编辑。
+    // 只有"文件"的标签列才可编辑。
     // - 目录没有标签，放开编辑只会让用户输完再弹一次写盘失败；
     // - 不可用的项（权限/盘符失效）也不该给出编辑入口，否则委托记录了编辑意图、
-    //   视图却不会创建编辑器，正是编辑意图残留的成因之一。
+    // 视图却不会创建编辑器，正是编辑意图残留的成因之一。
     if (index.column() == 4 && !isDir(index) && (f & Qt::ItemIsEnabled))
         f |= Qt::ItemIsEditable;
 

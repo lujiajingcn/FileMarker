@@ -340,13 +340,13 @@ bool EditableDelegate::editorEvent(QEvent *event, QAbstractItemModel *model, con
         const LayoutRects layout = calculateRects(option, index);
         const QPoint mousePos = me->pos();
 
-        // 【A3】双击标签区域（没标签时是文件名下方那一行）= 打开"增删式"标签对话框，
+        // 双击标签区域（没标签时是文件名下方那一行）= 打开"增删式"标签对话框，
         // 不再走"就地编辑第 5 列文本"的老路（那条路会把全部标签当成一行文本替换掉）。
         if (layout.tagEditRect.contains(mousePos)) {
             emit sendEditTag(index);
             return true;
         }
-        // 【B5】双击文件名与双击其它区域语义统一为"打开/进入"，
+        // 双击文件名与双击其它区域语义统一为"打开/进入"，
         // 不再"双击文件名 = 就地重命名"（资源管理器里没有这个行为，容易误改名）。
         emit sendDblClick(index);
         return true;
@@ -355,7 +355,7 @@ bool EditableDelegate::editorEvent(QEvent *event, QAbstractItemModel *model, con
     return QStyledItemDelegate::editorEvent(event, model, option, index);
 }
 
-// 【A3/B5】缩略图视图已把 editTriggers 设为 NoEditTriggers：
+// 缩略图视图已把 editTriggers 设为 NoEditTriggers：
 // 双击=打开、双击标签区=弹标签对话框、重命名走右键菜单。
 // 因此"编辑意图"那套成员状态不再需要，这里只保留默认实现。
 QWidget *EditableDelegate::createEditor(QWidget *parent, const QStyleOptionViewItem &option, const QModelIndex &index) const

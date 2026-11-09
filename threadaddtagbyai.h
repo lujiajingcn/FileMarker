@@ -17,7 +17,7 @@ public:
     void stopThread();
 
 signals:
-    // 【D5 修复】结束信号带上统计与首个错误，UI 才能提示"AI 根本没跑起来"，
+    // 结束信号带上统计与首个错误，UI 才能提示"AI 根本没跑起来"，
     // 而不是像以前那样静默回到文件列表。
     void sendFinish(int nSucceeded, int nFailed, QString sFirstError);
     void sendProcessInfo(QString sProcessedFilePath);

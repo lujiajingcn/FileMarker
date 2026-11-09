@@ -38,7 +38,7 @@ FormPageFilterdFiles::FormPageFilterdFiles(QWidget *parent) :
     m_tvFilteredFiles->header()->resizeSection(2, 180);
     m_tvFilteredFiles->header()->setMinimumSectionSize(60);
 
-    // 【B8】两个"定位文件"拆成两个名字互相区分的行为：
+    // 两个"定位文件"拆成两个名字互相区分的行为：
     //   - 在资源管理器中显示：打开系统资源管理器并选中文件（与文件列表右键一致）
     //   - 在文件列表中打开所在目录：把程序自己的文件列表切到该目录
     m_gotoFilePath = new QAction(tr("在文件列表中打开所在目录"), this);
@@ -105,7 +105,7 @@ void FormPageFilterdFiles::onShowFilteredFiles(QStringList qLFilteredFiles)
     QString sCountText = tr("搜索结果 %1 项").arg(qLFilteredFiles.size());
     if (!m_sSearchCondition.isEmpty())
         sCountText += QStringLiteral("（") + m_sSearchCondition + QStringLiteral("）");
-    // 【C12】把结果来源写出来：缓存可能过期，用户至少要能看到这次是从哪查的
+    // 把结果来源写出来：缓存可能过期，用户至少要能看到这次是从哪查的
     if (!m_sSearchSource.isEmpty())
         sCountText += QStringLiteral("  ") + m_sSearchSource;
     ui->lblResultCount->setText(sCountText);

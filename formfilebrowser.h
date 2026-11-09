@@ -54,14 +54,14 @@ public:
 
     QStringList getSelDirs();
 
-    /** A2：【标签库】的改名/删除需要查询"哪些文件在用这个标签"，由主窗口把它传给 FormLabels */
+    /** 【标签库】的改名/删除需要查询"哪些文件在用这个标签"，由主窗口把它传给 FormLabels */
     SqliteOperation *sqlOperation() const { return m_sqlOperation; }
 
     // 启动时恢复上次访问的目录
     void restoreLastDir();
 
 signals:
-    // 【C16】能否撤销的状态变化（供菜单项启用/禁用）
+    // 能否撤销的状态变化（供菜单项启用/禁用）
     void sendUndoStateChanged(bool bCanUndo);
     void sendStop();
     void sendShowFilteredFiles(QStringList qLFilteredFiles);
@@ -87,10 +87,10 @@ public slots:
 
     void onRecvSelLabels(QStringList qLSelLabels);
 
-    /** A4：来自【标签库】的分组（每组 = 选中标签 + 它的全部子标签），搜索时组内 OR、组间按设置的逻辑 */
+    /** 来自【标签库】的分组（每组 = 选中标签 + 它的全部子标签），搜索时组内 OR、组间按设置的逻辑 */
     void onRecvLabelGroups(const QList<QSet<QString>> &qLLabelGroups);
 
-    // 【D5 修复】结束信号带上统计与首个错误，便于界面提示失败原因
+    // 结束信号带上统计与首个错误，便于界面提示失败原因
     void onRecvAddLabelByAIFinish(int nSucceeded, int nFailed, QString sFirstError);
 
     void onRecvLabelsGeneratedByAI(QString sLabels);
@@ -108,7 +108,7 @@ private slots:
     /** 遍历选中的文件夹，查找这些文件夹中有ads信息的文件，将这些文件和ads信息写入数据库，作为下次查找的缓存信息 */
     void onActionTraverseSelDirsTriggered();
 
-    // P1-1：多带"完整遍历过的目录"与"是否被中断"两个参数，未扫完的目录不入缓存。
+    // 多带"完整遍历过的目录"与"是否被中断"两个参数，未扫完的目录不入缓存。
     void onRecvTraverseResult(QMap<QString, FILE_TAGS> dirAndFileTags,
                               QMap<QString, QSet<QString>> dirAndTags,
                               QStringList qLCompletedDirs,
@@ -121,10 +121,10 @@ private slots:
     void onRecvLabels(QString sFilePath, QString sLabels);
 
 public slots:
-    // 【C16】标签即将被改动：先记住改动前的标签，供"撤销上一次标签操作"
+    // 标签即将被改动：先记住改动前的标签，供"撤销上一次标签操作"
     void onBeforeTagsChanged(const QStringList &qLFilePaths);
 
-    // 【C16】撤销上一次标签操作（把标签恢复成改动前的样子）
+    // 撤销上一次标签操作（把标签恢复成改动前的样子）
     void undoLastTagOperation();
 
 private slots:
@@ -154,14 +154,14 @@ private:
     QAction             *m_aSearchConfig;
 
     QStringList         m_qLSelLabels;          // 选中的标签，可能是【标签管理类】中选中的，也可能是【当前目录文件的标签类】选中的
-    // A4：与 m_qLSelLabels 一一对应的"分组"（组 = 标签 + 它的全部子标签），搜索用这个匹配
+    // 与 m_qLSelLabels 一一对应的"分组"（组 = 标签 + 它的全部子标签），搜索用这个匹配
     QList<QSet<QString>> m_qLLabelGroups;
 
-    // 【C16】"撤销上一次标签操作"的现场：文件 → 改动前的标签列表
+    // "撤销上一次标签操作"的现场：文件 → 改动前的标签列表
     QMap<QString, QStringList> m_mapUndoOldTags;
     QString                    m_sUndoDesc;
 
-    // 【C12】上一次搜索的结果来源（缓存 / 磁盘扫描），显示在结果页
+    // 上一次搜索的结果来源（缓存 / 磁盘扫描），显示在结果页
     QString                    m_sSearchSource;
 
     SqliteOperation     *m_sqlOperation;        // 操作sqlite数据库

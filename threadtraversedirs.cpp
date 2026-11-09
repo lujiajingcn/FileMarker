@@ -30,9 +30,9 @@ void ThreadTraverseDirs::run()
 
     QMap<QString, FILE_TAGS> dirAndFileTags;
     QMap<QString, QSet<QString>> dirAndTags;
-    QStringList qLCompletedDirs;      // P1-1：只收录"完整扫完"的目录
+    QStringList qLCompletedDirs;      // 只收录"完整扫完"的目录
 
-    TraverseDirectory::resetStop();   // 每个遍历任务开头复位一次停止标志（多目录遍历也能正确响应停止，P1-3）
+    TraverseDirectory::resetStop();   // 每个遍历任务开头复位一次停止标志（多目录遍历也能正确响应停止）
     foreach(const QString &selDir, m_selDirs){
         // 用户已点停止：后面的目录一个都不要进，避免又跑一遍
         if (TraverseDirectory::isStopped())
@@ -69,7 +69,7 @@ bool ThreadTraverseDirs::traverseDir(const QFileInfo& fileInfo)
 
     emit sendProcessInfo(filePath);
 
-//    QThread::msleep(1);//让出时间片，使得ui有时间响应
+// QThread::msleep(1);//让出时间片，使得ui有时间响应
 
     return true;
 }

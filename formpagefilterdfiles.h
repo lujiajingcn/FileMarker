@@ -35,7 +35,7 @@ public slots:
     void onGotoFilePath();
     void setSearchCondition(const QString &sCondition);
 
-    // 【C12】结果来源（缓存 / 磁盘扫描），显示在结果计数后面，让"缓存可能过期"这件事可见
+    // 结果来源（缓存 / 磁盘扫描），显示在结果计数后面，让"缓存可能过期"这件事可见
     void setSearchSource(const QString &sSource);
 
 protected:

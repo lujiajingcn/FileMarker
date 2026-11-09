@@ -79,7 +79,7 @@ signals:
     // 标签写盘成功后通知外层让搜索缓存失效
     void sendTagsChanged(const QStringList &qLFilePaths);
 
-    // 【C16】写标签之前广播一次，供外层记住"改之前的标签"用于撤销
+    // 写标签之前广播一次，供外层记住"改之前的标签"用于撤销
     void sendBeforeTagsChanged(const QStringList &qLFilePaths);
 
 public:
@@ -138,7 +138,7 @@ private:
     // 双击标签区域 / 双击标签列时弹出"增删式"标签对话框（A3）。
     void onEditTag(const QModelIndex &index);
 
-    // 【B5】重命名入口：两个视图都不再就地改名，统一走右键【重命名…】。
+    // 重命名入口：两个视图都不再就地改名，统一走右键【重命名…】。
     void renameFile(const QModelIndex &index);
 
     // 切换缩略图尺寸档位（小/中/大）

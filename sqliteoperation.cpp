@@ -14,7 +14,7 @@ SqliteOperation::SqliteOperation()
 
 SqliteOperation::~SqliteOperation()
 {
-    // P0-4：close 后必须 removeDatabase 清理全局数据库连接表，否则再次 addDatabase 会
+    // close 后必须 removeDatabase 清理全局数据库连接表，否则再次 addDatabase 会
     // 返回已关闭的旧连接并产生 "driver is already in use" 警告。
     // 注意：默认连接（addDatabase 未指定名称）的 connectionName() 是空字符串，
     // 因此不能以 connectionName() 是否为空作为是否清理的判断条件。
@@ -145,7 +145,7 @@ void SqliteOperation::invalidateCacheForFile(const QString &sFilePath)
     const QString sFileDir = QDir::cleanPath(QFileInfo(sFilePath).absolutePath());
 
     // 缓存行的 dir 列记录的是"遍历根"，它可能是该文件的任意祖先目录；
-    // 只删 absolutePath() 会让"遍历了父目录、改的是子目录里的文件"这种情况永远失效不掉（P1-2）。
+    // 只删 absolutePath() 会让"遍历了父目录、改的是子目录里的文件"这种情况永远失效不掉。
     QStringList qLRoots;
     QSqlQuery query(m_sqlDB);
     if (query.exec(QString("SELECT dir FROM %1").arg(TABLE_NAME_DIR))) {
@@ -177,7 +177,7 @@ void SqliteOperation::invalidateCacheForFile(const QString &sFilePath)
 
 void SqliteOperation::insertRecord(QMap<QString, FILE_TAGS> dirAndFileTags, const QStringList &qLCompletedDirs)
 {
-    // P1-1：dirs 表必须和文件行在同一个事务里。否则文件行回滚了、目录却仍标着"已缓存"，
+    // dirs 表必须和文件行在同一个事务里。否则文件行回滚了、目录却仍标着"已缓存"，
     // 之后按缓存搜索会命中"有目录、没数据"的空壳，永远查不到文件。
     if (!m_sqlDB.transaction()) {
         QString sErrorMsg = QString("Transaction failed to start:%1").arg(m_sqlDB.lastError().text());
@@ -246,7 +246,7 @@ void SqliteOperation::insertRecord(QMap<QString, FILE_TAGS> dirAndFileTags, cons
     }
 }
 
-// A4：按"标签组"判断一行缓存是否命中。
+// 按"标签组"判断一行缓存是否命中。
 // 组内是 OR（选了父标签就等于选了它整棵子树），组间按 AND/OR 组合。
 static bool isFileMatchLabelGroups(const QSet<QString> &setFileLabels,
                                    const QList<QSet<QString>> &qLLabelGroups,

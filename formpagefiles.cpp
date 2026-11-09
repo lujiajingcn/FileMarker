@@ -269,7 +269,7 @@ void FormPageFiles::onDeleteLabels()
     QMessageBox box(this);
     box.setWindowTitle(tr("删除标签"));
     box.setIcon(QMessageBox::Warning);
-    // 【D9 修复】确认框里列出具体文件（最多 5 个），避免"选中的文件已经不在当前视图里"时
+    // 确认框里列出具体文件（最多 5 个），避免"选中的文件已经不在当前视图里"时
     // 用户不知道到底要删哪些文件的标签。
     QString sFileList = qLSelFilePaths.mid(0, 5).join(QStringLiteral("\n"));
     if (qLSelFilePaths.size() > 5)
@@ -283,11 +283,11 @@ void FormPageFiles::onDeleteLabels()
     if (box.clickedButton() != pBtnDelete)
         return;
 
-    // 【C16】删除前广播一次，供上层记录"删除之前的标签"用于撤销
+    // 删除前广播一次，供上层记录"删除之前的标签"用于撤销
     emit sendBeforeTagsChanged(qLSelFilePaths);
 
     bool bAllOk = true;
-    QStringList qLFailedFiles;          // 【D7 修复】把失败的文件名带回给用户
+    QStringList qLFailedFiles;          // 把失败的文件名带回给用户
     foreach(const QString &sSelFilePath, qLSelFilePaths)
     {
         if (!ADSOperation::deleteADSFiles(sSelFilePath)) {
@@ -315,10 +315,10 @@ void FormPageFiles::initDetailFileList()
      // 设置可以选中多行
     m_tvFiles->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_tvFiles->setModel(m_modelFiles);
-    // 【D6 修复】第 0~3 列装"拒绝编辑"代理，禁止 F2/双击把文件名改到磁盘上。
+    // 第 0~3 列装"拒绝编辑"代理，禁止 F2/双击把文件名改到磁盘上。
     for (int nCol = 0; nCol <= 3; ++nCol)
         m_tvFiles->setItemDelegateForColumn(nCol, new NoEditDelegate(m_tvFiles));
-    // 【A3/B5】标签列也不再就地编辑：双击标签单元格改为弹出"增删式"标签对话框
+    // 标签列也不再就地编辑：双击标签单元格改为弹出"增删式"标签对话框
     // （在 onDoubleClicked 里处理），与缩略图的双击语义统一。
     m_tvFiles->setItemDelegateForColumn(4, new NoEditDelegate(m_tvFiles));
     m_tvFiles->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -334,7 +334,7 @@ void FormPageFiles::initDetailFileList()
     m_tvFiles->header()->setSortIndicator(m_nSortColumn, m_sortOrder);
     m_modelFiles->sort(m_nSortColumn, m_sortOrder);
     connect(m_tvFiles->header(), &QHeaderView::sectionClicked, this, [this](int section) {
-        // 【B7】标签列不支持排序：给一句提示，而不是"点了完全没反应"
+        // 标签列不支持排序：给一句提示，而不是"点了完全没反应"
         if (section == 4) {
             emit sendHintMessage(tr("标签列暂不支持排序；双击标签列可以编辑该文件的标签。"));
             return;
@@ -403,7 +403,7 @@ void FormPageFiles::initThumbnailFileList()
     m_lstFiles->setContextMenuPolicy(Qt::CustomContextMenu);
     m_lstFiles->setMouseTracking(true);              // 悬停高亮需要鼠标移动事件
 
-    // 【B5】缩略图不再用"双击文件名/F2 就地重命名"：双击统一为"打开/进入"，
+    // 缩略图不再用"双击文件名/F2 就地重命名"：双击统一为"打开/进入"，
     // 标签编辑走双击标签区（弹对话框），重命名走右键菜单。
     m_lstFiles->setEditTriggers(QAbstractItemView::NoEditTriggers);
 
@@ -435,7 +435,7 @@ void FormPageFiles::curDirChanged(QString sCurDir)
     m_sCurDir = sCurDir;
     // 同步地址栏并把路径记入下拉历史
     rememberPath(sCurDir);
-    // P2-16：导航栈变化时直接更新按钮状态，不再依赖 event() 拦截 Paint。
+    // 导航栈变化时直接更新按钮状态，不再依赖 event() 拦截 Paint。
     updateToolButtons();
 
     // 进入目录后立即更新【当前目录标签】面板：先清空旧内容，再在文件模型加载完成后扫描。
@@ -445,7 +445,7 @@ void FormPageFiles::curDirChanged(QString sCurDir)
 void FormPageFiles::updateDirLabelsPanel(const QString &sDir)
 {
     emit sendDirLabels(sDir, QSet<QString>());
-    // 【D4 修复】这里必须强制重扫：发送空集已经把面板清空了，如果再用"非强制"方式调用，
+    // 这里必须强制重扫：发送空集已经把面板清空了，如果再用"非强制"方式调用，
     // 对"本会话已扫过一遍的同一目录"会被 m_sScanCompletedDir 守卫直接跳过，
     // 结果面板清空后永远不再填充（实测：对同一路径再按一次回车即可复现）。
     QTimer::singleShot(150, this, [this, sDir]() { scanDirLabels(sDir, true); });
@@ -654,7 +654,7 @@ void FormPageFiles::onLookInComboReturnPressed()
     navigateToDir(ui->lookInCombo->currentText());
 }
 
-// P2-16 删除：不再需要拦截 Paint 事件来更新工具按钮。
+// 不再需要拦截 Paint 事件来更新工具按钮。
 // 原 event() 重写中每次重绘都调用 updateToolButtons()，降低 UI 性能。
 // 按钮状态仅在导航栈变化时（back/forward/parent 点击、双击目录、onTvNavigationClicked）
 // 需要更新，这些调用点均已直接调用 updateToolButtons()。
@@ -766,7 +766,7 @@ void FormPageFiles::onCustomContextMenuRequested(const QPoint &pos)
     actionCopyPath->setEnabled(hasSelection);
     QAction *actionEditTags = menu.addAction(tr("编辑标签…"));
     actionEditTags->setEnabled(singleSelection);
-    // 【B5】两个视图都不再支持就地改名（双击=打开），重命名统一放在这里。
+    // 两个视图都不再支持就地改名（双击=打开），重命名统一放在这里。
     QAction *actionRename = menu.addAction(tr("重命名…"));
     actionRename->setEnabled(singleSelection);
 
@@ -886,7 +886,7 @@ void FormPageFiles::onBackButtonClicked()
     bothSetRootIndex(m_modelFiles->index(sDir));
     m_sCurDir = sDir;
     refreshAddressBar();
-    updateToolButtons();  // P2-16：导航栈变化后直接更新按钮
+    updateToolButtons();  // 导航栈变化后直接更新按钮
     updateDirLabelsPanel(sDir);
 }
 
@@ -901,7 +901,7 @@ void FormPageFiles::onForwardButtonClicked()
     bothSetRootIndex(m_modelFiles->index(sDir));
     m_sCurDir = sDir;
     refreshAddressBar();
-    updateToolButtons();  // P2-16：导航栈变化后直接更新按钮
+    updateToolButtons();  // 导航栈变化后直接更新按钮
     updateDirLabelsPanel(sDir);
 }
 
@@ -929,7 +929,7 @@ void FormPageFiles::onToParentButtonClicked()
     m_sCurDir = sNewDirectory;
     // 地址栏同步：之前这里漏了更新，导致点上移后地址栏还停留在旧路径。
     rememberPath(sNewDirectory);
-    updateToolButtons();  // P2-16：导航栈变化后直接更新按钮
+    updateToolButtons();  // 导航栈变化后直接更新按钮
     updateDirLabelsPanel(sNewDirectory);
 }
 
@@ -976,7 +976,7 @@ void FormPageFiles::onBtnRefreshClicked()
     QModelIndex curIndex = m_modelFiles->index(m_sCurDir);
     if (curIndex.isValid())
     {
-        // P2-3：清空标签缓存，强制重新枚举 ADS（QFileSystemModel 本身通过文件监视器自动感知文件增删，
+        // 清空标签缓存，强制重新枚举 ADS（QFileSystemModel 本身通过文件监视器自动感知文件增删，
         // 这里只需保证标签列刷新；Qt5 的 QFileSystemModel 没有 refresh() 接口）。
         m_modelFiles->clearTagCache();
         m_tvFiles->setRootIndex(curIndex);
@@ -992,15 +992,15 @@ void FormPageFiles::onBtnRefreshClicked()
 
 void FormPageFiles::recvGotoFile(QString sFilePath)
 {
-    // P2-4：用 QFileInfo 取父目录，正确处理盘符根（如 C:/file.txt 下 lastIndexOf('/') 会失效）。
+    // 用 QFileInfo 取父目录，正确处理盘符根（如 C:/file.txt 下 lastIndexOf('/') 会失效）。
     QFileInfo fi(sFilePath);
     const QString sFileDir = QDir::cleanPath(fi.absolutePath());
     const QModelIndex dirIndex = m_modelFiles->index(sFileDir);
-    // P1-7：使用 bothSetRootIndex 同时更新详细视图和缩略图视图，
+    // 使用 bothSetRootIndex 同时更新详细视图和缩略图视图，
     // 否则缩略图模式下跳转后仍停留在旧目录。
     bothSetRootIndex(dirIndex);
 
-    // 【D3 修复】"当前目录"的状态有 5 份副本（两个视图的 rootIndex、m_sCurDir、地址栏、
+    // "当前目录"的状态有 5 份副本（两个视图的 rootIndex、m_sCurDir、地址栏、
     // 后退/前进栈、【当前目录中的标签】面板）。原来这里只改了 rootIndex，于是：
     // 地址栏和标签面板还显示旧目录，点【刷新】又按 m_sCurDir 把列表弹回旧目录。
     // 现在统一走 curDirChanged()，只有"本来就在这个目录"时才只同步地址栏，避免重复压后退栈。
@@ -1031,7 +1031,7 @@ void FormPageFiles::onTbThumbnailClicked()
 void FormPageFiles::onDoubleClicked(const QModelIndex &index)
 {
     // 第 5 列（标签列）的双击语义是"编辑标签"，不能同时打开文件/进入目录。
-    // 【A3】改为弹出"增删式"标签对话框（不再就地编辑整行文本）。
+    // 改为弹出"增删式"标签对话框（不再就地编辑整行文本）。
     // 说明：0aead52 之前该列的 FilePathRole 会误返回标签字符串，openUrl 打开失败，
     // 看起来像“没有打开文件”；修正 FilePathRole 后必须在这里显式排除标签列。
     if (index.column() == 4) {
@@ -1057,7 +1057,7 @@ void FormPageFiles::bothSetRootIndex(const QModelIndex &index)
 {
     m_tvFiles->setRootIndex(index);
     m_lstFiles->setRootIndex(index);
-    // 【D9 修复】换目录时必须清掉选择集：两个视图共用同一个 QItemSelectionModel，
+    // 换目录时必须清掉选择集：两个视图共用同一个 QItemSelectionModel，
     // 而 setRootIndex() 不会清理它。不清的话，切到别的目录后工具栏【删除标签】/【添加标签】
     // 仍会作用到旧目录里"已经看不见"的文件（实测：不可见文件的标签被真实删除）。
     if (m_tvFiles->selectionModel() != nullptr)
@@ -1084,7 +1084,7 @@ void FormPageFiles::onEditTag(const QModelIndex &index)
     // 按录入顺序显示当前标签（NTFS 枚举流是按流名排序的，不能直接用它）
     const QStringList adsNames = ADSOperation::listADSTagsInOrder(sFilePath);
 
-    // 【A3】改用"列表 + 添加/移除"的编辑器：
+    // 改用"列表 + 添加/移除"的编辑器：
     // 以前是把全部标签当成一行文本编辑，用户全选后输入新名字就等于静默替换掉所有旧标签；
     // 现在每个标签都是列表里的一项，增删都要显式操作，且非法名字在添加时就被拒绝。
     TagEditDialog dlg(adsNames, QFileInfo(sFilePath).fileName(), this);
@@ -1095,7 +1095,7 @@ void FormPageFiles::onEditTag(const QModelIndex &index)
     if (qLLabels == adsNames)   // 没有改动就不要重写
         return;
 
-    emit sendBeforeTagsChanged(QStringList() << sFilePath);   // 【C16】供"撤销上一次标签操作"
+    emit sendBeforeTagsChanged(QStringList() << sFilePath);   // 供"撤销上一次标签操作"
     const bool bOk = ADSOperation::replaceTags(sFilePath, qLLabels);
     emit sendTagsChanged(QStringList() << sFilePath);
     onBtnRefreshClicked();
@@ -1116,7 +1116,7 @@ void FormPageFiles::recvDblClick(const QModelIndex &index)
     onDoubleClicked(index);
 }
 
-/** 【B5】统一的重命名入口（右键菜单）。 */
+/** 统一的重命名入口（右键菜单）。 */
 void FormPageFiles::renameFile(const QModelIndex &index)
 {
     if (!index.isValid())

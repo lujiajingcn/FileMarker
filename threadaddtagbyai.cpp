@@ -31,7 +31,7 @@ QString oneLine(const QByteArray &data, int nMax = 300)
 
 ThreadAddTagByAI::ThreadAddTagByAI(QObject *parent) : QThread(parent)
 {
-    // P3-27：与 ThreadSearch/ThreadTraverseDirs 保持一致，在构造函数内部连接
+    // 与 ThreadSearch/ThreadTraverseDirs 保持一致，在构造函数内部连接
     // finished→deleteLater，避免未来调用者遗漏导致线程对象泄漏。
     connect(this, &ThreadAddTagByAI::finished, this, &QObject::deleteLater);
 }
@@ -72,7 +72,7 @@ void ThreadAddTagByAI::run()
         return this->addTag(info);
     };
 
-    // 【D5 修复】先确认脚本存在：以前脚本缺失时每个文件都静默失败，界面毫无提示。
+    // 先确认脚本存在：以前脚本缺失时每个文件都静默失败，界面毫无提示。
     const QString sScript = g_sAppDir + "/extract_and_tag.py";
     if (!QFileInfo::exists(sScript)) {
         m_sFirstError = tr("找不到 AI 脚本：%1（请把 extract_and_tag.py 与程序放在同一目录）").arg(sScript);
@@ -81,7 +81,7 @@ void ThreadAddTagByAI::run()
         return;
     }
 
-    // P1-6：静态 m_bIsStop 标志被所有遍历线程共享。若用户此前停止过搜索/遍历操作，
+    // 静态 m_bIsStop 标志被所有遍历线程共享。若用户此前停止过搜索/遍历操作，
     // 不在此处复位则 m_bIsStop 仍为 true，AI 线程会立即跳过所有目录并结束。
     TraverseDirectory::resetStop();
 
@@ -90,7 +90,7 @@ void ThreadAddTagByAI::run()
         if (TraverseDirectory::isStopped())
             break;
         TraverseDirectory::traverseDirectory(selDir, func, true);
-        // 【D5 修复】连续失败且一个都没成功（典型：Python 没装、依赖缺失、解释器不可用），
+        // 连续失败且一个都没成功（典型：Python 没装、依赖缺失、解释器不可用），
         // 就不要再把成百上千个文件挨个试一遍，直接结束并把错误交给界面。
         if (m_nSucceeded == 0 && m_nFailed >= 3)
             break;
@@ -164,7 +164,7 @@ bool ThreadAddTagByAI::addTag(const QFileInfo& info)
     if (!sErr.isEmpty())
         qWarning() << "extract_and_tag.py stderr:" << err;
 
-    // 【D5 修复】以前只要退出码是 NormalExit 就当成成功，于是"缺依赖的 traceback（退出码 1）"
+    // 以前只要退出码是 NormalExit 就当成成功，于是"缺依赖的 traceback（退出码 1）"
     // 被完全吞掉。现在把非 0 退出码、空输出、JSON error 字段都当成失败上报。
     if (proc.exitCode() != 0) {
         return recordFailure(filePath, tr("脚本返回错误（退出码 %1）").arg(proc.exitCode()), sErr);
@@ -221,7 +221,7 @@ bool ThreadAddTagByAI::addTag(const QFileInfo& info)
     }
 
     ++m_nSucceeded;
-    // #10：之前解析出 summary 却直接丢弃，这里通过信号上报，不再浪费模型输出。
+    // 之前解析出 summary 却直接丢弃，这里通过信号上报，不再浪费模型输出。
     if (obj.contains("summary")) {
         QString sSummary = obj.value("summary").toString();
         if (!sSummary.isEmpty())

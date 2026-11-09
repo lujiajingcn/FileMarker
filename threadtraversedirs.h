@@ -32,7 +32,7 @@ protected:
     bool traverseDir(const QFileInfo& fileInfo);
 
 signals:
-    // P1-1：结果里只包含"完整扫完"的目录；qLCompletedDirs 供上层登记 dirs 表（空目录也要登记），
+    // 结果里只包含"完整扫完"的目录；qLCompletedDirs 供上层登记 dirs 表（空目录也要登记），
     // bAborted 为 true 表示用户中途点了停止，此时未扫完的目录不会出现在任何结果里。
     void sendResult(QMap<QString, FILE_TAGS> dirAndFileTags,
                     QMap<QString, QSet<QString>> dirAndTags,

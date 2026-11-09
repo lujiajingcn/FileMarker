@@ -52,7 +52,7 @@ void FormCurDirLabels::onTreeViewClicked(const QModelIndex &index)
 {
     Q_UNUSED(index);
 
-    // P1-11：selectedIndexes() 会为同一行的每一列都返回索引，导致同一标签被重复返回。
+    // selectedIndexes() 会为同一行的每一列都返回索引，导致同一标签被重复返回。
     // 用 selectedRows(0) 只取每行第 0 列，并用 QSet 去重。
     QStringList qLLabels;
     QSet<QString> stLabels;

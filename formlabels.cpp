@@ -191,7 +191,7 @@ void FormLabels::initLabels()
     for(QList<LabelInfo>::const_iterator cItr = lstLabelInfo.begin(); cItr != lstLabelInfo.end(); cItr++)
     {
         QString sName = (*cItr).sName;
-        // #1：保留从文件读到的 UUID（为空则新生成），避免保存时 UUID 被清空。
+        // 保留从文件读到的 UUID（为空则新生成），避免保存时 UUID 被清空。
         QString sUuid = (*cItr).sUuid.isEmpty() ? Utility::createUuid() : (*cItr).sUuid;
         QStandardItem *item = createLabelItem(sName, sUuid);
         if((*cItr).lstChild.count() > 0)
@@ -207,7 +207,7 @@ QStringList FormLabels::getSelLabels()
 {
     QStringList qLLabels;
     QItemSelectionModel *selectionModel = m_tvAllLabels->selectionModel();
-    // P1-10：selectedIndexes() 会为同一选中行的每一列都返回一个索引，若不只取第 0 列，
+    // selectedIndexes() 会为同一选中行的每一列都返回一个索引，若不只取第 0 列，
     // 会导致同一标签被重复返回多次（搜索时会重复匹配）。
     // 这里按选中行的顺序逐个追加并去重，保证返回顺序与树上看到的顺序一致
     // （原先用 QSet::values() 会打乱顺序，导致批量添加标签时顺序随机）。
@@ -243,14 +243,14 @@ void FormLabels::addItem(QStandardItem *parentItem)
     }
     registerItem(newItem);
     m_tvAllLabels->setCurrentIndex(newItem->index());
-    // 【D17】新建的节点直接进入改名状态：默认名是"新标签"，让用户马上就改，
+    // 新建的节点直接进入改名状态：默认名是"新标签"，让用户马上就改，
     // 而不是点完"新建标签"看到多了一行"新标签"还要再双击一次。
     m_bNamingNewLabel = true;          // 这次改名只是给新标签起名，不要弹同步询问
     m_tvAllLabels->edit(newItem->index());
     saveLabelToXmlFile();   // #11 新增标签后立即持久化
 }
 
-// A4：把选中的标签展开成"组"（组 = 标签 + 全部子标签），供搜索使用。
+// 把选中的标签展开成"组"（组 = 标签 + 全部子标签），供搜索使用。
 QList<QSet<QString>> FormLabels::getSelLabelGroups() const
 {
     QList<QSet<QString>> qLGroups;
@@ -333,7 +333,7 @@ void FormLabels::onActionDeleteTriggered()
     const int nCurRow = curIdx.row();
     QStandardItem *parentItem = curItem->parent();
 
-    // A2：删除只影响标签库，文件上的标签不会自动消失 —— 先问清楚，并给出"一并移除"的选项。
+    // 删除只影响标签库，文件上的标签不会自动消失 —— 先问清楚，并给出"一并移除"的选项。
     QStringList qLFiles;
     if (m_sqlOperation != nullptr)
         qLFiles = m_sqlOperation->filesUsingLabel(sLabel);
@@ -380,9 +380,9 @@ void FormLabels::onActionDeleteTriggered()
         parentItem->removeRow(nCurRow);
         m_tvAllLabels->setCurrentIndex(parentItem->index());
     }
-    // #3：删除可能包含整棵子树，删除“之后”按当前模型重新同步去重集合，
+    // 删除可能包含整棵子树，删除“之后”按当前模型重新同步去重集合，
     // 必须在 removeRow 之后调用，否则 m_setLabels 会残留被删标签名，
-    // 导致之后同名的外部/AI 标签被 m_setLabels.contains() 误判为已存在而静默丢弃（P2-1）。
+    // 导致之后同名的外部/AI 标签被 m_setLabels.contains() 误判为已存在而静默丢弃。
     resyncSets();
     saveLabelToXmlFile();   // #11 删除后立即持久化
 }
@@ -580,7 +580,7 @@ void FormLabels::onItemChanged(QStandardItem *item)
 
     saveLabelToXmlFile();   // #11 重命名后立即持久化
 
-    // A2：改名只改了标签库，文件上的旧标签不会自动跟着变。
+    // 改名只改了标签库，文件上的旧标签不会自动跟着变。
     // 这里排队弹一次询问，让用户明确选择"只改库"还是"连文件一起改"（可以撤销）。
     if (m_bNamingNewLabel) {
         // 新建标签时的"起名"：只是给新节点取名字，不需要问要不要同步到文件
@@ -590,7 +590,7 @@ void FormLabels::onItemChanged(QStandardItem *item)
     }
 }
 
-/** A2：改名后询问是否同步到文件；可以撤销改名。 */
+/** 改名后询问是否同步到文件；可以撤销改名。 */
 void FormLabels::promptSyncRenameToFiles(const QString &sOldTag, const QString &sNewTag)
 {
     if (m_sqlOperation == nullptr || sOldTag.isEmpty())
@@ -643,7 +643,7 @@ void FormLabels::promptSyncRenameToFiles(const QString &sOldTag, const QString &
     }
 }
 
-/** A2：把改名/删除应用到文件；返回成功数，失败数累加到 nFailed。 */
+/** 把改名/删除应用到文件；返回成功数，失败数累加到 nFailed。 */
 int FormLabels::syncTagToFiles(bool bRename, const QString &sOldTag, const QString &sNewTag, int &nFailed)
 {
     nFailed = 0;
@@ -669,14 +669,14 @@ int FormLabels::syncTagToFiles(bool bRename, const QString &sOldTag, const QStri
 QStandardItem* FormLabels::createLabelItem(const QString &name, const QString &uuid)
 {
     QStandardItem *item = new QStandardItem(name);
-    // #1：每个标签节点携带稳定 UUID，保存时回写，避免退出保存后标识全部丢失。
+    // 每个标签节点携带稳定 UUID，保存时回写，避免退出保存后标识全部丢失。
     item->setData(uuid.isEmpty() ? Utility::createUuid() : uuid, LabelUuidRole);
     return item;
 }
 
 void FormLabels::registerItem(QStandardItem *item)
 {
-    if (item == nullptr)   // 【D1 防御】
+    if (item == nullptr)
         return;
     m_setLabels.insert(item->text());
     m_committedText[QPersistentModelIndex(item->index())] = item->text();
@@ -689,7 +689,7 @@ int FormLabels::countLabelOccurrences(const QString &name) const
 {
     int n = 0;
     std::function<void(QStandardItem*)> walk = [&](QStandardItem *it) {
-        if (it == nullptr)   // 【D1 防御】
+        if (it == nullptr)
             return;
         for (int i = 0; i < it->rowCount(); ++i) {
             QStandardItem *child = it->child(i);
@@ -722,7 +722,7 @@ void FormLabels::saveLabelToXmlFile()
     {
         LabelInfo labelInfo;
         QStandardItem *item = m_modelAllLabels->item(i);
-        if (item == nullptr)   // 【D1 防御】模型里不该再出现 null 行，真出现也不能崩
+        if (item == nullptr)   // 模型里不该再出现 null 行，真出现也不能崩
             continue;
         labelInfo.sUuid = item->data(LabelUuidRole).toString();
         if (labelInfo.sUuid.isEmpty())
@@ -739,7 +739,7 @@ void FormLabels::traverseWriteLabel(QStandardItem *item, const QList<LabelInfo> 
 {
     for (QList<LabelInfo>::const_iterator cItr = lstLabelInfo.begin(); cItr != lstLabelInfo.end(); cItr++)
     {
-        // #1：写子节点时同样保留 UUID（为空则新生成）。
+        // 写子节点时同样保留 UUID（为空则新生成）。
         QString sUuid = (*cItr).sUuid.isEmpty() ? Utility::createUuid() : (*cItr).sUuid;
         QStandardItem *itemChild = createLabelItem((*cItr).sName, sUuid);
         if((*cItr).lstChild.count() > 0)
@@ -758,7 +758,7 @@ void FormLabels::traverseReadLabel(QStandardItem *item, QList<LabelInfo> &lstLab
     for(int i = 0; i < nRowCount; i++)
     {
         QStandardItem *itemChild = item->child(i);
-        if (itemChild == nullptr)   // 【D1 防御】跳过 null 子项
+        if (itemChild == nullptr)   // 跳过 null 子项
             continue;
         LabelInfo labelInfo;
         labelInfo.sUuid = itemChild->data(LabelUuidRole).toString();
@@ -786,7 +786,7 @@ void FormLabels::updateAllLabelList(QVector<QString> vtAllLabels)
 void FormLabels::onTreeViewClicked(const QModelIndex &index)
 {
     Q_UNUSED(index);
-    // P1-10/P3-32：复用 getSelLabels，避免与 getSelLabels 重复逻辑，且同样去除 selectedIndexes 多列重复。
+    // 复用 getSelLabels，避免与 getSelLabels 重复逻辑，且同样去除 selectedIndexes 多列重复。
     sendSelLabels(getSelLabels());
 }
 

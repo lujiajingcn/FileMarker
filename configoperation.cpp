@@ -30,7 +30,7 @@ SearchConfig ConfigOperation::readSearchConfig(QString sConfigFilePath)
 #endif
     settings.beginGroup("search");
     sc.bFromCache = settings.value("fromcache").toBool();
-    // P3-28：校验 labellogic 的枚举范围（仅 0=AND, 1=OR 合法）。
+    // 校验 labellogic 的枚举范围（仅 0=AND, 1=OR 合法）。
     // 配置文件损坏或手动编辑时，避免 static_cast 产生非法枚举值。
     int nLogic = settings.value("labellogic").toInt();
     if (nLogic == labelLogic::AND || nLogic == labelLogic::OR)

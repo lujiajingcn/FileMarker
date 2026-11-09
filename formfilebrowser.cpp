@@ -80,7 +80,7 @@ FormFileBrowser::FormFileBrowser(QWidget *parent) :
     m_threadSearch = nullptr;
     m_threadTraverseDirs = nullptr;
     m_threadAddLabelByAI = nullptr;
-    m_nThread = -1;  // P2-18：初始化为非法值，防止 onRecvStopSearch 提前触发时 switch 走入意外分支
+    m_nThread = -1;  // 初始化为非法值，防止 onRecvStopSearch 提前触发时 switch 走入意外分支
 
     // 点击左侧【文件导航】中节点，将该节点下的文件夹及文件显示在右侧【文件列表】
     connect(ui->wFileNavigation, &FormFileNavigation::sendNavigationClicked, this, &FormFileBrowser::onTvNavigationClicked);
@@ -118,13 +118,13 @@ FormFileBrowser::FormFileBrowser(QWidget *parent) :
             [this](const QStringList &qLFilePaths) {
                 if (m_sqlOperation == nullptr)
                     return;
-                // P1-2：缓存按"遍历根"存，文件可能在根的子孙目录里，
+                // 缓存按"遍历根"存，文件可能在根的子孙目录里，
                 // 必须按文件反查所有包含它的根目录，不能只删 absolutePath()。
                 for (const QString &sFilePath : qLFilePaths)
                     m_sqlOperation->invalidateCacheForFile(sFilePath);
             });
 
-    // 【C16】页面里要改标签之前先广播，这里记住改动前的标签用于撤销
+    // 页面里要改标签之前先广播，这里记住改动前的标签用于撤销
     connect(ui->pageFiles, &FormPageFiles::sendBeforeTagsChanged,
             this, &FormFileBrowser::onBeforeTagsChanged);
 }
@@ -157,7 +157,7 @@ FormFileBrowser::~FormFileBrowser()
     waitThread(pTraverse, QStringLiteral("遍历线程"));
     waitThread(pAI, QStringLiteral("AI 线程"));
 
-    // P0-3：m_sqlOperation 在构造函数中 new 在堆上，从未释放，导致内存泄漏。
+    // m_sqlOperation 在构造函数中 new 在堆上，从未释放，导致内存泄漏。
     delete m_sqlOperation;
     delete ui;
 }
@@ -356,7 +356,7 @@ void FormFileBrowser::showFilteredFile(QStringList qLFilteredFiles)
     }
     setActionState(SEARCH_FINISH);
     ui->stackedWidget->setCurrentWidget(ui->pageFilteredFiles);
-    ui->pageFilteredFiles->setSearchSource(m_sSearchSource);   // 【C12】结果来源
+    ui->pageFilteredFiles->setSearchSource(m_sSearchSource);   // 结果来源
     emit sendShowFilteredFiles(qLFilteredFiles);
     ui->pageProgressInfo->clear();
 
@@ -393,7 +393,7 @@ void FormFileBrowser::onRecvSelLabels(QStringList qLSelLabels)
         m_qLLabelGroups << setGroup;
     }
 
-    // 【C11】两个面板都会走到这里：点一下标签就等于"选中"，要明确告诉用户选中的是什么、
+    // 两个面板都会走到这里：点一下标签就等于"选中"，要明确告诉用户选中的是什么、
     // 接下来能用来做什么，否则【当前目录中的标签】看起来像只读面板。
     if (qLSelLabels.isEmpty())
         emit sendStatusMessage(tr("已清空标签选择。"));
@@ -402,7 +402,7 @@ void FormFileBrowser::onRecvSelLabels(QStringList qLSelLabels)
                                    .arg(qLSelLabels.join("、")));
 }
 
-/** A4：接收【标签库】给出的分组（每组 = 选中标签 + 它的全部子标签）。 */
+/** 接收【标签库】给出的分组（每组 = 选中标签 + 它的全部子标签）。 */
 void FormFileBrowser::onRecvLabelGroups(const QList<QSet<QString>> &qLLabelGroups)
 {
     m_qLLabelGroups = qLLabelGroups;
@@ -420,14 +420,14 @@ void FormFileBrowser::onActionAddLabelByAITriggered()
     connect(m_threadAddLabelByAI, &ThreadAddTagByAI::sendProcessInfo, ui->pageProgressInfo, &FormPageProgressInfo::onRecvProgress);
     connect(m_threadAddLabelByAI, &ThreadAddTagByAI::sendFinish, this, &FormFileBrowser::onRecvAddLabelByAIFinish);
     connect(m_threadAddLabelByAI, &ThreadAddTagByAI::sendTags, this, &FormFileBrowser::onRecvLabelsGeneratedByAI);
-    // #10：AI 返回的 summary 之前被丢弃，这里记入日志（程序无专门展示 UI）。
+    // AI 返回的 summary 之前被丢弃，这里记入日志（程序无专门展示 UI）。
     connect(m_threadAddLabelByAI, &ThreadAddTagByAI::sendSummary, this, [](QString s){
         qInfo() << "AI 摘要:" << s;
     });
     connect(m_threadAddLabelByAI, &ThreadAddTagByAI::sendTagChanged, this,
             [this](QString sFilePath) {
                 if (m_sqlOperation != nullptr)
-                    m_sqlOperation->invalidateCacheForFile(sFilePath);   // P1-2：按文件反查遍历根
+                    m_sqlOperation->invalidateCacheForFile(sFilePath);   // 按文件反查遍历根
             });
 
     // 线程结束后自动释放对象并把指针置空，避免反复创建导致对象泄漏以及悬空指针误用。
@@ -448,7 +448,7 @@ void FormFileBrowser::onRecvAddLabelByAIFinish(int nSucceeded, int nFailed, QStr
     // 这里主动刷新并清空标签缓存，否则标签列会一直显示旧值。
     emit sendRefresh();
 
-    // 【D5 修复】进度页在结束时会被清空，所以失败必须在这里用对话框告诉用户，
+    // 进度页在结束时会被清空，所以失败必须在这里用对话框告诉用户，
     // 否则"脚本缺失/缺依赖/解释器不可用"这类失败对用户完全不可见。
     if (nFailed > 0 || !sFirstError.isEmpty()) {
         QString sMsg;
@@ -496,7 +496,7 @@ void FormFileBrowser::onActionAddLabelsTriggered()
         return;
     }
 
-    // 【D20】批量打标签是不可撤销的写盘操作，数量多时先确认一次
+    // 批量打标签是不可撤销的写盘操作，数量多时先确认一次
     if (qLFilePaths.size() > 20) {
         const QMessageBox::StandardButton btn =
             QMessageBox::question(this, tr("添加标签"),
@@ -507,10 +507,10 @@ void FormFileBrowser::onActionAddLabelsTriggered()
             return;
     }
 
-    onBeforeTagsChanged(qLFilePaths);   // 【C16】先记下改动前的标签，供撤销
+    onBeforeTagsChanged(qLFilePaths);   // 先记下改动前的标签，供撤销
 
     bool bAllOk = true;
-    QStringList qLFailedFiles;          // 【D7 修复】把失败的文件名带回给用户
+    QStringList qLFailedFiles;          // 把失败的文件名带回给用户
     foreach(const QString &sFilePath, qLFilePaths)
     {
         // 追加而不是覆盖：保留文件已有标签的顺序，新标签按选中顺序追加到末尾
@@ -521,7 +521,7 @@ void FormFileBrowser::onActionAddLabelsTriggered()
     }
 
     // 标签变化后让搜索缓存失效，避免搜索仍按旧标签命中/漏掉新标签
-    // P1-2：按文件反查所有包含它的"遍历根"，不能只按父目录删缓存。
+    // 按文件反查所有包含它的"遍历根"，不能只按父目录删缓存。
     if (m_sqlOperation != nullptr) {
         for (const QString &sFilePath : qLFilePaths)
             m_sqlOperation->invalidateCacheForFile(sFilePath);
@@ -530,7 +530,7 @@ void FormFileBrowser::onActionAddLabelsTriggered()
     emit sendRefresh();
 
     if (!bAllOk) {
-        // 【D7 修复】以前只给一句通用提示，批量操作时无法知道是哪个文件失败；
+        // 以前只给一句通用提示，批量操作时无法知道是哪个文件失败；
         // 现在列出前 5 个失败文件名（完整列表见日志）。
         const QString sList = qLFailedFiles.mid(0, 5).join(QStringLiteral("\n"));
         const QString sMore = qLFailedFiles.size() > 5
@@ -567,7 +567,7 @@ void FormFileBrowser::onActionSearchFilesbyLabelsTriggered()
         return;
     }
 
-    // A4：搜索条件是"分组"——每组 = 选中的标签 + 它的全部子标签。
+    // 搜索条件是"分组"——每组 = 选中的标签 + 它的全部子标签。
     // 因此"搜索父标签"能搜到只打了子标签的文件；多个条件之间仍按设置里的 AND/OR 组合。
     if (m_qLLabelGroups.isEmpty()) {
         for (const QString &sLabel : m_qLSelLabels) {
@@ -614,22 +614,22 @@ void FormFileBrowser::onActionSearchFilesbyLabelsTriggered()
         qInfo() << "[搜索] 缓存命中文件=" << qLFilePaths.size() << " 未命中目录数=" << qLNotHitedDirs.size()
                 << " 分组数=" << m_qLLabelGroups.size() << " logic=" << int(sc.logic);
         if(qLNotHitedDirs.count() == 0) { // 查找的文件夹全部在缓存数据库中存在，则显示查找结果后结束。
-            m_sSearchSource = tr("（结果来自缓存）");   // 【C12】
+            m_sSearchSource = tr("（结果来自缓存）");
             showFilteredFile(qLFilePaths);
             return;
         } else { // 查找的文件夹有部分未在缓存数据库中，不在的文件夹从磁盘查找
             // 命中缓存的部分先保留，最后与磁盘查找结果合并，避免被整体丢弃。
             m_qLFilePathsFromCache = qLFilePaths;
             qLSelDirs = qLNotHitedDirs;
-            m_sSearchSource = tr("（结果来自缓存 + 磁盘扫描）");   // 【C12】
+            m_sSearchSource = tr("（结果来自缓存 + 磁盘扫描）");
         }
     } else {
-        m_sSearchSource = tr("（结果来自磁盘扫描）");   // 【C12】
+        m_sSearchSource = tr("（结果来自磁盘扫描）");
     }
 
     qInfo() << "[搜索] 启动磁盘扫描 dirs=" << qLSelDirs;
 
-    // P2-15：若前一个搜索线程仍在运行，直接返回。正常流程下搜索按钮运行期间已被禁用，
+    // 若前一个搜索线程仍在运行，直接返回。正常流程下搜索按钮运行期间已被禁用，
     // 此检查仅为防御性编程，避免旧线程的 finished lambda（m_threadSearch = nullptr）
     // 误清新线程指针，以及重复启动线程。
     if (m_threadSearch && m_threadSearch->isRunning()) {
@@ -687,7 +687,7 @@ void FormFileBrowser::onRecvTraverseResult(QMap<QString, FILE_TAGS> dirAndFileTa
     // 注意：insertRecord 内部已经按目录做“先删后插”，因此这里不能再整体清空
     // filewithlabels 表，否则之前遍历过的其它目录的缓存会被全部抹掉，
     // 导致“命中缓存”的优化几乎永远不生效。
-    // P1-1：只有"完整扫完"的目录才会出现在 dirAndFileTags / qLCompletedDirs 里；
+    // 只有"完整扫完"的目录才会出现在 dirAndFileTags / qLCompletedDirs 里；
     // 被中断时未扫完的目录不会入库，旧缓存也保持原样（不会被残缺数据覆盖）。
     if (!qLCompletedDirs.isEmpty() || !dirAndFileTags.isEmpty())
         m_sqlOperation->insertRecord(dirAndFileTags, qLCompletedDirs);
@@ -742,7 +742,7 @@ void FormFileBrowser::onRecvStopSearch()
     }
 }
 
-/** 【C16】记住"这次改动之前的标签"，供【撤销上一次标签操作】使用（只保留最近一次）。 */
+/** 记住"这次改动之前的标签"，供【撤销上一次标签操作】使用（只保留最近一次）。 */
 void FormFileBrowser::onBeforeTagsChanged(const QStringList &qLFilePaths)
 {
     if (qLFilePaths.isEmpty())
@@ -758,7 +758,7 @@ void FormFileBrowser::onBeforeTagsChanged(const QStringList &qLFilePaths)
     emit sendUndoStateChanged(!m_mapUndoOldTags.isEmpty());
 }
 
-/** 【C16】把最近一次标签操作改回原样。 */
+/** 把最近一次标签操作改回原样。 */
 void FormFileBrowser::undoLastTagOperation()
 {
     if (m_mapUndoOldTags.isEmpty()) {
@@ -791,7 +791,7 @@ void FormFileBrowser::undoLastTagOperation()
 
 void FormFileBrowser::onRecvLabels(QString sFilePath, QString sLabels)
 {
-    // P2-5：内联编辑/弹框编辑标签时，只作用于被编辑的那一个文件，
+    // 内联编辑/弹框编辑标签时，只作用于被编辑的那一个文件，
     // 不再误覆盖当前选中的其它文件（批量打标签请用工具栏“添加标签”按钮）。
     if(sFilePath.isEmpty())
     {
@@ -820,7 +820,7 @@ void FormFileBrowser::onRecvLabels(QString sFilePath, QString sLabels)
             qLChanged << sLabel + tr("（已忽略）");
         }
     }
-    // 【D2 修复】输入非空但净化后一个都不剩 → 中止并提示，不能当成"清空全部标签"。
+    // 输入非空但净化后一个都不剩 → 中止并提示，不能当成"清空全部标签"。
     if (qLLabels.isEmpty() && !sLabels.trimmed().isEmpty()) {
         QMessageBox::warning(this, tr("标签名无效"),
                              tr("输入的标签名都不合法（不能用 : / \\ * ? \" < > | 和分隔符），"
@@ -834,11 +834,11 @@ void FormFileBrowser::onRecvLabels(QString sFilePath, QString sLabels)
 
     // replaceTags 会按 qLLabels 的先后顺序写入，并把顺序号存进流内容，
     // 保证下次显示时仍是用户录入的顺序（NTFS 枚举流本身是按流名排序的）。
-    onBeforeTagsChanged(QStringList() << sFilePath);   // 【C16】先记下改之前的标签
+    onBeforeTagsChanged(QStringList() << sFilePath);   // 先记下改之前的标签
     const bool bOk = ADSOperation::replaceTags(sFilePath, qLLabels);
 
     if (m_sqlOperation != nullptr)
-        m_sqlOperation->invalidateCacheForFile(sFilePath);   // P1-2：按文件反查遍历根
+        m_sqlOperation->invalidateCacheForFile(sFilePath);   // 按文件反查遍历根
 
     emit sendRefresh();
 
@@ -863,7 +863,7 @@ void FormFileBrowser::setActionState(OPERATION op)
     case ADDTAGBYAI_START:
     case SEARCH_START:
     case TRAVERSER_START:
-        // P1-9：QAction 指针可能为 null（setActions 传入 null 时 connect 静默失败），需判空。
+        // QAction 指针可能为 null（setActions 传入 null 时 connect 静默失败），需判空。
         if (m_aAddLabelByAI) m_aAddLabelByAI->setEnabled(false);
         if (m_aSearch) m_aSearch->setEnabled(false);
         if (m_aTraverse) m_aTraverse->setEnabled(false);

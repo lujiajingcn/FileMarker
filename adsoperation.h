@@ -39,10 +39,10 @@ public :
     /** 在已有标签之后追加新标签（去重），失败返回 false；已有标签不会因失败丢失 */
     static bool appendTags(const QString &filePath, const QStringList &tags);
 
-    /** 把文件上的某个标签改名（保留顺序）；文件上没有该标签时返回 true（A2：标签库改名后可选同步） */
+    /** 把文件上的某个标签改名（保留顺序）；文件上没有该标签时返回 true（标签库改名后可选同步） */
     static bool renameTag(const QString &filePath, const QString &sOldTag, const QString &sNewTag);
 
-    /** 从文件上移除某个标签（保留其余标签顺序）；文件上没有该标签时返回 true（A2：标签库删除后可选同步） */
+    /** 从文件上移除某个标签（保留其余标签顺序）；文件上没有该标签时返回 true（标签库删除后可选同步） */
     static bool removeTag(const QString &filePath, const QString &sTag);
 };
 

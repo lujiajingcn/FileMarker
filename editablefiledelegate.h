@@ -80,7 +80,7 @@ signals:
     void sendEditTag(const QModelIndex &index);
 
 private:
-    // 【A3/B5】双击语义已经简化（双击=打开、双击标签区=弹标签对话框、重命名走右键菜单），
+    // 双击语义已经简化（双击=打开、双击标签区=弹标签对话框、重命名走右键菜单），
     // 视图也设为 NoEditTriggers，因此不再需要"编辑意图"这类跨调用的可变状态。
     int m_iconSize;
     QPersistentModelIndex m_hoveredIndex;
