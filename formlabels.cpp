@@ -278,188 +278,152 @@ void FormLabels::onActionDeleteTriggered()
     saveLabelToXmlFile();   // #11 删除后立即持久化
 }
 
+// 【2026-11-09 D1 修复】原来四个移动函数用 takeItem()/takeChild() 摘节点，
+// 这两个 API 只把单元格置空、不减少行数（真正删行的是 takeRow()），于是留下 null 行；
+// 函数末尾的 saveLabelToXmlFile() 遍历到 null 就解引用崩溃（实测 0xC0000005）。
+// 统一改为 takeRow()/insertRow()：整行摘走、整行插回，模型里不会出现 null 行。
+// 另外每次结构性变更后 resyncSets()，避免 QPersistentModelIndex 失效导致改名时清空名字。
 void FormLabels::onActionMoveUpTriggered()
 {
-    QModelIndex curIdx = m_tvAllLabels->currentIndex();
-    if(!curIdx.isValid())
-    {
+    const QModelIndex curIdx = m_tvAllLabels->currentIndex();
+    if (!curIdx.isValid() || curIdx.row() <= 0)
         return;
-    }
 
-    int nCurRow = curIdx.row();
-    if(curIdx.row() == 0)
-    {
-        return;
-    }
-
+    const int nCurRow = curIdx.row();
     QStandardItem *curItem = m_modelAllLabels->itemFromIndex(curIdx);
+    if (curItem == nullptr)
+        return;
+
     QStandardItem *parentItem = curItem->parent();
-    if(parentItem == nullptr)
-    {
-        // P2-19：移除内部 curItem 的类型声明，避免遮蔽外层变量。
-        curItem = m_modelAllLabels->takeItem(nCurRow);
-        if(curItem == nullptr)
+    QList<QStandardItem *> rowCur;
+    QList<QStandardItem *> rowUp;
+    if (parentItem == nullptr) {
+        rowCur = m_modelAllLabels->takeRow(nCurRow);
+        rowUp = m_modelAllLabels->takeRow(nCurRow - 1);
+        if (rowCur.isEmpty())
             return;
-
-        QStandardItem *lastUpItem = m_modelAllLabels->takeItem(nCurRow - 1);
-
-        m_modelAllLabels->setItem(nCurRow - 1, curItem);
-        m_modelAllLabels->setItem(nCurRow, lastUpItem);
-
-        QModelIndex index = m_modelAllLabels->index(nCurRow - 1, 0, QModelIndex());
-        m_tvAllLabels->setCurrentIndex(index);
-    }
-    else
-    {
-        curItem = parentItem->takeChild(nCurRow);
-        if(curItem == nullptr)
+        // 先插被移动项，再插原来的上一项，否则顺序不变（等于没动）
+        m_modelAllLabels->insertRow(nCurRow - 1, rowCur);
+        m_modelAllLabels->insertRow(nCurRow, rowUp);
+    } else {
+        rowCur = parentItem->takeRow(nCurRow);
+        rowUp = parentItem->takeRow(nCurRow - 1);
+        if (rowCur.isEmpty())
             return;
-
-        QStandardItem *lastUpItem = parentItem->takeChild(nCurRow - 1);
-
-        parentItem->setChild(nCurRow - 1, curItem);
-        parentItem->setChild(nCurRow, lastUpItem);
-
-        QModelIndex index = curItem->index();
-        m_tvAllLabels->setCurrentIndex(index);
+        parentItem->insertRow(nCurRow - 1, rowCur);
+        parentItem->insertRow(nCurRow, rowUp);
     }
+
+    QStandardItem *movedItem = rowCur.value(0);
+    if (movedItem != nullptr)
+        m_tvAllLabels->setCurrentIndex(movedItem->index());
+    resyncSets();
     saveLabelToXmlFile();   // #11 移动后立即持久化
 }
 
 void FormLabels::onActionMoveDownTriggered()
 {
-    QModelIndex curIdx = m_tvAllLabels->currentIndex();
-    if(!curIdx.isValid())
-    {
+    const QModelIndex curIdx = m_tvAllLabels->currentIndex();
+    if (!curIdx.isValid())
         return;
-    }
 
-    int nCurRow = curIdx.row();
-
+    const int nCurRow = curIdx.row();
     QStandardItem *curItem = m_modelAllLabels->itemFromIndex(curIdx);
+    if (curItem == nullptr)
+        return;
+
     QStandardItem *parentItem = curItem->parent();
-    if(parentItem == nullptr)
-    {
-        if(nCurRow + 1 == m_modelAllLabels->rowCount())
-        {
+    QList<QStandardItem *> rowCur;
+    QList<QStandardItem *> rowDown;
+    if (parentItem == nullptr) {
+        if (nCurRow + 1 >= m_modelAllLabels->rowCount())
             return;
-        }
-
-        // P2-19：移除内部 curItem 的类型声明，避免遮蔽外层变量。
-        curItem = m_modelAllLabels->takeItem(nCurRow);
-        if(curItem == nullptr)
+        rowCur = m_modelAllLabels->takeRow(nCurRow);
+        rowDown = m_modelAllLabels->takeRow(nCurRow);
+        if (rowCur.isEmpty())
             return;
-
-        QStandardItem *lastDownItem = m_modelAllLabels->takeItem(nCurRow + 1);
-
-        m_modelAllLabels->setItem(nCurRow + 1, curItem);
-        m_modelAllLabels->setItem(nCurRow, lastDownItem);
-
-        QModelIndex index = m_modelAllLabels->index(nCurRow + 1, 0, QModelIndex());
-        m_tvAllLabels->setCurrentIndex(index);
+        m_modelAllLabels->insertRow(nCurRow, rowDown);
+        m_modelAllLabels->insertRow(nCurRow + 1, rowCur);
+    } else {
+        if (nCurRow + 1 >= parentItem->rowCount())
+            return;
+        rowCur = parentItem->takeRow(nCurRow);
+        rowDown = parentItem->takeRow(nCurRow);
+        if (rowCur.isEmpty())
+            return;
+        parentItem->insertRow(nCurRow, rowDown);
+        parentItem->insertRow(nCurRow + 1, rowCur);
     }
-    else
-    {
-        if(nCurRow + 1 == parentItem->rowCount())
-        {
-            return;
-        }
 
-        curItem = parentItem->takeChild(nCurRow);
-        if(curItem == nullptr)
-            return;
-
-        QStandardItem *lastDownItem = parentItem->takeChild(nCurRow + 1);
-
-        parentItem->setChild(nCurRow + 1, curItem);
-        parentItem->setChild(nCurRow, lastDownItem);
-
-        QModelIndex index = curItem->index();
-        m_tvAllLabels->setCurrentIndex(index);
-    }
+    QStandardItem *movedItem = rowCur.value(0);
+    if (movedItem != nullptr)
+        m_tvAllLabels->setCurrentIndex(movedItem->index());
+    resyncSets();
     saveLabelToXmlFile();   // #11 移动后立即持久化
 }
 
 void FormLabels::onActionMoveLeftTriggered()
 {
-    QModelIndex curIdx = m_tvAllLabels->currentIndex();
-    if(!curIdx.isValid())
-    {
+    const QModelIndex curIdx = m_tvAllLabels->currentIndex();
+    if (!curIdx.isValid())
         return;
-    }
 
     QStandardItem *curItem = m_modelAllLabels->itemFromIndex(curIdx);
-    QStandardItem *parentItem = curItem->parent();
-    if(parentItem == nullptr)
-    {
+    if (curItem == nullptr)
         return;
-    }
+
+    QStandardItem *parentItem = curItem->parent();
+    if (parentItem == nullptr)
+        return;   // 顶层节点没有"左移"
+
+    QStandardItem *pParentItem = parentItem->parent();
+    const int nInsertRow = parentItem->index().row() + 1;
+    const QList<QStandardItem *> rowCur = parentItem->takeRow(curIdx.row());
+    if (rowCur.isEmpty())
+        return;
+
+    if (pParentItem == nullptr)
+        m_modelAllLabels->insertRow(nInsertRow, rowCur);
     else
-    {
-        // P0-1：takeChild 已将该节点从父节点移除并返回，这里再次 removeRow 会误删
-        // 原本位于 curIdx.row() 之后的相邻节点。移除冗余的 removeRow 调用。
-        curItem = parentItem->takeChild(curIdx.row());
-        QStandardItem *pParentItem = parentItem->parent();
-        if(pParentItem == nullptr)
-        {
-            m_modelAllLabels->insertRow(parentItem->index().row() + 1, curItem);
-        }
-        else
-        {
-            pParentItem->insertRow(parentItem->index().row() + 1, curItem);
-        }
-    }
+        pParentItem->insertRow(nInsertRow, rowCur);
 
-    QModelIndex index = curItem->index();
-    m_tvAllLabels->setCurrentIndex(index);
+    QStandardItem *movedItem = rowCur.value(0);
+    if (movedItem != nullptr)
+        m_tvAllLabels->setCurrentIndex(movedItem->index());
+    resyncSets();
     saveLabelToXmlFile();   // #11 移动后立即持久化
-
 }
 
 // 作为其上方的节点的子节点
 void FormLabels::onActionMoveRightTriggered()
 {
-    QModelIndex curIdx = m_tvAllLabels->currentIndex();
-    if(!curIdx.isValid() || m_modelAllLabels->rowCount() <= 1)
-    {
+    const QModelIndex curIdx = m_tvAllLabels->currentIndex();
+    if (!curIdx.isValid() || curIdx.row() <= 0)
         return;
-    }
 
     QStandardItem *curItem = m_modelAllLabels->itemFromIndex(curIdx);
+    if (curItem == nullptr)
+        return;
+
     QStandardItem *parentItem = curItem->parent();
-    if(parentItem == nullptr)
-    {
-       QStandardItem *upItem = m_modelAllLabels->item(curIdx.row() - 1);
-       if(upItem == nullptr)
-       {
-           return;
-       }
-       else
-       {
-            // P0-2：takeItem 已将该节点移除并返回，这里再次 removeRow 会误删相邻节点。
-            curItem = m_modelAllLabels->takeItem(curIdx.row());
-            upItem->appendRow(curItem);
-       }
-    }
-    else
-    {
-        QStandardItem *upItem = parentItem->child(curIdx.row() - 1);
-        if(upItem == nullptr)
-        {
-            return;
-        }
-        else
-        {
-             // P0-2：takeChild 已将该节点移除并返回，这里再次 removeRow 会误删相邻节点。
-             curItem = parentItem->takeChild(curIdx.row());
-             upItem->appendRow(curItem);
-        }
-    }
+    QStandardItem *upItem = (parentItem == nullptr)
+                                ? m_modelAllLabels->item(curIdx.row() - 1)
+                                : parentItem->child(curIdx.row() - 1);
+    if (upItem == nullptr)
+        return;
 
-    QModelIndex index = curItem->index();
-    m_tvAllLabels->setCurrentIndex(index);
+    const QList<QStandardItem *> rowCur = (parentItem == nullptr)
+                                             ? m_modelAllLabels->takeRow(curIdx.row())
+                                             : parentItem->takeRow(curIdx.row());
+    if (rowCur.isEmpty())
+        return;
+    upItem->appendRow(rowCur);
+
+    QStandardItem *movedItem = rowCur.value(0);
+    if (movedItem != nullptr)
+        m_tvAllLabels->setCurrentIndex(movedItem->index());
+    resyncSets();
     saveLabelToXmlFile();   // #11 移动后立即持久化
-
 }
 
 // 节点文本编辑结束时触发：处理去重、回退旧值，并保持 m_setLabels / m_committedText 同步。
@@ -519,6 +483,8 @@ QStandardItem* FormLabels::createLabelItem(const QString &name, const QString &u
 
 void FormLabels::registerItem(QStandardItem *item)
 {
+    if (item == nullptr)   // 【D1 防御】
+        return;
     m_setLabels.insert(item->text());
     m_committedText[QPersistentModelIndex(item->index())] = item->text();
     // 递归登记子树
@@ -530,8 +496,12 @@ int FormLabels::countLabelOccurrences(const QString &name) const
 {
     int n = 0;
     std::function<void(QStandardItem*)> walk = [&](QStandardItem *it) {
+        if (it == nullptr)   // 【D1 防御】
+            return;
         for (int i = 0; i < it->rowCount(); ++i) {
             QStandardItem *child = it->child(i);
+            if (child == nullptr)
+                continue;
             if (QString::compare(child->text(), name, Qt::CaseInsensitive) == 0)
                 ++n;
             walk(child);
@@ -559,6 +529,8 @@ void FormLabels::saveLabelToXmlFile()
     {
         LabelInfo labelInfo;
         QStandardItem *item = m_modelAllLabels->item(i);
+        if (item == nullptr)   // 【D1 防御】模型里不该再出现 null 行，真出现也不能崩
+            continue;
         labelInfo.sUuid = item->data(LabelUuidRole).toString();
         if (labelInfo.sUuid.isEmpty())
             labelInfo.sUuid = Utility::createUuid();
@@ -587,10 +559,14 @@ void FormLabels::traverseWriteLabel(QStandardItem *item, const QList<LabelInfo> 
 
 void FormLabels::traverseReadLabel(QStandardItem *item, QList<LabelInfo> &lstLabelInfo)
 {
+    if (item == nullptr)
+        return;
     int nRowCount = item->rowCount();
     for(int i = 0; i < nRowCount; i++)
     {
         QStandardItem *itemChild = item->child(i);
+        if (itemChild == nullptr)   // 【D1 防御】跳过 null 子项
+            continue;
         LabelInfo labelInfo;
         labelInfo.sUuid = itemChild->data(LabelUuidRole).toString();
         if (labelInfo.sUuid.isEmpty())

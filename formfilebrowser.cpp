@@ -230,7 +230,7 @@ void FormFileBrowser::onActionAddLabelByAITriggered()
     m_threadAddLabelByAI->start();
 }
 
-void FormFileBrowser::onRecvAddLabelByAIFinish()
+void FormFileBrowser::onRecvAddLabelByAIFinish(int nSucceeded, int nFailed, QString sFirstError)
 {
     showFilesWidget();
     setActionState(ADDTAGBYAI_FINISH);
@@ -238,6 +238,26 @@ void FormFileBrowser::onRecvAddLabelByAIFinish()
     // AI 线程写 ADS 时 FileTimeGuard 保持 mtime 不变，模型不会自动感知标签变化；
     // 这里主动刷新并清空标签缓存，否则标签列会一直显示旧值。
     emit sendRefresh();
+
+    // 【D5 修复】进度页在结束时会被清空，所以失败必须在这里用对话框告诉用户，
+    // 否则"脚本缺失/缺依赖/解释器不可用"这类失败对用户完全不可见。
+    if (nFailed > 0 || !sFirstError.isEmpty()) {
+        QString sMsg;
+        if (nFailed > 0) {
+            sMsg = tr("AI 自动生成标签未全部成功：成功 %1 个文件，失败 %2 个。")
+                       .arg(nSucceeded).arg(nFailed);
+        } else {
+            sMsg = tr("AI 自动生成标签未能运行。");
+        }
+        if (!sFirstError.isEmpty())
+            sMsg += tr("\n\n原因：\n%1").arg(sFirstError);
+        sMsg += tr("\n\n详细信息见程序目录下的 FileMarker.log。");
+        QMessageBox::warning(this, tr("AI 自动生成标签"), sMsg);
+    } else if (nSucceeded == 0) {
+        QMessageBox::information(this, tr("AI 自动生成标签"),
+                                 tr("没有处理任何文件。\n\n请确认已选中文件（或目录），"
+                                    "并且目录里包含可处理的文件。"));
+    }
 }
 
 void FormFileBrowser::onRecvLabelsGeneratedByAI(QString sLabels)
@@ -268,12 +288,15 @@ void FormFileBrowser::onActionAddLabelsTriggered()
     }
 
     bool bAllOk = true;
+    QStringList qLFailedFiles;          // 【D7 修复】把失败的文件名带回给用户
     QSet<QString> setDirs;
     foreach(const QString &sFilePath, qLFilePaths)
     {
         // 追加而不是覆盖：保留文件已有标签的顺序，新标签按选中顺序追加到末尾
-        if (!ADSOperation::appendTags(sFilePath, m_qLSelLabels))
+        if (!ADSOperation::appendTags(sFilePath, m_qLSelLabels)) {
             bAllOk = false;
+            qLFailedFiles << QFileInfo(sFilePath).fileName();
+        }
         setDirs.insert(QFileInfo(sFilePath).absolutePath());
     }
 
@@ -286,9 +309,16 @@ void FormFileBrowser::onActionAddLabelsTriggered()
     emit sendRefresh();
 
     if (!bAllOk) {
+        // 【D7 修复】以前只给一句通用提示，批量操作时无法知道是哪个文件失败；
+        // 现在列出前 5 个失败文件名（完整列表见日志）。
+        const QString sList = qLFailedFiles.mid(0, 5).join(QStringLiteral("\n"));
+        const QString sMore = qLFailedFiles.size() > 5
+                                  ? tr("\n…另有 %1 个文件").arg(qLFailedFiles.size() - 5)
+                                  : QString();
         QMessageBox::warning(this, tr("保存标签失败"),
-                             tr("部分文件或标签未能写入，可能是文件被占用、只读或磁盘空间不足。\n"
-                                "已有标签不会被删除，请检查后重试。"));
+                             tr("以下 %1 个文件的标签未能写入（可能是文件被占用、只读或磁盘空间不足）：\n\n%2%3\n\n"
+                                "已有标签不会被删除，请检查后重试。")
+                                 .arg(qLFailedFiles.size()).arg(sList).arg(sMore));
     }
 }
 
@@ -466,6 +496,15 @@ void FormFileBrowser::onRecvLabels(QString sFilePath, QString sLabels)
             qLChanged << sLabel + tr("（已忽略）");
         }
     }
+    // 【D2 修复】输入非空但净化后一个都不剩 → 中止并提示，不能当成"清空全部标签"。
+    if (qLLabels.isEmpty() && !sLabels.trimmed().isEmpty()) {
+        QMessageBox::warning(this, tr("标签名无效"),
+                             tr("输入的标签名都不合法（不能用 : / \\ * ? \" < > | 和分隔符），"
+                                "未做任何修改。\n\n原始输入：%1")
+                                 .arg(sLabels.trimmed()));
+        return;
+    }
+
     if (!qLChanged.isEmpty())
         emit sendStatusMessage(tr("部分标签名已规范化：%1").arg(qLChanged.join("，")));
 

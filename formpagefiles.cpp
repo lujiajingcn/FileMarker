@@ -86,6 +86,22 @@ public:
     }
 };
 
+// 详情视图第 0~3 列（名称/大小/类型/修改日期）禁止就地编辑。
+// 原因：为了让第 5 列（标签）可编辑，代码里调用了 m_modelFiles->setReadOnly(false)，
+// 而 QFileSystemModel::flags() 会因此把第 0 列也标成 ItemIsEditable —— 于是双击文件名或按 F2
+// 会真的重命名磁盘文件（无确认、无撤销，实测把 audio.wav 改了名）。
+// 这里用一个"拒绝创建编辑器"的代理把这些列锁死；标签列仍用 TagColumnDelegate。
+class NoEditDelegate : public QStyledItemDelegate
+{
+public:
+    explicit NoEditDelegate(QObject *parent = nullptr) : QStyledItemDelegate(parent) {}
+
+    QWidget *createEditor(QWidget *, const QStyleOptionViewItem &, const QModelIndex &) const override
+    {
+        return nullptr;   // 不创建编辑器 → 无法改名（视图对 nullptr 有判空）
+    }
+};
+
 } // namespace
 
 FormPageFiles::FormPageFiles(QWidget *parent) :
@@ -245,7 +261,13 @@ void FormPageFiles::onDeleteLabels()
     QMessageBox box(this);
     box.setWindowTitle(tr("删除标签"));
     box.setIcon(QMessageBox::Warning);
-    box.setText(tr("将删除选中 %1 个文件的全部标签，且无法撤销。\n是否继续？").arg(qLSelFilePaths.size()));
+    // 【D9 修复】确认框里列出具体文件（最多 5 个），避免"选中的文件已经不在当前视图里"时
+    // 用户不知道到底要删哪些文件的标签。
+    QString sFileList = qLSelFilePaths.mid(0, 5).join(QStringLiteral("\n"));
+    if (qLSelFilePaths.size() > 5)
+        sFileList += tr("\n…另有 %1 个文件").arg(qLSelFilePaths.size() - 5);
+    box.setText(tr("将删除以下 %1 个文件的全部标签，且无法撤销：\n\n%2\n\n是否继续？")
+                    .arg(qLSelFilePaths.size()).arg(sFileList));
     QPushButton *pBtnDelete = box.addButton(tr("删除"), QMessageBox::DestructiveRole);
     QPushButton *pBtnCancel = box.addButton(tr("取消"), QMessageBox::RejectRole);
     box.setDefaultButton(pBtnCancel);
@@ -254,17 +276,25 @@ void FormPageFiles::onDeleteLabels()
         return;
 
     bool bAllOk = true;
+    QStringList qLFailedFiles;          // 【D7 修复】把失败的文件名带回给用户
     foreach(const QString &sSelFilePath, qLSelFilePaths)
     {
-        if (!ADSOperation::deleteADSFiles(sSelFilePath))
+        if (!ADSOperation::deleteADSFiles(sSelFilePath)) {
             bAllOk = false;
+            qLFailedFiles << QFileInfo(sSelFilePath).fileName();
+        }
     }
     emit sendTagsChanged(qLSelFilePaths);
     onBtnRefreshClicked();
 
     if (!bAllOk) {
+        const QString sList = qLFailedFiles.mid(0, 5).join(QStringLiteral("\n"));
+        const QString sMore = qLFailedFiles.size() > 5
+                                  ? tr("\n…另有 %1 个文件").arg(qLFailedFiles.size() - 5)
+                                  : QString();
         QMessageBox::warning(this, tr("删除标签失败"),
-                             tr("部分文件的标签未能删除，可能是文件被占用、只读或权限不足。"));
+                             tr("以下 %1 个文件的标签未能删除（可能是文件被占用、只读或权限不足）：\n\n%2%3")
+                                 .arg(qLFailedFiles.size()).arg(sList).arg(sMore));
     }
 }
 
@@ -274,6 +304,10 @@ void FormPageFiles::initDetailFileList()
      // 设置可以选中多行
     m_tvFiles->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_tvFiles->setModel(m_modelFiles);
+    // 【D6 修复】第 0~3 列装"拒绝编辑"代理，只有标签列（第 4 列）保留编辑器；
+    // 否则双击文件名/F2 会直接重命名磁盘文件（见 NoEditDelegate 注释）。
+    for (int nCol = 0; nCol <= 3; ++nCol)
+        m_tvFiles->setItemDelegateForColumn(nCol, new NoEditDelegate(m_tvFiles));
     // 标签列单独装代理，保证行内编辑器铺满单元格（见 TagColumnDelegate）。
     m_tvFiles->setItemDelegateForColumn(4, new TagColumnDelegate(m_tvFiles));
 
@@ -392,7 +426,10 @@ void FormPageFiles::curDirChanged(QString sCurDir)
 void FormPageFiles::updateDirLabelsPanel(const QString &sDir)
 {
     emit sendDirLabels(sDir, QSet<QString>());
-    QTimer::singleShot(150, this, [this, sDir]() { scanDirLabels(sDir); });
+    // 【D4 修复】这里必须强制重扫：发送空集已经把面板清空了，如果再用"非强制"方式调用，
+    // 对"本会话已扫过一遍的同一目录"会被 m_sScanCompletedDir 守卫直接跳过，
+    // 结果面板清空后永远不再填充（实测：对同一路径再按一次回车即可复现）。
+    QTimer::singleShot(150, this, [this, sDir]() { scanDirLabels(sDir, true); });
 }
 
 void FormPageFiles::scanDirLabels(const QString &sDir, bool bForce)
@@ -861,12 +898,28 @@ void FormPageFiles::recvGotoFile(QString sFilePath)
 {
     // P2-4：用 QFileInfo 取父目录，正确处理盘符根（如 C:/file.txt 下 lastIndexOf('/') 会失效）。
     QFileInfo fi(sFilePath);
-    QString sFileDir = fi.absolutePath();
-    QModelIndex dirIndex = m_modelFiles->index(sFileDir);
+    const QString sFileDir = QDir::cleanPath(fi.absolutePath());
+    const QModelIndex dirIndex = m_modelFiles->index(sFileDir);
     // P1-7：使用 bothSetRootIndex 同时更新详细视图和缩略图视图，
     // 否则缩略图模式下跳转后仍停留在旧目录。
     bothSetRootIndex(dirIndex);
-    m_tvFiles->setCurrentIndex(m_modelFiles->index(sFilePath));
+
+    // 【D3 修复】"当前目录"的状态有 5 份副本（两个视图的 rootIndex、m_sCurDir、地址栏、
+    // 后退/前进栈、【当前目录中的标签】面板）。原来这里只改了 rootIndex，于是：
+    // 地址栏和标签面板还显示旧目录，点【刷新】又按 m_sCurDir 把列表弹回旧目录。
+    // 现在统一走 curDirChanged()，只有"本来就在这个目录"时才只同步地址栏，避免重复压后退栈。
+    if (!isSameDirPath(sFileDir, m_sCurDir)) {
+        curDirChanged(sFileDir);
+    } else {
+        refreshAddressBar();
+        updateToolButtons();
+    }
+
+    const QModelIndex fileIndex = m_modelFiles->index(fi.absoluteFilePath());
+    if (fileIndex.isValid()) {
+        m_tvFiles->setCurrentIndex(fileIndex);
+        m_lstFiles->setCurrentIndex(fileIndex);
+    }
 }
 
 void FormPageFiles::onTbDetailClicked()
@@ -905,6 +958,11 @@ void FormPageFiles::bothSetRootIndex(const QModelIndex &index)
 {
     m_tvFiles->setRootIndex(index);
     m_lstFiles->setRootIndex(index);
+    // 【D9 修复】换目录时必须清掉选择集：两个视图共用同一个 QItemSelectionModel，
+    // 而 setRootIndex() 不会清理它。不清的话，切到别的目录后工具栏【删除标签】/【添加标签】
+    // 仍会作用到旧目录里"已经看不见"的文件（实测：不可见文件的标签被真实删除）。
+    if (m_tvFiles->selectionModel() != nullptr)
+        m_tvFiles->selectionModel()->clearSelection();
 }
 
 void FormPageFiles::onListViewCustomContextMenuRequested(const QPoint &pos)
@@ -927,13 +985,21 @@ void FormPageFiles::onEditTag(const QModelIndex &index)
     // 按录入顺序显示当前标签（NTFS 枚举流是按流名排序的，不能直接用它）
     QStringList adsNames = ADSOperation::listADSTagsInOrder(sFilePath);
     const QString sOldText = adsNames.join(",");
-    bool ok = false;
-    QString sNewTags = QInputDialog::getText(this, tr("编辑标签"),
-                                             tr("多个标签用逗号、顿号或分号分隔（支持中英文）："),
-                                             QLineEdit::Normal,
-                                             sOldText, &ok);
-    if (!ok)
+    // 【D8 修复】不用静态的 QInputDialog::getText（它的按钮文字来自 Qt 自带翻译，
+    // 未加载 .qm 时永远是英文 OK/Cancel），改为自建实例并显式设置中文按钮；
+    // 同时把对话框放宽，避免 Qt 报 "setGeometry: Unable to set geometry" 警告。
+    QInputDialog dlg(this);
+    dlg.setWindowTitle(tr("编辑标签"));
+    dlg.setLabelText(tr("多个标签用逗号、顿号或分号分隔（支持中英文）："));
+    dlg.setInputMode(QInputDialog::TextInput);
+    dlg.setTextValue(sOldText);
+    dlg.setOkButtonText(tr("确定"));
+    dlg.setCancelButtonText(tr("取消"));
+    dlg.setMinimumWidth(560);
+    dlg.resize(560, dlg.sizeHint().height());
+    if (dlg.exec() != QDialog::Accepted)
         return;
+    QString sNewTags = dlg.textValue();
 
     // 没有改动就不要重写：历史标签可能合法包含 "，、；"，重新 split 会把一个标签拆成多个。
     if (sNewTags == sOldText)
@@ -958,6 +1024,19 @@ void FormPageFiles::onEditTag(const QModelIndex &index)
             qLChanged << sLabel + tr("（已忽略）");
         }
     }
+
+    // 【D2 修复】区分两种"空列表"：
+    //   - 用户把输入框清空 → 视为"清空全部标签"，照常执行；
+    //   - 输入非空但净化后一个都不剩（如 "???"、"<>"）→ 中止并提示，绝不静默清空。
+    // 以前两种都走 replaceTags(file, {})，会把文件原有标签全部删掉还返回成功。
+    if (qLLabels.isEmpty() && !sNewTags.trimmed().isEmpty()) {
+        QMessageBox::warning(this, tr("标签名无效"),
+                             tr("输入的标签名都不合法（不能用 : / \\ * ? \" < > | 和分隔符），"
+                                "未做任何修改。\n\n原始输入：%1")
+                                 .arg(sNewTags.trimmed()));
+        return;
+    }
+
     if (!qLChanged.isEmpty())
         emit sendHintMessage(tr("部分标签名已规范化：%1").arg(qLChanged.join("，")));
 

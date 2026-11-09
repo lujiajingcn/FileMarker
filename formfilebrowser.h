@@ -79,7 +79,8 @@ public slots:
 
     void onRecvSelLabels(QStringList qLSelLabels);
 
-    void onRecvAddLabelByAIFinish();
+    // 【D5 修复】结束信号带上统计与首个错误，便于界面提示失败原因
+    void onRecvAddLabelByAIFinish(int nSucceeded, int nFailed, QString sFirstError);
 
     void onRecvLabelsGeneratedByAI(QString sLabels);
 
