@@ -13,6 +13,8 @@
 #include <QDirIterator>
 #include <QProgressDialog>
 #include <QMessageBox>
+#include <QFileInfo>
+#include <QProcess>
 #include <QPushButton>
 #include "adsoperation.h"
 
@@ -61,8 +63,7 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->dwcLabels->addToolButtonsToMenu(ui->menuLabelManage);
 
     // 清理未使用标签：扫描选中目录（含子目录），把没有任何文件使用的库标签删掉
-    QAction *actionCleanupLabels = ui->menuLabelManage->addAction(tr("清理未使用标签…"));
-    connect(actionCleanupLabels, &QAction::triggered, this, [this]() {
+    QAction *actionCleanupLabels = ui->menuLabelManage->addAction(tr("清理未使用标签…"));    connect(actionCleanupLabels, &QAction::triggered, this, [this]() {
         const QStringList qLDirs = ui->wFileBrowser->getSelDirs();
         if (qLDirs.isEmpty())
             return;
@@ -128,6 +129,17 @@ MainWindow::MainWindow(QWidget *parent) :
         if (box.clickedButton() == pDelete)
             ui->dwcLabels->removeLabels(qLUnused);
     });
+
+    // 【C16】撤销上一次标签操作：标签写盘不可撤销，至少要能给"刚才那一步"兜底
+    QAction *actionUndoTag = ui->menuFileManage->addAction(tr("撤销上一次标签操作"));
+    actionUndoTag->setShortcut(QKeySequence::Undo);
+    actionUndoTag->setEnabled(false);
+    connect(actionUndoTag, &QAction::triggered, ui->wFileBrowser, &FormFileBrowser::undoLastTagOperation);
+    connect(ui->wFileBrowser, &FormFileBrowser::sendUndoStateChanged, actionUndoTag, &QAction::setEnabled);
+
+    // 【C15】AI 打标依赖外部 Python 脚本与依赖库，给个自检入口，免得只能看到运行失败
+    QAction *actionCheckAI = ui->menuHelp->addAction(tr("检查 AI 打标环境…"));
+    connect(actionCheckAI, &QAction::triggered, this, &MainWindow::checkAIEnvironment);
 
     // 灏嗚彍鍗曟爮涓殑鍔ㄤ綔鏀惧埌銆愭枃浠剁鐞嗐€戜腑瀹炵幇
     ui->wFileBrowser->setActions(ui->actionAddLabelbyAI, ui->actionAddLabels, ui->actionDelLabels, ui->actionSearchFilesbyLabels, ui->actionTraverseSelDirs, ui->actionSearchConfig);
@@ -230,5 +242,54 @@ void MainWindow::onActionAuthorTriggered()
 {
     DlgAuthor dlgAuthor(this);
     dlgAuthor.exec();
+}
+
+/** 【C15】AI 打标环境自检：脚本 / Python / 依赖库 三项，逐项给结果。 */
+void MainWindow::checkAIEnvironment()
+{
+    const QString sScript = g_sAppDir + "/extract_and_tag.py";
+    QStringList qLLines;
+
+    qLLines << (QFileInfo::exists(sScript)
+                    ? tr("① 脚本：已找到\n   %1").arg(sScript)
+                    : tr("① 脚本：未找到\n   期望位置：%1\n   请把 extract_and_tag.py 放到程序目录。").arg(sScript));
+
+    QString sPython;
+    QProcess proc;
+    proc.start(QStringLiteral("python"),
+               QStringList() << QStringLiteral("-c")
+                             << QStringLiteral("import sys;print(sys.version.split()[0])"));
+    if (proc.waitForFinished(5000) && proc.exitCode() == 0)
+        sPython = QString::fromLocal8Bit(proc.readAllStandardOutput()).trimmed();
+
+    if (sPython.isEmpty()) {
+        proc.start(QStringLiteral("python3"),
+                   QStringList() << QStringLiteral("-c") << QStringLiteral("import sys;print(sys.version.split()[0])"));
+        if (proc.waitForFinished(5000) && proc.exitCode() == 0)
+            sPython = QString::fromLocal8Bit(proc.readAllStandardOutput()).trimmed();
+    }
+
+    if (sPython.isEmpty()) {
+        qLLines << tr("② Python：未找到可用的解释器（需要 python 或 python3 在 PATH 里）");
+        qLLines << tr("③ 依赖库：无法检查（没有 Python）");
+    } else {
+        qLLines << tr("② Python：%1").arg(sPython);
+
+        proc.start(QStringLiteral("python"),
+                   QStringList() << QStringLiteral("-c")
+                                 << QStringLiteral("import pypdf,docx,PIL,pytesseract,requests;print('ok')"));
+        const bool bDepsOk = proc.waitForFinished(20000) && proc.exitCode() == 0;
+        if (bDepsOk) {
+            qLLines << tr("③ 依赖库：pypdf / python-docx / Pillow / pytesseract / requests 均已安装");
+        } else {
+            const QString sErr = QString::fromLocal8Bit(proc.readAllStandardError()).trimmed();
+            qLLines << tr("③ 依赖库：缺少部分库\n   %1\n   可在命令行执行：pip install pypdf python-docx Pillow pytesseract requests")
+                           .arg(sErr.isEmpty() ? tr("（没有拿到错误信息）") : sErr);
+        }
+        qLLines << tr("提示：AI 打标对每个文件启动一次脚本，结果只写进日志与进度页；"
+                      "失败时会在结束时弹窗说明原因。");
+    }
+
+    QMessageBox::information(this, tr("AI 打标环境"), qLLines.join(QStringLiteral("\n\n")));
 }
 

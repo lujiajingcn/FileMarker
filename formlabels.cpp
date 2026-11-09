@@ -217,6 +217,10 @@ void FormLabels::addItem(QStandardItem *parentItem)
     }
     registerItem(newItem);
     m_tvAllLabels->setCurrentIndex(newItem->index());
+    // 【D17】新建的节点直接进入改名状态：默认名是"新标签"，让用户马上就改，
+    // 而不是点完"新建标签"看到多了一行"新标签"还要再双击一次。
+    m_bNamingNewLabel = true;          // 这次改名只是给新标签起名，不要弹同步询问
+    m_tvAllLabels->edit(newItem->index());
     saveLabelToXmlFile();   // #11 新增标签后立即持久化
 }
 
@@ -552,7 +556,10 @@ void FormLabels::onItemChanged(QStandardItem *item)
 
     // A2：改名只改了标签库，文件上的旧标签不会自动跟着变。
     // 这里排队弹一次询问，让用户明确选择"只改库"还是"连文件一起改"（可以撤销）。
-    if (!old.isEmpty() && !m_bSuppressSyncPrompt && m_sqlOperation != nullptr) {
+    if (m_bNamingNewLabel) {
+        // 新建标签时的"起名"：只是给新节点取名字，不需要问要不要同步到文件
+        m_bNamingNewLabel = false;
+    } else if (!old.isEmpty() && !m_bSuppressSyncPrompt && m_sqlOperation != nullptr) {
         QTimer::singleShot(0, this, [this, old, sLabel]() { promptSyncRenameToFiles(old, sLabel); });
     }
 }

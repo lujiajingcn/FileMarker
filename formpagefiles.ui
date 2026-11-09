@@ -91,13 +91,13 @@
            <item row="0" column="3">
             <widget class="QToolButton" name="toParentButton">
              <property name="toolTip">
-              <string>Parent Directory</string>
+              <string>上一级</string>
              </property>
              <property name="accessibleName">
-              <string>Parent Directory</string>
+              <string>上一级</string>
              </property>
              <property name="accessibleDescription">
-              <string>Go to the parent directory</string>
+              <string>回到上一级目录</string>
              </property>
              <property name="icon">
               <iconset resource="resources.qrc">
@@ -114,13 +114,13 @@
            <item row="0" column="1">
             <widget class="QToolButton" name="forwardButton">
              <property name="toolTip">
-              <string>Forward</string>
+              <string>前进</string>
              </property>
              <property name="accessibleName">
-              <string>Forward</string>
+              <string>前进</string>
              </property>
              <property name="accessibleDescription">
-              <string>Go forward</string>
+              <string>前进到下一个目录</string>
              </property>
              <property name="icon">
               <iconset resource="resources.qrc">
@@ -176,13 +176,13 @@
            <item row="0" column="0">
             <widget class="QToolButton" name="backButton">
              <property name="toolTip">
-              <string>Back</string>
+              <string>后退</string>
              </property>
              <property name="accessibleName">
-              <string>Back</string>
+              <string>后退</string>
              </property>
              <property name="accessibleDescription">
-              <string>Go back</string>
+              <string>回到上一个目录</string>
              </property>
              <property name="icon">
               <iconset resource="resources.qrc">

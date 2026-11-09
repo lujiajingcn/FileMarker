@@ -59,6 +59,8 @@ public:
     void restoreLastDir();
 
 signals:
+    // 【C16】能否撤销的状态变化（供菜单项启用/禁用）
+    void sendUndoStateChanged(bool bCanUndo);
     void sendStop();
     void sendShowFilteredFiles(QStringList qLFilteredFiles);
     void sendRefresh();
@@ -116,6 +118,15 @@ private slots:
 
     void onRecvLabels(QString sFilePath, QString sLabels);
 
+public slots:
+    // 【C16】标签即将被改动：先记住改动前的标签，供"撤销上一次标签操作"
+    void onBeforeTagsChanged(const QStringList &qLFilePaths);
+
+    // 【C16】撤销上一次标签操作（把标签恢复成改动前的样子）
+    void undoLastTagOperation();
+
+private slots:
+
 protected:
     void setActionState(OPERATION op);
 
@@ -133,10 +144,17 @@ private:
     // A4：与 m_qLSelLabels 一一对应的"分组"（组 = 标签 + 它的全部子标签），搜索用这个匹配
     QList<QSet<QString>> m_qLLabelGroups;
 
+    // 【C16】"撤销上一次标签操作"的现场：文件 → 改动前的标签列表
+    QMap<QString, QStringList> m_mapUndoOldTags;
+    QString                    m_sUndoDesc;
+
+    // 【C12】上一次搜索的结果来源（缓存 / 磁盘扫描），显示在结果页
+    QString                    m_sSearchSource;
+
     SqliteOperation     *m_sqlOperation;        // 操作sqlite数据库
     ThreadSearch        *m_threadSearch;        // 处理根据标签查找文件的线程
     ThreadTraverseDirs  *m_threadTraverseDirs;  // 遍历选中文件夹中全部文件的线程
-    ThreadAddTagByAI  *m_threadAddLabelByAI;
+    ThreadAddTagByAI    *m_threadAddLabelByAI;  // AI 自动生成标签的线程
 
     int                 m_nThread;              // 用来记录当前运行的线程：根据标签查找文件、遍历文件夹、AI自动生成标签。
 

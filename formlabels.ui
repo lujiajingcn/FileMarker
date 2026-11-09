@@ -47,7 +47,7 @@
      <item row="0" column="5">
       <widget class="QToolButton" name="btnMoveLeft">
        <property name="toolTip">
-        <string>左移标签</string>
+        <string>升级标签</string>
        </property>
        <property name="text">
         <string>...</string>
@@ -67,7 +67,7 @@
      <item row="0" column="6">
       <widget class="QToolButton" name="btnMoveRight">
        <property name="toolTip">
-        <string>右移标签</string>
+        <string>降级标签</string>
        </property>
        <property name="text">
         <string>...</string>
@@ -184,7 +184,7 @@
      <normaloff>:/Resources/moveleft.png</normaloff>:/Resources/moveleft.png</iconset>
    </property>
    <property name="text">
-    <string>左移标签</string>
+    <string>升级标签</string>
    </property>
   </action>
   <action name="actionMoveRight">
@@ -193,7 +193,7 @@
      <normaloff>:/Resources/moveright.png</normaloff>:/Resources/moveright.png</iconset>
    </property>
    <property name="text">
-    <string>右移标签</string>
+    <string>降级标签</string>
    </property>
   </action>
  </widget>

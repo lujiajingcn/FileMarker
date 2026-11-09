@@ -128,6 +128,8 @@ private:
     bool m_bPromptShowing;
     // A2：程序化改回名字时不要再次弹"是否同步到文件"
     bool m_bSuppressSyncPrompt = false;
+    // 新建标签后正在输入名字：这一次改名只是给新标签起名，不该弹"要不要同步到文件"
+    bool m_bNamingNewLabel = false;
     SqliteOperation        *m_sqlOperation = nullptr;
 
     enum { LabelUuidRole = Qt::UserRole + 1 };

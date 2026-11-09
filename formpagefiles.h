@@ -78,6 +78,9 @@ signals:
     // 标签写盘成功后通知外层让搜索缓存失效
     void sendTagsChanged(const QStringList &qLFilePaths);
 
+    // 【C16】写标签之前广播一次，供外层记住"改之前的标签"用于撤销
+    void sendBeforeTagsChanged(const QStringList &qLFilePaths);
+
 public:
     // 刷新当前目录：既响应【刷新】按钮，也作为 FormFileBrowser::sendRefresh 信号的接收者
     void onBtnRefreshClicked();

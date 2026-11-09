@@ -35,6 +35,9 @@ public slots:
     void onGotoFilePath();
     void setSearchCondition(const QString &sCondition);
 
+    // 【C12】结果来源（缓存 / 磁盘扫描），显示在结果计数后面，让"缓存可能过期"这件事可见
+    void setSearchSource(const QString &sSource);
+
 protected:
     void hideEvent(QHideEvent *event) override;
     void showEvent(QShowEvent *event) override;
@@ -62,12 +65,14 @@ private:
     QTreeView               *m_tvFilteredFiles;
     QStandardItemModel      *m_modelFilteredFiles;
     QAction                 *m_gotoFilePath;
+    QAction                 *m_revealInExplorer;
     QAction                 *m_openFile;
     QAction                 *m_copyFilePath;
 
     // 标签列分片填充状态
     QTimer                  *m_pTagScanTimer;
     QStringList              m_qLTagScanPaths;
+    QString                  m_sSearchSource;
     int                      m_nTagScanRow;
     QString                  m_sSearchCondition;
 };

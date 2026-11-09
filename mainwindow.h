@@ -32,6 +32,9 @@ private:
 
     void onActionAuthorTriggered();
 
+    /** 【C15】检查 AI 打标依赖：脚本是否存在、Python 是否可用、依赖库是否齐全 */
+    void checkAIEnvironment();
+
     QFile                   m_logFile;
     QTimer                 *m_pGeometryTimer;
 

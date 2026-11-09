@@ -179,7 +179,8 @@
     <string>遍历文件</string>
    </property>
    <property name="toolTip">
-    <string>遍历选中的文件夹</string>
+    <string>遍历选中的文件夹，把其中的标签信息写入本地缓存（之后的【查找文件】会走缓存，更快；
+有文件在程序外被改动时，重新遍历一次即可刷新）</string>
    </property>
   </action>
   <action name="actionHelp">

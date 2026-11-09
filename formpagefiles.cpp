@@ -276,6 +276,9 @@ void FormPageFiles::onDeleteLabels()
     if (box.clickedButton() != pBtnDelete)
         return;
 
+    // 【C16】删除前广播一次，供上层记录"删除之前的标签"用于撤销
+    emit sendBeforeTagsChanged(qLSelFilePaths);
+
     bool bAllOk = true;
     QStringList qLFailedFiles;          // 【D7 修复】把失败的文件名带回给用户
     foreach(const QString &sSelFilePath, qLSelFilePaths)
@@ -324,6 +327,11 @@ void FormPageFiles::initDetailFileList()
     m_tvFiles->header()->setSortIndicator(m_nSortColumn, m_sortOrder);
     m_modelFiles->sort(m_nSortColumn, m_sortOrder);
     connect(m_tvFiles->header(), &QHeaderView::sectionClicked, this, [this](int section) {
+        // 【B7】标签列不支持排序：给一句提示，而不是"点了完全没反应"
+        if (section == 4) {
+            emit sendHintMessage(tr("标签列暂不支持排序；双击标签列可以编辑该文件的标签。"));
+            return;
+        }
         if (section < 0 || section > 3)
             return;
         const Qt::SortOrder order = (section == m_nSortColumn && m_sortOrder == Qt::AscendingOrder)
@@ -1009,6 +1017,7 @@ void FormPageFiles::onEditTag(const QModelIndex &index)
     if (qLLabels == adsNames)   // 没有改动就不要重写
         return;
 
+    emit sendBeforeTagsChanged(QStringList() << sFilePath);   // 【C16】供"撤销上一次标签操作"
     const bool bOk = ADSOperation::replaceTags(sFilePath, qLLabels);
     emit sendTagsChanged(QStringList() << sFilePath);
     onBtnRefreshClicked();

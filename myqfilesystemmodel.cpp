@@ -32,6 +32,15 @@ QVariant MyQFileSystemModel::headerData(int section, Qt::Orientation orientation
         return Qt::AlignLeft;
     }
 
+    // 【B7/C10】表头提示：标签列不能排序、但双击可编辑，提示出来免得用户以为坏了
+    if (orientation == Qt::Horizontal && role == Qt::ToolTipRole) {
+        if (section == 4)
+            return tr("双击标签列可编辑该文件的标签；标签列不支持排序");
+        if (section >= 0 && section <= 3)
+            return tr("点击按此列排序");
+        return QVariant();
+    }
+
     if (orientation != Qt::Horizontal || role != Qt::DisplayRole)
         return QAbstractItemModel::headerData(section, orientation, role);
 
@@ -88,7 +97,9 @@ QVariant MyQFileSystemModel::data(const QModelIndex & index, int role) const
 
         const QStringList tags = tagListForFile(sFilePath);
         if (tags.isEmpty())
-            return QVariant();
+            return role == Qt::DisplayRole && QFileSystemModel::isDir(nameIndex)
+                       ? QVariant(QStringLiteral("—"))   // 【D19】目录没有标签，给个占位符而不是空格子
+                       : QVariant();
 
         return QVariant(tags.join(role == Qt::ToolTipRole ? QStringLiteral(", ")
                                                           : QStringLiteral(",")));

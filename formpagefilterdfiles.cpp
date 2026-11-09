@@ -9,6 +9,7 @@
 #include <QFileInfo>
 #include <QHeaderView>
 #include <QMenu>
+#include <QProcess>
 #include <QTimer>
 #include <QElapsedTimer>
 #include <QUrl>
@@ -37,7 +38,11 @@ FormPageFilterdFiles::FormPageFilterdFiles(QWidget *parent) :
     m_tvFilteredFiles->header()->resizeSection(2, 180);
     m_tvFilteredFiles->header()->setMinimumSectionSize(60);
 
-    m_gotoFilePath = new QAction(tr("打开文件所在位置"), this);
+    // 【B8】两个"定位文件"拆成两个名字互相区分的行为：
+    //   - 在资源管理器中显示：打开系统资源管理器并选中文件（与文件列表右键一致）
+    //   - 在文件列表中打开所在目录：把程序自己的文件列表切到该目录
+    m_gotoFilePath = new QAction(tr("在文件列表中打开所在目录"), this);
+    m_revealInExplorer = new QAction(tr("在资源管理器中显示"), this);
     m_openFile = new QAction(tr("打开"), this);
     m_copyFilePath = new QAction(tr("复制路径"), this);
 
@@ -48,6 +53,13 @@ FormPageFilterdFiles::FormPageFilterdFiles(QWidget *parent) :
     connect(m_pTagScanTimer, &QTimer::timeout, this, &FormPageFilterdFiles::continueFillTags);
 
     connect(m_gotoFilePath, &QAction::triggered, this, &FormPageFilterdFiles::onGotoFilePath);
+    connect(m_revealInExplorer, &QAction::triggered, this, [this]() {
+        const QString sFilePath = currentFilePath();
+        if (sFilePath.isEmpty())
+            return;
+        QProcess::startDetached(QStringLiteral("explorer.exe"),
+                                QStringList() << (QStringLiteral("/select,") + QDir::toNativeSeparators(sFilePath)));
+    });
     connect(m_openFile, &QAction::triggered, this, [this]() {
         const QString sFilePath = currentFilePath();
         if (!sFilePath.isEmpty())
@@ -93,6 +105,9 @@ void FormPageFilterdFiles::onShowFilteredFiles(QStringList qLFilteredFiles)
     QString sCountText = tr("搜索结果 %1 项").arg(qLFilteredFiles.size());
     if (!m_sSearchCondition.isEmpty())
         sCountText += QStringLiteral("（") + m_sSearchCondition + QStringLiteral("）");
+    // 【C12】把结果来源写出来：缓存可能过期，用户至少要能看到这次是从哪查的
+    if (!m_sSearchSource.isEmpty())
+        sCountText += QStringLiteral("  ") + m_sSearchSource;
     ui->lblResultCount->setText(sCountText);
 
     if (m_pTagScanTimer != nullptr && !m_qLTagScanPaths.isEmpty())
@@ -102,6 +117,11 @@ void FormPageFilterdFiles::onShowFilteredFiles(QStringList qLFilteredFiles)
 void FormPageFilterdFiles::setSearchCondition(const QString &sCondition)
 {
     m_sSearchCondition = sCondition;
+}
+
+void FormPageFilterdFiles::setSearchSource(const QString &sSource)
+{
+    m_sSearchSource = sSource;
 }
 
 void FormPageFilterdFiles::hideEvent(QHideEvent *event)
@@ -192,9 +212,11 @@ void FormPageFilterdFiles::onTvFilteredFilesCustomContextMenuRequested(const QPo
 
     QMenu menu(ui->tvFilteredFiles);
     menu.addAction(m_openFile);
+    menu.addAction(m_revealInExplorer);
     menu.addAction(m_gotoFilePath);
     menu.addAction(m_copyFilePath);
     m_openFile->setEnabled(hasSelection);
+    m_revealInExplorer->setEnabled(hasSelection);
     m_gotoFilePath->setEnabled(hasSelection);
     m_copyFilePath->setEnabled(hasSelection);
     menu.exec(m_tvFilteredFiles->viewport()->mapToGlobal(pos));
