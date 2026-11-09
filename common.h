@@ -11,7 +11,7 @@
 enum labelLogic{
     AND,
     OR
-//    NOT //todo 后续实现逻辑非得功能
+    // NOT,   // todo: 后续实现「逻辑非」（NOT）的查找逻辑，界面上再放出这个选项
 };
 
 #define FILTER_TAG "Zone.Identifier"    // 系统自己生成的标签
