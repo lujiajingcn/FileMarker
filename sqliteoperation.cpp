@@ -255,7 +255,18 @@ static bool isFileMatchLabelGroups(const QSet<QString> &setFileLabels,
     if (qLLabelGroups.isEmpty())
         return false;
 
-    if (nLabelLogic != labelLogic::AND) {
+    // 【NOT】逻辑非：文件上不能出现任何一组里的标签
+    if (nLabelLogic == labelLogic::NOT) {
+        for (const QSet<QString> &setGroup : qLLabelGroups) {
+            for (QSet<QString>::const_iterator cItr = setGroup.cbegin(); cItr != setGroup.cend(); ++cItr) {
+                if (setFileLabels.contains(*cItr))
+                    return false;
+            }
+        }
+        return true;
+    }
+
+    if (nLabelLogic == labelLogic::OR) {
         for (const QSet<QString> &setGroup : qLLabelGroups) {
             for (QSet<QString>::const_iterator cItr = setGroup.cbegin(); cItr != setGroup.cend(); ++cItr) {
                 if (setFileLabels.contains(*cItr))

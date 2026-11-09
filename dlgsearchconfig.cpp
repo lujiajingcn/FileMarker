@@ -45,11 +45,19 @@ void DlgSearchConfig::readSearchConfig()
     {
         ui->rbLogicAnd->setChecked(true);
         ui->rbLogicOr->setChecked(false);
+        ui->rbLogicNot->setChecked(false);
     }
     else if(sc.logic == labelLogic::OR)
     {
         ui->rbLogicAnd->setChecked(false);
         ui->rbLogicOr->setChecked(true);
+        ui->rbLogicNot->setChecked(false);
+    }
+    else
+    {
+        ui->rbLogicAnd->setChecked(false);
+        ui->rbLogicOr->setChecked(false);
+        ui->rbLogicNot->setChecked(true);
     }
 }
 
@@ -63,8 +71,10 @@ void DlgSearchConfig::writeSearchConfig()
 
     if (ui->rbLogicAnd->isChecked())
         sc.logic = labelLogic::AND;
-    else
+    else if (ui->rbLogicOr->isChecked())
         sc.logic = labelLogic::OR;
+    else
+        sc.logic = labelLogic::NOT;
 
     ConfigOperation::writeSearchConfig(m_sConfigFilePath, sc);
 }

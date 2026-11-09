@@ -99,6 +99,19 @@
           </attribute>
          </widget>
         </item>
+        <item row="0" column="3">
+         <widget class="QRadioButton" name="rbLogicNot">
+          <property name="text">
+           <string>标签的逻辑关系为非</string>
+          </property>
+          <property name="toolTip">
+           <string>排除含所选标签的文件（逻辑非会直接扫描磁盘，不使用缓存，避免漏掉没有任何标签的文件）</string>
+          </property>
+          <attribute name="buttonGroup">
+           <string notr="true">buttonGroup_2</string>
+          </attribute>
+         </widget>
+        </item>
        </layout>
       </item>
      </layout>

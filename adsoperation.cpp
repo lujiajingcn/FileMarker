@@ -679,12 +679,25 @@ bool ADSOperation::isHostFile(const QString &sFilePath, const QList<QSet<QString
 
     // 复用标签流枚举：只比较 FileMarker 自己的标签，第三方 ADS 不参与搜索。
     const QStringList adsNames = listADSFileName(sFilePath);
-    if (adsNames.isEmpty())
-        return false;
 
     QSet<QString> setAdsNames;
     for (const QString &sName : adsNames)
         setAdsNames.insert(sName);
+
+    // 【NOT】逻辑非：文件上不能出现任何一组里的标签。
+    // 注意先于"空标签直接返回 false"处理——没有任何标签的文件同样"不含"这些标签，应当命中。
+    if (logic == labelLogic::NOT) {
+        for (const QSet<QString> &setGroup : qLLabelGroups) {
+            for (QSet<QString>::const_iterator cItr = setGroup.cbegin(); cItr != setGroup.cend(); ++cItr) {
+                if (setAdsNames.contains(*cItr))
+                    return false;
+            }
+        }
+        return true;
+    }
+
+    if (adsNames.isEmpty())
+        return false;
 
     // A4：每个组 = 一个选中标签 + 它的全部子标签，组内 OR、组间按 AND/OR 组合。
     if (logic == labelLogic::OR) {
