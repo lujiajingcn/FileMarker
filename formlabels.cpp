@@ -232,7 +232,7 @@ QStringList FormLabels::getSelLabels()
 
 void FormLabels::addItem(QStandardItem *parentItem)
 {
-    QStandardItem *newItem = createLabelItem(NEW_LABEL_NAME);
+    QStandardItem *newItem = createLabelItem(nextNewLabelName());
     if(nullptr == parentItem)
     {
         m_modelAllLabels->appendRow(newItem);
@@ -683,6 +683,42 @@ void FormLabels::registerItem(QStandardItem *item)
     // 递归登记子树
     for (int i = 0; i < item->rowCount(); ++i)
         registerItem(item->child(i));
+}
+
+/**
+ * 新建标签时自动取一个没被占用的名字：
+ * 第一次是"新标签"，之后依次是"新标签(1)"、"新标签(2)"……
+ * （"新标签"本身也是标签库里的普通名字，所以按整棵树的现有名字去重，忽略大小写。）
+ */
+QString FormLabels::nextNewLabelName() const
+{
+    QSet<QString> setNames;
+    for (int i = 0; i < m_modelAllLabels->rowCount(); ++i) {
+        const QStandardItem *pItem = m_modelAllLabels->item(i);
+        if (pItem == nullptr)
+            continue;
+        QList<const QStandardItem *> lstStack;
+        lstStack << pItem;
+        while (!lstStack.isEmpty()) {
+            const QStandardItem *pCur = lstStack.takeFirst();
+            if (pCur == nullptr)
+                continue;
+            setNames.insert(pCur->text().toCaseFolded());
+            for (int r = 0; r < pCur->rowCount(); ++r)
+                lstStack << pCur->child(r);
+        }
+    }
+
+    const QString sBase = QString::fromUtf8(NEW_LABEL_NAME);
+    if (!setNames.contains(sBase.toCaseFolded()))
+        return sBase;
+
+    for (int n = 1; n < 100000; ++n) {
+        const QString sCandidate = QStringLiteral("%1(%2)").arg(sBase).arg(n);
+        if (!setNames.contains(sCandidate.toCaseFolded()))
+            return sCandidate;
+    }
+    return sBase;
 }
 
 int FormLabels::countLabelOccurrences(const QString &name) const

@@ -74,6 +74,9 @@ protected:
     /** 依据当前模型重建去重集合（结构性变更后调用） */
     void resyncSets();
     /** 统计整棵树中名为 name 的节点数量（用于重复检测） */
+    /** 生成一个新的标签名：新标签 / 新标签1 / 新标签2 …（取第一个没被占用的，忽略大小写） */
+    QString nextNewLabelName() const;
+
     int countLabelOccurrences(const QString &name) const;
 
     void traverseWriteLabel(QStandardItem *item, const QList<LabelInfo> &lstLabelInfo);
