@@ -30,9 +30,9 @@
     <number>0</number>
    </property>
    <item row="0" column="0">
-    <layout class="QHBoxLayout" name="topBar">
+    <layout class="QVBoxLayout" name="topBar">
      <property name="spacing">
-      <number>8</number>
+      <number>2</number>
      </property>
      <item>
       <widget class="QToolButton" name="btnBack">
@@ -49,20 +49,10 @@
        <property name="text">
         <string>搜索结果 0 项</string>
        </property>
+       <property name="styleSheet">
+        <string notr="true">color:#555;</string>
+       </property>
       </widget>
-     </item>
-     <item>
-      <spacer name="spacerTop">
-       <property name="orientation">
-        <enum>Qt::Horizontal</enum>
-       </property>
-       <property name="sizeHint" stdset="0">
-        <size>
-         <width>40</width>
-         <height>20</height>
-        </size>
-       </property>
-      </spacer>
      </item>
     </layout>
    </item>
