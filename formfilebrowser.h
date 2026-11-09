@@ -97,7 +97,11 @@ private slots:
     /** 遍历选中的文件夹，查找这些文件夹中有ads信息的文件，将这些文件和ads信息写入数据库，作为下次查找的缓存信息 */
     void onActionTraverseSelDirsTriggered();
 
-    void onRecvTraverseResult(QMap<QString, FILE_TAGS> dirAndFileTags, QMap<QString, QSet<QString>> dirAndTags);
+    // P1-1：多带"完整遍历过的目录"与"是否被中断"两个参数，未扫完的目录不入缓存。
+    void onRecvTraverseResult(QMap<QString, FILE_TAGS> dirAndFileTags,
+                              QMap<QString, QSet<QString>> dirAndTags,
+                              QStringList qLCompletedDirs,
+                              bool bAborted);
 
     void onActionSearchConfigTriggered();
 

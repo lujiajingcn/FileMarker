@@ -30,20 +30,28 @@ void ThreadTraverseDirs::run()
 
     QMap<QString, FILE_TAGS> dirAndFileTags;
     QMap<QString, QSet<QString>> dirAndTags;
+    QStringList qLCompletedDirs;      // P1-1：只收录"完整扫完"的目录
 
     TraverseDirectory::resetStop();   // 每个遍历任务开头复位一次停止标志（多目录遍历也能正确响应停止，P1-3）
-    foreach(QString selDir, m_selDirs){
-        TraverseDirectory::traverseDirectory(selDir, func, true);
+    foreach(const QString &selDir, m_selDirs){
+        // 用户已点停止：后面的目录一个都不要进，避免又跑一遍
+        if (TraverseDirectory::isStopped())
+            break;
 
-        dirAndFileTags[selDir] = m_fileTags;
-        if(m_tags.count() != 0)
-            dirAndTags[selDir] = m_tags;
+        const bool bCompleted = TraverseDirectory::traverseDirectory(selDir, func, true);
+        if (bCompleted) {
+            qLCompletedDirs << selDir;
+            dirAndFileTags[selDir] = m_fileTags;
+            if(m_tags.count() != 0)
+                dirAndTags[selDir] = m_tags;
+        }
+        // 未扫完的目录：本地结果直接丢弃，绝不进入缓存（否则缓存里只剩残缺数据）
 
         m_tags.clear();
         m_fileTags.clear();
     }
 
-    emit sendResult(dirAndFileTags, dirAndTags);
+    emit sendResult(dirAndFileTags, dirAndTags, qLCompletedDirs, TraverseDirectory::isStopped());
 }
 
 bool ThreadTraverseDirs::traverseDir(const QFileInfo& fileInfo)

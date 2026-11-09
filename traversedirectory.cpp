@@ -6,7 +6,7 @@ TraverseDirectory::TraverseDirectory()
 {
 }
 
-void TraverseDirectory::traverseDirectory(const QString& path, FileAction action, bool recursive)
+bool TraverseDirectory::traverseDirectory(const QString& path, FileAction action, bool recursive)
 {
     QDirIterator::IteratorFlags flags = recursive ? QDirIterator::Subdirectories : QDirIterator::NoIteratorFlags;
     QDirIterator it(path, QDir::Files | QDir::NoDotAndDotDot, flags);
@@ -15,8 +15,9 @@ void TraverseDirectory::traverseDirectory(const QString& path, FileAction action
         it.next();
         bool shouldContinue = action(it.fileInfo());
         if (!shouldContinue || m_bIsStop)
-            break;
+            return false;   // P1-1：中断 -> 结果不完整，调用方不得写缓存
     }
+    return true;            // P1-1：完整遍历
 }
 
 void TraverseDirectory::stop()

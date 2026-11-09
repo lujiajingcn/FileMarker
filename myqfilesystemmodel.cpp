@@ -158,7 +158,11 @@ Qt::ItemFlags MyQFileSystemModel::flags(const QModelIndex &index) const
     if (!index.isValid())
         return f;
 
-    if (index.column() == 4)
+    // P1-8 / P2-20：只有"文件"的标签列才可编辑。
+    // - 目录没有标签，放开编辑只会让用户输完再弹一次写盘失败；
+    // - 不可用的项（权限/盘符失效）也不该给出编辑入口，否则委托记录了编辑意图、
+    //   视图却不会创建编辑器，正是编辑意图残留的成因之一。
+    if (index.column() == 4 && !isDir(index) && (f & Qt::ItemIsEnabled))
         f |= Qt::ItemIsEditable;
 
     return f;

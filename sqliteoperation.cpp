@@ -1,6 +1,7 @@
 #include "sqliteoperation.h"
 #include <common.h>
 #include <QDebug>
+#include <QDir>
 #include <QFileInfo>
 #include "utility.h"
 
@@ -109,20 +110,76 @@ void SqliteOperation::invalidateDirCache(const QString &sDir)
         qWarning() << "清除目录缓存失败:" << sDir << dirQuery.lastError().text();
 }
 
-void SqliteOperation::insertRecord(QMap<QString, FILE_TAGS> dirAndFileTags)
+void SqliteOperation::invalidateCacheForFile(const QString &sFilePath)
 {
+    if (sFilePath.isEmpty())
+        return;
+
+    const QString sFileDir = QDir::cleanPath(QFileInfo(sFilePath).absolutePath());
+
+    // 缓存行的 dir 列记录的是"遍历根"，它可能是该文件的任意祖先目录；
+    // 只删 absolutePath() 会让"遍历了父目录、改的是子目录里的文件"这种情况永远失效不掉（P1-2）。
+    QStringList qLRoots;
+    QSqlQuery query(m_sqlDB);
+    if (query.exec(QString("SELECT dir FROM %1").arg(TABLE_NAME_DIR))) {
+        while (query.next()) {
+            const QString sRoot = QDir::cleanPath(query.value(0).toString());
+            if (sRoot.isEmpty())
+                continue;
+            // 比较前去掉末尾分隔符：遍历根可能是 "E:/" 这种盘符根，
+            // 直接拼 '/' 会变成 "E://"，子目录就永远匹配不上。
+            QString sRootCmp = sRoot;
+            while (sRootCmp.endsWith(QLatin1Char('/')) && sRootCmp.size() > 1)
+                sRootCmp.chop(1);
+            if (sFileDir.compare(sRootCmp, Qt::CaseInsensitive) == 0
+                    || sFileDir.startsWith(sRootCmp + QLatin1Char('/'), Qt::CaseInsensitive)) {
+                qLRoots << sRoot;      // 删除时用库里存的原始写法
+            }
+        }
+    } else {
+        qWarning() << "读取缓存目录列表失败:" << query.lastError().text();
+    }
+
+    // 兜底：dirs 表为空或读取失败时，至少按文件父目录清一次
+    if (qLRoots.isEmpty())
+        qLRoots << sFileDir;
+
+    for (const QString &sRoot : qLRoots)
+        invalidateDirCache(sRoot);
+}
+
+void SqliteOperation::insertRecord(QMap<QString, FILE_TAGS> dirAndFileTags, const QStringList &qLCompletedDirs)
+{
+    // P1-1：dirs 表必须和文件行在同一个事务里。否则文件行回滚了、目录却仍标着"已缓存"，
+    // 之后按缓存搜索会命中"有目录、没数据"的空壳，永远查不到文件。
+    if (!m_sqlDB.transaction()) {
+        QString sErrorMsg = QString("Transaction failed to start:%1").arg(m_sqlDB.lastError().text());
+        qCritical("%s", sErrorMsg.toStdString().c_str());
+        return;
+    }
+
+    // 要登记的目录 = 完整遍历过的目录 + 结果里出现过的目录（去重）。
+    // 完整遍历但一个带标签文件都没有的目录也要登记，这样缓存命中时不必反复扫盘。
+    QStringList qLAllDirs = qLCompletedDirs;
+    for (QMap<QString, FILE_TAGS>::const_iterator cItr = dirAndFileTags.begin(); cItr != dirAndFileTags.end(); cItr++) {
+        if (!qLAllDirs.contains(cItr.key()))
+            qLAllDirs << cItr.key();
+    }
+
     QSqlQuery query(m_sqlDB);
     // 使用 INSERT OR IGNORE 写入目录，dir 列有 UNIQUE 约束，重复遍历同一目录不会报错。
     query.prepare(QString("INSERT OR IGNORE INTO %1 (dir) VALUES (:dir)").arg(TABLE_NAME_DIR));
-    for(QMap<QString, FILE_TAGS>::const_iterator cItr = dirAndFileTags.begin(); cItr != dirAndFileTags.end(); cItr++) {
-        query.bindValue(":dir", cItr.key());
+    for (int i = 0; i < qLAllDirs.count(); i++) {
+        query.bindValue(":dir", qLAllDirs.at(i));
         if(!query.exec()) {
-            QString sErrorMsg = QString("向表dirs中插入数据失败：%2").arg(query.lastError().text());
+            QString sErrorMsg = QString("向表dirs中插入数据失败：%1").arg(query.lastError().text());
             qCritical("%s", sErrorMsg.toStdString().c_str());
+            m_sqlDB.rollback();
+            return;
         }
     }
 
-    if (m_sqlDB.transaction()) {
+    {
         // 预编译语句：删除指定目录的旧缓存。
         QSqlQuery delQuery(m_sqlDB);
         delQuery.prepare(QString("DELETE FROM %1 WHERE dir=:dir").arg(TABLE_NAME_FILEPATH_TAG));
@@ -158,13 +215,7 @@ void SqliteOperation::insertRecord(QMap<QString, FILE_TAGS> dirAndFileTags)
             QString sErrorMsg = QString("Transaction commit failed:%1").arg(insQuery.lastError().text());
             qCritical("%s", sErrorMsg.toStdString().c_str());
             m_sqlDB.rollback();
-            return;
         }
-    } else {
-        // P2-20：transaction() 失败时，query 是前面的 INSERT INTO dirs，属于无关语句。
-        // 事务本身的错误应取自数据库连接 lastError()。
-        QString sErrorMsg = QString("Transaction failed to start:%1").arg(m_sqlDB.lastError().text());
-        qCritical("%s", sErrorMsg.toStdString().c_str());
     }
 }
 

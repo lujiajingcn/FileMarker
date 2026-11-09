@@ -153,7 +153,6 @@ int EditableDelegate::preferredCellHeight(int iconSize, const QFont &font)
 
 EditableDelegate::EditableDelegate(QObject *parent)
     : QStyledItemDelegate(parent)
-    , m_editTarget(TargetNone)
     , m_iconSize(ICON_SIZE)
     , m_thumbnailProvider(nullptr)
 {
@@ -343,16 +342,16 @@ bool EditableDelegate::editorEvent(QEvent *event, QAbstractItemModel *model, con
 
         // 双击标签区域（没标签时是文件名下方那一行）：切换为“就地编辑标签”，交给视图打开第 5 列的编辑器
         if (layout.tagEditRect.contains(mousePos)) {
-            m_editTarget = TargetCustomData;
+            rememberEditTarget(index, TargetCustomData);
             return false;
         }
         // 双击文件名区域：编辑文件名（沿用原有行为）
         if (layout.nameRect.contains(mousePos)) {
-            m_editTarget = TargetFileName;
+            rememberEditTarget(index, TargetFileName);
             return false;
         }
         // 其他区域：双击直接打开文件
-        m_editTarget = TargetNone;
+        m_pendingEdit.clear();
         emit sendDblClick(index);
         return true;
     }
@@ -360,12 +359,19 @@ bool EditableDelegate::editorEvent(QEvent *event, QAbstractItemModel *model, con
     return QStyledItemDelegate::editorEvent(event, model, option, index);
 }
 
+// P1-8：把编辑意图和具体的那一项绑在一起。视图可能因为 flags 不可编辑而不创建编辑器，
+// 这样残留的记录只会挂在原索引上，不会影响其它行（旧实现是全局的 EditTarget 成员）。
+void EditableDelegate::rememberEditTarget(const QModelIndex &index, EditTarget target) const
+{
+    if (m_pendingEdit.size() > 32)   // 正常情况只会有一两条，超过就清空防止无界增长
+        m_pendingEdit.clear();
+    m_pendingEdit.insert(QPersistentModelIndex(index), target);
+}
+
 QWidget *EditableDelegate::createEditor(QWidget *parent, const QStyleOptionViewItem &option, const QModelIndex &index) const
 {
-    const EditTarget target = m_editTarget;
-    // 编辑意图只对本次创建编辑器有效，用掉即清空，
-    // 否则之后按 F2 等其它方式编辑时还会沿用上一次“编辑标签”的目标。
-    m_editTarget = TargetNone;
+    // 只消费"属于这一项"的编辑意图；用掉即擦除，避免影响后续编辑。
+    const EditTarget target = m_pendingEdit.take(QPersistentModelIndex(index));
 
     if (target == TargetCustomData)
     {

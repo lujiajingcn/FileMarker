@@ -60,11 +60,10 @@ FormFileBrowser::FormFileBrowser(QWidget *parent) :
             [this](const QStringList &qLFilePaths) {
                 if (m_sqlOperation == nullptr)
                     return;
-                QSet<QString> setDirs;
+                // P1-2：缓存按"遍历根"存，文件可能在根的子孙目录里，
+                // 必须按文件反查所有包含它的根目录，不能只删 absolutePath()。
                 for (const QString &sFilePath : qLFilePaths)
-                    setDirs.insert(QFileInfo(sFilePath).absolutePath());
-                for (const QString &sDir : setDirs)
-                    m_sqlOperation->invalidateDirCache(sDir);
+                    m_sqlOperation->invalidateCacheForFile(sFilePath);
             });
 }
 
@@ -218,7 +217,7 @@ void FormFileBrowser::onActionAddLabelByAITriggered()
     connect(m_threadAddLabelByAI, &ThreadAddTagByAI::sendTagChanged, this,
             [this](QString sFilePath) {
                 if (m_sqlOperation != nullptr)
-                    m_sqlOperation->invalidateDirCache(QFileInfo(sFilePath).absolutePath());
+                    m_sqlOperation->invalidateCacheForFile(sFilePath);   // P1-2：按文件反查遍历根
             });
 
     // 线程结束后自动释放对象并把指针置空，避免反复创建导致对象泄漏以及悬空指针误用。
@@ -289,7 +288,6 @@ void FormFileBrowser::onActionAddLabelsTriggered()
 
     bool bAllOk = true;
     QStringList qLFailedFiles;          // 【D7 修复】把失败的文件名带回给用户
-    QSet<QString> setDirs;
     foreach(const QString &sFilePath, qLFilePaths)
     {
         // 追加而不是覆盖：保留文件已有标签的顺序，新标签按选中顺序追加到末尾
@@ -297,13 +295,13 @@ void FormFileBrowser::onActionAddLabelsTriggered()
             bAllOk = false;
             qLFailedFiles << QFileInfo(sFilePath).fileName();
         }
-        setDirs.insert(QFileInfo(sFilePath).absolutePath());
     }
 
     // 标签变化后让搜索缓存失效，避免搜索仍按旧标签命中/漏掉新标签
+    // P1-2：按文件反查所有包含它的"遍历根"，不能只按父目录删缓存。
     if (m_sqlOperation != nullptr) {
-        for (const QString &sDir : setDirs)
-            m_sqlOperation->invalidateDirCache(sDir);
+        for (const QString &sFilePath : qLFilePaths)
+            m_sqlOperation->invalidateCacheForFile(sFilePath);
     }
 
     emit sendRefresh();
@@ -418,27 +416,43 @@ void FormFileBrowser::onActionTraverseSelDirsTriggered()
     m_threadTraverseDirs->start();
 }
 
-void FormFileBrowser::onRecvTraverseResult(QMap<QString, FILE_TAGS> dirAndFileTags, QMap<QString, QSet<QString>> dirAndTags)
+void FormFileBrowser::onRecvTraverseResult(QMap<QString, FILE_TAGS> dirAndFileTags,
+                                           QMap<QString, QSet<QString>> dirAndTags,
+                                           QStringList qLCompletedDirs,
+                                           bool bAborted)
 {
     // 注意：insertRecord 内部已经按目录做“先删后插”，因此这里不能再整体清空
     // filewithlabels 表，否则之前遍历过的其它目录的缓存会被全部抹掉，
     // 导致“命中缓存”的优化几乎永远不生效。
-    m_sqlOperation->insertRecord(dirAndFileTags);
+    // P1-1：只有"完整扫完"的目录才会出现在 dirAndFileTags / qLCompletedDirs 里；
+    // 被中断时未扫完的目录不会入库，旧缓存也保持原样（不会被残缺数据覆盖）。
+    if (!qLCompletedDirs.isEmpty() || !dirAndFileTags.isEmpty())
+        m_sqlOperation->insertRecord(dirAndFileTags, qLCompletedDirs);
+
     showFilesWidget();
     setActionState(TRAVERER_FINISH);
     emit sendDirAndLabels(dirAndTags);
     ui->pageProgressInfo->clear();
 
-    // 遍历完成提示：小目录时进度页一闪而过，用户需要明确的完成反馈。
     int nFiles = 0;
     for (auto it = dirAndFileTags.constBegin(); it != dirAndFileTags.constEnd(); ++it)
         nFiles += it.value().size();
     int nLabels = 0;
     for (auto it = dirAndTags.constBegin(); it != dirAndTags.constEnd(); ++it)
         nLabels += it.value().size();
+
+    if (bAborted) {
+        // 遍历完成提示：小目录时进度页一闪而过，用户需要明确的完成反馈。
+        emit sendStatusMessage(tr("遍历已取消：已完成的 %1 个目录已写入缓存，未完成的目录保持原样")
+                                   .arg(qLCompletedDirs.size()));
+        qInfo() << "遍历被取消: completedDirs=" << qLCompletedDirs.size()
+                << "files=" << nFiles << "labels=" << nLabels;
+        return;
+    }
+
     emit sendStatusMessage(tr("遍历完成：%1 个目录，%2 个文件，%3 个标签")
-                               .arg(dirAndTags.size()).arg(nFiles).arg(nLabels));
-    qInfo() << "遍历完成: dirs=" << dirAndTags.size() << "files=" << nFiles << "labels=" << nLabels;
+                               .arg(qLCompletedDirs.size()).arg(nFiles).arg(nLabels));
+    qInfo() << "遍历完成: dirs=" << qLCompletedDirs.size() << "files=" << nFiles << "labels=" << nLabels;
 }
 
 void FormFileBrowser::onActionSearchConfigTriggered()
@@ -513,7 +527,7 @@ void FormFileBrowser::onRecvLabels(QString sFilePath, QString sLabels)
     const bool bOk = ADSOperation::replaceTags(sFilePath, qLLabels);
 
     if (m_sqlOperation != nullptr)
-        m_sqlOperation->invalidateDirCache(QFileInfo(sFilePath).absolutePath());
+        m_sqlOperation->invalidateCacheForFile(sFilePath);   // P1-2：按文件反查遍历根
 
     emit sendRefresh();
 
