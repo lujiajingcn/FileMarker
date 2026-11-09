@@ -8,6 +8,8 @@
 
 #include <QWidget>
 
+class QToolButton;
+
 #include "sqliteoperation.h"
 #include "threadsearch.h"
 #include "threadtraversedirs.h"
@@ -132,6 +134,17 @@ protected:
 
 private:
     Ui::FormFileBrowser *ui;
+
+    // 左侧【文件导航】面板的收起/展开：
+    // 收起后整个面板只剩一条 24px 的窄条，按钮还在上面，点一下即可展开。
+    void initNavPanelToggle();
+    void setNavPanelVisible(bool bVisible, bool bSave = true);
+    void saveNavPanelVisible(bool bVisible) const;
+
+    QWidget             *m_navPanel = nullptr;      // 包住目录树的容器（含顶部收起按钮）
+    QToolButton         *m_btnToggleNav = nullptr;  // 收起/展开按钮
+    bool                 m_bNavPanelVisible = true;
+    int                  m_nNavExpandedWidth = 200; // 展开时的宽度，收起再展开时按它恢复
 
     QAction             *m_aAddLabelByAI;
     QAction             *m_aAddLabel;

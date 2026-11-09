@@ -1,14 +1,26 @@
 #include "formfilebrowser.h"
 #include "ui_formfilebrowser.h"
 
+#include <QHBoxLayout>
 #include <QMessageBox>
 #include <QDebug>
+#include <QSettings>
+#include <QTimer>
+#include <QToolButton>
+#include <QVBoxLayout>
 
 
 #include "adsoperation.h"
 #include "configoperation.h"
 #include "dlgsearchconfig.h"
 #include "utility.h"
+
+namespace {
+// 左侧目录树收起后留下的窄条宽度（正好放下那个 20x20 的收起/展开按钮）
+const int kNavRailWidth = 28;
+// 展开时目录树的最小宽度，避免被 splitter 压成一条缝
+const int kNavExpandedMinWidth = 160;
+}
 
 FormFileBrowser::FormFileBrowser(QWidget *parent) :
     QWidget(parent),
@@ -17,6 +29,9 @@ FormFileBrowser::FormFileBrowser(QWidget *parent) :
     ui->setupUi(this);
 
     setWindowStyleSheet();
+
+    // 左侧【文件导航】面板：顶部加一个"收起/展开"按钮，可以像侧边栏一样隐藏起来
+    initNavPanelToggle();
 
     m_sqlOperation = new SqliteOperation;
     m_threadSearch = nullptr;
@@ -102,6 +117,124 @@ FormFileBrowser::~FormFileBrowser()
     // P0-3：m_sqlOperation 在构造函数中 new 在堆上，从未释放，导致内存泄漏。
     delete m_sqlOperation;
     delete ui;
+}
+
+/**
+ * 左侧【文件导航】面板的收起/展开按钮。
+ *
+ * 做法：把原本直接放在 QSplitter 里的 wFileNavigation 包进一个容器 m_navPanel，
+ * 容器顶部放一个"◀/▶"按钮；收起时隐藏目录树、把容器限宽成 24px 的窄条，
+ * 按钮仍留在窄条上，点一下即可展开（和 DeepSeek Harness 左侧栏的折叠按钮一个意思）。
+ */
+void FormFileBrowser::initNavPanelToggle()
+{
+    m_navPanel = new QWidget(this);
+    m_navPanel->setObjectName(QStringLiteral("navPanel"));
+    auto *pLayout = new QVBoxLayout(m_navPanel);
+    pLayout->setContentsMargins(0, 0, 0, 0);
+    pLayout->setSpacing(0);
+
+    // 顶部条形控件：高度固定，收起后按钮仍然贴在最上面
+    auto *pHeaderWidget = new QWidget(m_navPanel);
+    pHeaderWidget->setObjectName(QStringLiteral("navHeader"));
+    pHeaderWidget->setFixedHeight(24);
+    auto *pHeader = new QHBoxLayout(pHeaderWidget);
+    pHeader->setContentsMargins(2, 2, 2, 2);
+    pHeader->setSpacing(0);
+
+    m_btnToggleNav = new QToolButton(pHeaderWidget);
+    m_btnToggleNav->setObjectName(QStringLiteral("btnToggleNav"));
+    m_btnToggleNav->setAutoRaise(true);
+    m_btnToggleNav->setFixedSize(22, 22);
+    m_btnToggleNav->setCursor(Qt::PointingHandCursor);
+    m_btnToggleNav->setFocusPolicy(Qt::NoFocus);
+    // 系统默认字体下 ◀/▶ 偏小，这里放大一点，方便点到
+    m_btnToggleNav->setStyleSheet(QStringLiteral(
+        "QToolButton{border:none;font-size:14px;color:#555;}"
+        "QToolButton:hover{background:#e5e5e5;border-radius:3px;}"));
+    pHeader->addWidget(m_btnToggleNav, 0, Qt::AlignLeft | Qt::AlignVCenter);
+    pHeader->addStretch(1);
+    // 对齐到顶部：目录树收起后布局里只剩这一条，不加 AlignTop 会被垂直居中
+    pLayout->addWidget(pHeaderWidget, 0, Qt::AlignTop);
+
+    // 先占住 splitter 的第 0 个位置，再把原来的目录树搬进容器
+    ui->splitter->insertWidget(0, m_navPanel);
+    m_navPanel->setMinimumWidth(kNavExpandedMinWidth);
+    pLayout->addWidget(ui->wFileNavigation, 1);
+
+    // 记住目录树原本的宽度，收起/展开时按它恢复
+    m_nNavExpandedWidth = qBound(kNavExpandedMinWidth, ui->wFileNavigation->sizeHint().width(), 320);
+
+    connect(m_btnToggleNav, &QToolButton::clicked, this, [this]() {
+        setNavPanelVisible(!m_bNavPanelVisible);
+    });
+
+    // 首帧布局完成后再设置一次宽度：此时 splitter 才有真实宽度，否则会被压缩成一条缝
+    QTimer::singleShot(0, this, [this]() {
+        if (!m_bNavPanelVisible || m_navPanel == nullptr)
+            return;
+        const int nTotal = ui->splitter->width();
+        if (nTotal < 300)
+            return;
+        const int nNav = qBound(kNavExpandedMinWidth, m_nNavExpandedWidth, qMax(kNavExpandedMinWidth, nTotal / 2));
+        ui->splitter->setSizes(QList<int>() << nNav << (nTotal - nNav));
+    });
+
+    // 恢复上次的状态（默认展开）
+    QSettings settings(Utility::settingsFilePath(), QSettings::IniFormat);
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+    settings.setIniCodec("UTF-8");
+#endif
+    const bool bVisible = settings.value(QStringLiteral("view/navPanelVisible"), true).toBool();
+    setNavPanelVisible(bVisible, false);
+}
+
+void FormFileBrowser::setNavPanelVisible(bool bVisible, bool bSave)
+{
+    if (m_navPanel == nullptr || m_btnToggleNav == nullptr)
+        return;
+
+    // 收起前记住当前宽度，展开时按它恢复
+    if (!bVisible && m_bNavPanelVisible && m_navPanel->width() > 60)
+        m_nNavExpandedWidth = m_navPanel->width();
+
+    m_bNavPanelVisible = bVisible;
+    ui->wFileNavigation->setVisible(bVisible);
+
+    if (bVisible) {
+        m_navPanel->setMinimumWidth(kNavExpandedMinWidth);
+        m_navPanel->setMaximumWidth(QWIDGETSIZE_MAX);
+        m_btnToggleNav->setText(QStringLiteral("◀"));
+        m_btnToggleNav->setToolTip(tr("隐藏目录树"));
+
+        // 用户手动展开时才按记忆宽度恢复；启动时保持 splitter 原有的比例
+        if (bSave) {
+            const int nTotal = ui->splitter->width();
+            if (nTotal > 200) {
+                const int nNav = qBound(kNavExpandedMinWidth, m_nNavExpandedWidth,
+                                        qMax(kNavExpandedMinWidth, nTotal / 2));
+                ui->splitter->setSizes(QList<int>() << nNav << (nTotal - nNav));
+            }
+        }
+    } else {
+        // 收起后只留一条 24px 的窄条，按钮还在上面
+        m_navPanel->setMinimumWidth(kNavRailWidth);
+        m_navPanel->setMaximumWidth(kNavRailWidth);
+        m_btnToggleNav->setText(QStringLiteral("▶"));
+        m_btnToggleNav->setToolTip(tr("显示目录树"));
+    }
+
+    if (bSave)
+        saveNavPanelVisible(bVisible);
+}
+
+void FormFileBrowser::saveNavPanelVisible(bool bVisible) const
+{
+    QSettings settings(Utility::settingsFilePath(), QSettings::IniFormat);
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+    settings.setIniCodec("UTF-8");
+#endif
+    settings.setValue(QStringLiteral("view/navPanelVisible"), bVisible);
 }
 
 void FormFileBrowser::setWindowStyleSheet()
