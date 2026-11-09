@@ -391,9 +391,6 @@ void FormFileBrowser::onActionSearchFilesbyLabelsTriggered()
         return;
     }
 
-    // 先读配置：后面的条件回显与"是否走缓存"都要用到 logic
-    SearchConfig sc = ConfigOperation::readSearchConfig(g_sAppDir + "/" + SEARCH_CONFIG_FILE);
-
     // A4：搜索条件是"分组"——每组 = 选中的标签 + 它的全部子标签。
     // 因此"搜索父标签"能搜到只打了子标签的文件；多个条件之间仍按设置里的 AND/OR 组合。
     if (m_qLLabelGroups.isEmpty()) {
@@ -426,24 +423,16 @@ void FormFileBrowser::onActionSearchFilesbyLabelsTriggered()
         qLConditionTexts << tr("%1（含子标签：%2）").arg(sRoot, qLChildren.join("、"));
     }
 
-    // 搜条件回显里带上逻辑关系，否则"非"搜索看起来和"或"一样
-    const QString sLogicText = (sc.logic == labelLogic::AND) ? tr("与")
-                              : (sc.logic == labelLogic::OR) ? tr("或")
-                                                             : tr("非");
     ui->pageFilteredFiles->setSearchCondition(
-        tr("标签：%1；逻辑：%2；目录：%3")
-            .arg(qLConditionTexts.join("、"), sLogicText, qLSearchDirs.join("；")));
+        tr("标签：%1；目录：%2").arg(qLConditionTexts.join("、"), qLSearchDirs.join("；")));
 
     // 诊断日志：如果以后再次出现搜索界面卡住，可从日志判断搜索范围与是否走了缓存。
     qInfo() << "开始搜索: dirs=" << qLSelDirs << "labels=" << m_qLSelLabels
-            << "logic=" << int(sc.logic)
-            << "useCache=" << sc.bFromCache;
+            << "useCache=" << ConfigOperation::readSearchConfig(g_sAppDir + "/" + SEARCH_CONFIG_FILE).bFromCache;
 
-    // 【NOT】逻辑非不能走缓存：缓存里只存"带标签的文件"，没有任何标签的文件根本不在缓存中，
-    // 用缓存做排除会漏掉它们（它们本该命中"非"）。
-    const bool bUseCache = sc.bFromCache && (sc.logic != labelLogic::NOT);
+    SearchConfig sc = ConfigOperation::readSearchConfig(g_sAppDir + "/" + SEARCH_CONFIG_FILE);
 
-    if(bUseCache){
+    if(sc.bFromCache){
         QStringList qLFilePaths, qLNotHitedDirs;
         m_sqlOperation->searchFilesByLabels(qLSelDirs, m_qLLabelGroups, sc.logic, qLFilePaths, qLNotHitedDirs);
         qInfo() << "[搜索] 缓存命中文件=" << qLFilePaths.size() << " 未命中目录数=" << qLNotHitedDirs.size()

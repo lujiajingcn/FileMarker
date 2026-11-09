@@ -5,14 +5,13 @@
 
 #define LOGIC_AND "与"
 #define LOGIC_OR "或"
-#define LOGIC_NOT "非"
 
 #define ADS_TAIL ":$DATA"
 
 enum labelLogic{
     AND,
-    OR,
-    NOT       // 逻辑非：排除含这些标签的文件（AND=0 / OR=1 保持不变，NOT 追加在末尾）
+    OR
+    // NOT,   // todo: 后续实现「逻辑非」（NOT）的查找逻辑，界面上再放出这个选项
 };
 
 #define FILTER_TAG "Zone.Identifier"    // 系统自己生成的标签
