@@ -31,7 +31,8 @@ public:
     explicit FormLabels(QWidget *parent = nullptr);
     ~FormLabels();
 
-    void addToolButtonsToMenu(QMenu *menuLabelManage);
+    // 方案A：标签库命令只在面板内（dock 工具条 + 右键菜单），不再挂到主窗口菜单栏。
+    void addContextMenuAction(QAction *action);
 
     void setToolButtonDefaultAction();
 
@@ -107,6 +108,9 @@ private:
 
     void onTreeViewClicked(const QModelIndex &index);
 
+    /** 标签树的右键菜单：新建/子标签/删除/移动 + 外部追加的命令 */
+    void onTreeContextMenuRequested(const QPoint &pos);
+
     // 询问是否把“从文件编辑产生的新标签”加入标签库（是否加入由 QSettings 记住）
     void promptAddNewLabels(const QStringList &qLNewLabels);
 
@@ -130,6 +134,8 @@ private:
     bool m_bSuppressSyncPrompt = false;
     // 新建标签后正在输入名字：这一次改名只是给新标签起名，不该弹"要不要同步到文件"
     bool m_bNamingNewLabel = false;
+    // 右键菜单里追加的外部命令（如"清理未使用标签"）
+    QList<QAction *>        m_extraContextActions;
     SqliteOperation        *m_sqlOperation = nullptr;
 
     enum { LabelUuidRole = Qt::UserRole + 1 };

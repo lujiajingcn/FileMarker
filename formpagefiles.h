@@ -15,6 +15,7 @@
 #include <QFileSystemModel>
 #include <QStack>
 #include <QAction>
+#include <QToolBar>
 #include <QStandardItemModel>
 #include <QEvent>
 #include <QSet>
@@ -84,6 +85,12 @@ signals:
 public:
     // 刷新当前目录：既响应【刷新】按钮，也作为 FormFileBrowser::sendRefresh 信号的接收者
     void onBtnRefreshClicked();
+
+    /**
+     * 方案A：把"作用于文件列表"的命令放成本页面的命令条（地址栏上方）。
+     * 传 nullptr 表示插入一个分隔符；这些 QAction 仍归主窗口所有（可同时挂在菜单里）。
+     */
+    void setCommandActions(const QList<QAction *> &actions);
 
 protected:
     // 双击文件夹则进入该文件夹，双击文件则打开该文件。
@@ -189,6 +196,9 @@ private:
     int                     m_nScanTotal;
     QSet<QString>           m_setScanLabels;
     QString                 m_sScanCompletedDir;    // 已完整扫描过的目录（避免 directoryLoaded 重复扫）
+
+    // 方案A：页面顶部的命令条（承载 AI/添加/清空/查找/遍历/查找条件）
+    QToolBar               *m_commandBar = nullptr;
 
 private:
     Ui::FormPageFiles *ui;

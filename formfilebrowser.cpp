@@ -134,6 +134,14 @@ void FormFileBrowser::setActions(QAction *aAddLabelByAI, QAction *aAddLabel, QAc
     connect(m_aSearchConfig, &QAction::triggered, this, &FormFileBrowser::onActionSearchConfigTriggered);
 
     ui->pageFiles->setAction(aDelLabel);
+
+    // 方案A：把"作用于文件列表"的命令做成页面顶部的命令条（主窗口不再有全局工具栏）。
+    // nullptr 表示分隔符。
+    ui->pageFiles->setCommandActions(QList<QAction *>()
+                                     << aAddLabelByAI << nullptr
+                                     << aAddLabel << aDelLabel << nullptr
+                                     << aSearch << aTraverse << nullptr
+                                     << aSearchConfig);
 }
 
 QStringList FormFileBrowser::getSelFilePath()

@@ -893,6 +893,34 @@ void FormPageFiles::onTvNavigationClicked(const QModelIndex &index)
     curDirChanged(path);
 }
 
+void FormPageFiles::setCommandActions(const QList<QAction *> &actions)
+{
+    if (m_commandBar == nullptr) {
+        m_commandBar = new QToolBar(this);
+        m_commandBar->setObjectName(QStringLiteral("fileCommandBar"));
+        m_commandBar->setMovable(false);
+        m_commandBar->setFloatable(false);
+        m_commandBar->setIconSize(QSize(18, 18));
+        m_commandBar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+        // 放在地址栏那一行上方：ui->verticalLayout 的第 0 项
+        ui->verticalLayout->insertWidget(0, m_commandBar);
+    }
+
+    m_commandBar->clear();
+    bool bPendingSeparator = false;
+    for (QAction *pAction : actions) {
+        if (pAction == nullptr) {
+            bPendingSeparator = !m_commandBar->actions().isEmpty();
+            continue;
+        }
+        if (bPendingSeparator) {
+            m_commandBar->addSeparator();
+            bPendingSeparator = false;
+        }
+        m_commandBar->addAction(pAction);
+    }
+}
+
 void FormPageFiles::onBtnRefreshClicked()
 {
     QModelIndex curIndex = m_modelFiles->index(m_sCurDir);

@@ -46,6 +46,11 @@ FormLabels::FormLabels(QWidget *parent) :
     m_modelAllLabels = new QStandardItemModel(this);
     m_tvAllLabels->setModel(m_modelAllLabels);
 
+    // 方案A：标签库的命令收在本面板里 —— dock 工具条 + 右键菜单
+    m_tvAllLabels->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(m_tvAllLabels, &QTreeView::customContextMenuRequested,
+            this, &FormLabels::onTreeContextMenuRequested);
+
     setToolButtonDefaultAction();
 
     // 显式连接标签管理动作与标签树点击（此前依赖 on_<对象名>_<信号名> 的自动连接）
@@ -69,17 +74,40 @@ FormLabels::~FormLabels()
     delete ui;
 }
 
-void FormLabels::addToolButtonsToMenu(QMenu *menuLabelManage)
+/** 方案A：标签库的命令不再放到主窗口菜单里，改为本面板的右键菜单（外加 dock 上的工具条）。 */
+void FormLabels::addContextMenuAction(QAction *action)
 {
-    menuLabelManage->addAction(ui->actionAdd);
-    menuLabelManage->addAction(ui->actionAddChild);
-    menuLabelManage->addAction(ui->actionDelete);
-    menuLabelManage->addAction(ui->actionMoveUp);
-    menuLabelManage->addAction(ui->actionMoveDown);
-    menuLabelManage->addAction(ui->actionMoveLeft);
-    menuLabelManage->addAction(ui->actionMoveRight);
-    menuLabelManage->addSeparator();
-    QAction *actionResetPrompt = menuLabelManage->addAction(tr("恢复“新标签”询问"));
+    if (action != nullptr && !m_extraContextActions.contains(action))
+        m_extraContextActions.append(action);
+}
+
+void FormLabels::onTreeContextMenuRequested(const QPoint &pos)
+{
+    // 右键点在哪一行就选中哪一行，避免"菜单操作的是另一行"
+    const QModelIndex index = m_tvAllLabels->indexAt(pos);
+    if (index.isValid())
+        m_tvAllLabels->setCurrentIndex(index);
+
+    QMenu menu(this);
+    menu.addAction(ui->actionAdd);
+    menu.addAction(ui->actionAddChild);
+    menu.addSeparator();
+    menu.addAction(ui->actionDelete);
+    menu.addSeparator();
+    menu.addAction(ui->actionMoveUp);
+    menu.addAction(ui->actionMoveDown);
+    menu.addAction(ui->actionMoveLeft);
+    menu.addAction(ui->actionMoveRight);
+
+    if (!m_extraContextActions.isEmpty()) {
+        menu.addSeparator();
+        for (QAction *pAction : m_extraContextActions)
+            menu.addAction(pAction);
+    }
+
+    // 恢复"发现新标签，是否加入标签库"的询问
+    menu.addSeparator();
+    QAction *actionResetPrompt = menu.addAction(tr("恢复“新标签”询问"));
     connect(actionResetPrompt, &QAction::triggered, this, []() {
         QSettings settings(Utility::settingsFilePath(), QSettings::IniFormat);
 #if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
@@ -87,6 +115,8 @@ void FormLabels::addToolButtonsToMenu(QMenu *menuLabelManage)
 #endif
         settings.setValue(QStringLiteral("labels/autoAddFromFiles"), 0);
     });
+
+    menu.exec(m_tvAllLabels->viewport()->mapToGlobal(pos));
 }
 
 QStringList FormLabels::allLabels() const

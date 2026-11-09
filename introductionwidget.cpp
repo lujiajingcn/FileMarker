@@ -149,7 +149,7 @@ IntroductionWidget::IntroductionWidget(QWidget *parent)
             "<li>在缩略图模式下，双击文件标签区域可内联编辑标签。</li>"
             "<li>双击文件夹可进入该目录，双击文件会使用默认程序打开。</li>"
             "</ul>")},
-        {QLatin1String("mainToolBar"),
+        {QLatin1String("fileCommandBar"),
          tr("工具栏"),
          tr("根据选中的文件和标签执行各种操作"),
          tr("<p style=\"margin-top: 20px\">各个按钮的说明如下：<table>"
@@ -160,7 +160,7 @@ IntroductionWidget::IntroductionWidget(QWidget *parent)
              "<tr><td style=\"padding-right: 20px\">遍历文件:</td><td>遍历选中的文件夹，将标签信息存入缓存数据库以加速后续查询。</td></tr>"
              "<tr><td>界面介绍:</td><td>本界面介绍向导。</td></tr>"
              "</table></p>")},
-        {QLatin1String("menuFileSearch"),
+        {QLatin1String("wFileListToolBar"),
          tr("查找文件菜单"),
          tr("查找和遍历文件的相关菜单"),
          tr("<ul>"
@@ -343,25 +343,7 @@ void IntroductionWidget::setStep(uint index)
 
     const QString anchorObjectName = m_items.at(m_step).pointerAnchorObjectName;
     if (!anchorObjectName.isEmpty()) {
-        // 特殊处理 QMenu：通过 actionGeometry 获取菜单在菜单栏中的位置
-        if (anchorObjectName == "menuFileSearch") {
-            auto *menuBar = parentWidget()->findChild<QMenuBar *>("menuBar");
-            auto *menu = parentWidget()->findChild<QMenu *>(anchorObjectName);
-            if (menuBar && menu) {
-                QAction *action = menu->menuAction();
-                if (action) {
-                    // actionGeometry 返回的是相对菜单栏的坐标，转换为父窗口坐标
-                    const QPoint menuBarPos = menuBar->mapTo(parentWidget(), QPoint{0, 0});
-                    const QRect actionRect = menuBar->actionGeometry(action).translated(menuBarPos);
-                    m_tempSpotlightWidget = new QWidget(parentWidget());
-                    m_tempSpotlightWidget->setGeometry(actionRect);
-                    m_tempSpotlightWidget->raise();
-                    m_stepPointerAnchor = m_tempSpotlightWidget;
-                }
-            }
-        } else {
-            m_stepPointerAnchor = parentWidget()->findChild<QWidget *>(anchorObjectName);
-        }
+        m_stepPointerAnchor = parentWidget()->findChild<QWidget *>(anchorObjectName);
     }
 
     updateButtonStates();

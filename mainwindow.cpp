@@ -60,10 +60,12 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(ui->actionAuthor, &QAction::triggered, this, &MainWindow::onActionAuthorTriggered);
 
     // 灏嗐€愭爣绛剧鐞嗐€戠獥鍙ｇ殑宸ュ叿鏍忔搷浣滄坊鍔犲埌涓荤獥鍙ｇ殑鑿滃崟涓?
-    ui->dwcLabels->addToolButtonsToMenu(ui->menuLabelManage);
+    connect(ui->actionExit, &QAction::triggered, this, &QWidget::close);
 
     // 清理未使用标签：扫描选中目录（含子目录），把没有任何文件使用的库标签删掉
-    QAction *actionCleanupLabels = ui->menuLabelManage->addAction(tr("清理未使用标签…"));    connect(actionCleanupLabels, &QAction::triggered, this, [this]() {
+    QAction *actionCleanupLabels = new QAction(tr("清理未使用标签…"), this);
+    ui->dwcLabels->addContextMenuAction(actionCleanupLabels);
+    connect(actionCleanupLabels, &QAction::triggered, this, [this]() {
         const QStringList qLDirs = ui->wFileBrowser->getSelDirs();
         if (qLDirs.isEmpty())
             return;
