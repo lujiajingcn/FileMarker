@@ -80,17 +80,8 @@ signals:
     void sendEditTag(const QModelIndex &index);
 
 private:
-    // P1-8：把编辑意图记在"具体哪一项"上（见 .cpp 里 rememberEditTarget 的说明）
-    void rememberEditTarget(const QModelIndex &index, EditTarget target) const;
-
-    // P1-8：编辑意图必须"绑定到具体的那一项"。
-    // 以前是一个 EditTarget 成员变量：双击只读文件的标签区时委托记下了"编辑标签"，
-    // 但视图因 flags 不可编辑而没创建编辑器，这个值就残留下来；
-    // 之后对任意可写文件按 F2，createEditor 消费到残留值 -> 弹出标签编辑器，
-    // 用户以为是改名，输入的文件名就把该文件的全部标签覆盖掉了。
-    // mutable：createEditor 是 const，而 editorEvent 先于它调用。
-    mutable QMap<QPersistentModelIndex, EditTarget> m_pendingEdit;
-
+    // 【A3/B5】双击语义已经简化（双击=打开、双击标签区=弹标签对话框、重命名走右键菜单），
+    // 视图也设为 NoEditTriggers，因此不再需要"编辑意图"这类跨调用的可变状态。
     int m_iconSize;
     QPersistentModelIndex m_hoveredIndex;
     ThumbnailIconProvider *m_thumbnailProvider;

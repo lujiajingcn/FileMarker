@@ -110,6 +110,33 @@ void SqliteOperation::invalidateDirCache(const QString &sDir)
         qWarning() << "清除目录缓存失败:" << sDir << dirQuery.lastError().text();
 }
 
+QStringList SqliteOperation::filesUsingLabel(const QString &sLabel) const
+{
+    QStringList qLFiles;
+    if (sLabel.isEmpty())
+        return qLFiles;
+
+    QSqlDatabase db = m_sqlDB;
+    QSqlQuery query(db);
+    if (!query.exec(QString("SELECT filepath,labels FROM %1").arg(TABLE_NAME_FILEPATH_TAG))) {
+        qWarning() << "查询使用标签的文件失败:" << query.lastError().text();
+        return qLFiles;
+    }
+    while (query.next()) {
+        QString sLabels = query.value("labels").toString();
+        sLabels.remove(QStringLiteral(":$DATA"), Qt::CaseInsensitive);
+        const QStringList qLLabelsOfFile = sLabels.split(QLatin1Char(','));
+        for (const QString &sOne : qLLabelsOfFile) {
+            if (sOne.compare(sLabel, Qt::CaseInsensitive) == 0) {
+                qLFiles << query.value("filepath").toString();
+                break;
+            }
+        }
+    }
+    qLFiles.removeDuplicates();
+    return qLFiles;
+}
+
 void SqliteOperation::invalidateCacheForFile(const QString &sFilePath)
 {
     if (sFilePath.isEmpty())
@@ -219,7 +246,40 @@ void SqliteOperation::insertRecord(QMap<QString, FILE_TAGS> dirAndFileTags, cons
     }
 }
 
-void SqliteOperation::searchFilesByLabels(QStringList qLSelDirs, QStringList qLLabels, int nLabelLogic, QStringList &qLFilePaths, QStringList &qLNotHitedDirs)
+// A4：按"标签组"判断一行缓存是否命中。
+// 组内是 OR（选了父标签就等于选了它整棵子树），组间按 AND/OR 组合。
+static bool isFileMatchLabelGroups(const QSet<QString> &setFileLabels,
+                                   const QList<QSet<QString>> &qLLabelGroups,
+                                   int nLabelLogic)
+{
+    if (qLLabelGroups.isEmpty())
+        return false;
+
+    if (nLabelLogic != labelLogic::AND) {
+        for (const QSet<QString> &setGroup : qLLabelGroups) {
+            for (QSet<QString>::const_iterator cItr = setGroup.cbegin(); cItr != setGroup.cend(); ++cItr) {
+                if (setFileLabels.contains(*cItr))
+                    return true;
+            }
+        }
+        return false;
+    }
+
+    for (const QSet<QString> &setGroup : qLLabelGroups) {
+        bool bHit = false;
+        for (QSet<QString>::const_iterator cItr = setGroup.cbegin(); cItr != setGroup.cend(); ++cItr) {
+            if (setFileLabels.contains(*cItr)) {
+                bHit = true;
+                break;
+            }
+        }
+        if (!bHit)
+            return false;
+    }
+    return true;
+}
+
+void SqliteOperation::searchFilesByLabels(QStringList qLSelDirs, const QList<QSet<QString>> &qLLabelGroups, int nLabelLogic, QStringList &qLFilePaths, QStringList &qLNotHitedDirs)
 {
     QStringList qLSearchedDirs; // 已经缓存过的文件夹，从数据库中查找获得
     QSqlQuery query(m_sqlDB);
@@ -236,14 +296,23 @@ void SqliteOperation::searchFilesByLabels(QStringList qLSelDirs, QStringList qLL
         return;
     }
 
-    QSet<QString> stSelDirs = Utility::toSet(qLSelDirs);
-    QSet<QString> stSearchedDirs = Utility::toSet(qLSearchedDirs);
-    QSet<QString> stHitedDirs = stSelDirs.intersect(stSearchedDirs);    // 选中的文件夹命中缓存的部分
-    QSet<QString> stNotHitedDirs = stSelDirs.subtract(stSearchedDirs);  // 选中的文件夹未命中缓存的部分，这部分后续直接在磁盘中查找
+    // 【重要】Qt 5 的 QSet::intersect()/subtract() 只有"就地修改"的版本（返回自身引用），
+    // 直接写 stSelDirs.intersect(stSearchedDirs) 会把 stSelDirs 本身改成交集（这里就是空集），
+    // 于是后面的 subtract 永远是空 —— "未命中目录"恒为 0，缓存没覆盖的目录根本不会被磁盘查询，
+    // 搜索结果直接变空。这里显式拷贝一份再求交/求差。
+    const QSet<QString> stSelDirs = Utility::toSet(qLSelDirs);
+    const QSet<QString> stSearchedDirs = Utility::toSet(qLSearchedDirs);
+    QSet<QString> stHitedDirs = stSelDirs;              // 选中的文件夹命中缓存的部分
+    stHitedDirs.intersect(stSearchedDirs);
+    QSet<QString> stNotHitedDirs = stSelDirs;           // 未命中缓存的部分，后续直接从磁盘查找
+    stNotHitedDirs.subtract(stSearchedDirs);
     for (QSet<QString>::const_iterator cItr = stNotHitedDirs.begin(); cItr != stNotHitedDirs.end(); cItr++)
     {
         qLNotHitedDirs << *cItr;
     }
+
+    qDebug() << "[缓存查询] 选中=" << qLSelDirs << "已缓存=" << qLSearchedDirs
+            << "命中=" << stHitedDirs << "未命中=" << qLNotHitedDirs;
 
     // 使用预编译语句 + bindValue，避免路径中包含单引号等字符导致 SQL 语法错误。
     QSqlQuery hitQuery(m_sqlDB);
@@ -258,26 +327,10 @@ void SqliteOperation::searchFilesByLabels(QStringList qLSelDirs, QStringList qLL
             QString sLabels = hitQuery.value("labels").toString();
             // 防御性兼容：即使迁移失败/旧库只读，也按去掉 :$DATA 后的名字比较
             sLabels.remove(QStringLiteral(":$DATA"), Qt::CaseInsensitive);
-            if(nLabelLogic == labelLogic::AND)
-            {
-                QStringList qLLabelsOfFilePath = sLabels.split(",");
-                QSet<QString> stLabelsOfFilePath = Utility::toSet(qLLabelsOfFilePath);
-                QSet<QString> stConditionLabels = Utility::toSet(qLLabels);
-                QSet<QString> stIntersect = stLabelsOfFilePath.intersect(stConditionLabels);
-                QSet<QString> stSubtract = stConditionLabels.subtract(stIntersect);
-
-                if(stSubtract.count() == 0 && QFileInfo::exists(sFilePath))
-                {
-                    qLFilePaths << sFilePath;
-                }
-            }
-            else
-            {
-                QStringList qLLabelsOfFile = sLabels.split(",");
-                if(Utility::hasEqualElement(qLLabels, qLLabelsOfFile) && QFileInfo::exists(sFilePath))
-                {
-                    qLFilePaths << sFilePath;
-                }
+            const QSet<QString> setLabelsOfFilePath = Utility::toSet(sLabels.split(QLatin1Char(',')));
+            if (isFileMatchLabelGroups(setLabelsOfFilePath, qLLabelGroups, nLabelLogic)
+                    && QFileInfo::exists(sFilePath)) {
+                qLFilePaths << sFilePath;
             }
         }
         hitQuery.finish();

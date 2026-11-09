@@ -340,18 +340,14 @@ bool EditableDelegate::editorEvent(QEvent *event, QAbstractItemModel *model, con
         const LayoutRects layout = calculateRects(option, index);
         const QPoint mousePos = me->pos();
 
-        // 双击标签区域（没标签时是文件名下方那一行）：切换为“就地编辑标签”，交给视图打开第 5 列的编辑器
+        // 【A3】双击标签区域（没标签时是文件名下方那一行）= 打开"增删式"标签对话框，
+        // 不再走"就地编辑第 5 列文本"的老路（那条路会把全部标签当成一行文本替换掉）。
         if (layout.tagEditRect.contains(mousePos)) {
-            rememberEditTarget(index, TargetCustomData);
-            return false;
+            emit sendEditTag(index);
+            return true;
         }
-        // 双击文件名区域：编辑文件名（沿用原有行为）
-        if (layout.nameRect.contains(mousePos)) {
-            rememberEditTarget(index, TargetFileName);
-            return false;
-        }
-        // 其他区域：双击直接打开文件
-        m_pendingEdit.clear();
+        // 【B5】双击文件名与双击其它区域语义统一为"打开/进入"，
+        // 不再"双击文件名 = 就地重命名"（资源管理器里没有这个行为，容易误改名）。
         emit sendDblClick(index);
         return true;
     }
@@ -359,29 +355,11 @@ bool EditableDelegate::editorEvent(QEvent *event, QAbstractItemModel *model, con
     return QStyledItemDelegate::editorEvent(event, model, option, index);
 }
 
-// P1-8：把编辑意图和具体的那一项绑在一起。视图可能因为 flags 不可编辑而不创建编辑器，
-// 这样残留的记录只会挂在原索引上，不会影响其它行（旧实现是全局的 EditTarget 成员）。
-void EditableDelegate::rememberEditTarget(const QModelIndex &index, EditTarget target) const
-{
-    if (m_pendingEdit.size() > 32)   // 正常情况只会有一两条，超过就清空防止无界增长
-        m_pendingEdit.clear();
-    m_pendingEdit.insert(QPersistentModelIndex(index), target);
-}
-
+// 【A3/B5】缩略图视图已把 editTriggers 设为 NoEditTriggers：
+// 双击=打开、双击标签区=弹标签对话框、重命名走右键菜单。
+// 因此"编辑意图"那套成员状态不再需要，这里只保留默认实现。
 QWidget *EditableDelegate::createEditor(QWidget *parent, const QStyleOptionViewItem &option, const QModelIndex &index) const
 {
-    // 只消费"属于这一项"的编辑意图；用掉即擦除，避免影响后续编辑。
-    const EditTarget target = m_pendingEdit.take(QPersistentModelIndex(index));
-
-    if (target == TargetCustomData)
-    {
-        QLineEdit *editor = new QLineEdit(parent);
-        editor->setFont(tagFontFor(option.font));
-        editor->setPlaceholderText(index.sibling(index.row(), 4).data(Qt::DisplayRole).toString());
-        editor->setProperty("fmEditTarget", int(TargetCustomData));
-        return editor;
-    }
-    // 否则返回默认编辑器（文件名）
     return QStyledItemDelegate::createEditor(parent, option, index);
 }
 

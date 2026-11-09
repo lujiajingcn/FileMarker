@@ -15,10 +15,13 @@
 #include <QPersistentModelIndex>
 
 #include "xmloperation.h"
+#include <QSet>
 
 namespace Ui {
 class FormLabels;
 }
+
+class SqliteOperation;
 
 class FormLabels : public QWidget
 {
@@ -32,10 +35,23 @@ public:
 
     void setToolButtonDefaultAction();
 
+    /**
+     * A2：注入缓存数据库。标签库的改名/删除只改库、不碰文件，
+     * 但这个差别必须让用户看见 —— 有了它就能显示"有 N 个文件在用"并让用户选择是否同步到文件。
+     */
+    void setSqlOperation(SqliteOperation *op) { m_sqlOperation = op; }
+
     /** 从文件初始化标签树 */
     void initLabels();
 
     QStringList getSelLabels();
+
+    /**
+     * A4：把当前选中的标签展开成"组"（每组 = 选中的标签 + 它的全部子标签）。
+     * 搜索用这个：组内 OR（搜父标签能搜到打了子标签的文件），组间仍按设置的 AND/OR 组合。
+     * 注意与 getSelLabels() 的区别：那个是"直接选中的标签"，用于给文件打标签。
+     */
+    QList<QSet<QString>> getSelLabelGroups() const;
 
     // 刷新全部标签列表
     void updateAllLabelList(QVector<QString> vtAllLabels);
@@ -94,6 +110,12 @@ private:
     // 询问是否把“从文件编辑产生的新标签”加入标签库（是否加入由 QSettings 记住）
     void promptAddNewLabels(const QStringList &qLNewLabels);
 
+    /** A2：改名后询问"要不要同时改文件上的标签"（排队执行，避免在 itemChanged 里 exec 模态框） */
+    void promptSyncRenameToFiles(const QString &sOldTag, const QString &sNewTag);
+
+    /** A2：把改名/删除同步到文件；返回成功处理的文件数，失败数写进 nFailed */
+    int syncTagToFiles(bool bRename, const QString &sOldTag, const QString &sNewTag, int &nFailed);
+
 private:
     Ui::FormLabels *ui;
 
@@ -104,6 +126,9 @@ private:
     // 每个节点最近一次“提交成功”的文本，按持久索引记录；用于重命名去重与回退原名。
     QMap<QPersistentModelIndex, QString> m_committedText;
     bool m_bPromptShowing;
+    // A2：程序化改回名字时不要再次弹"是否同步到文件"
+    bool m_bSuppressSyncPrompt = false;
+    SqliteOperation        *m_sqlOperation = nullptr;
 
     enum { LabelUuidRole = Qt::UserRole + 1 };
 };

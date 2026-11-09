@@ -12,6 +12,7 @@
 #include "threadsearch.h"
 #include "threadtraversedirs.h"
 #include "threadaddtagbyai.h"
+#include <QSet>
 
 namespace Ui {
 class FormFileBrowser;
@@ -51,6 +52,9 @@ public:
 
     QStringList getSelDirs();
 
+    /** A2：【标签库】的改名/删除需要查询"哪些文件在用这个标签"，由主窗口把它传给 FormLabels */
+    SqliteOperation *sqlOperation() const { return m_sqlOperation; }
+
     // 启动时恢复上次访问的目录
     void restoreLastDir();
 
@@ -78,6 +82,9 @@ public slots:
     void onTvNavigationClicked(const QModelIndex &index);
 
     void onRecvSelLabels(QStringList qLSelLabels);
+
+    /** A4：来自【标签库】的分组（每组 = 选中标签 + 它的全部子标签），搜索时组内 OR、组间按设置的逻辑 */
+    void onRecvLabelGroups(const QList<QSet<QString>> &qLLabelGroups);
 
     // 【D5 修复】结束信号带上统计与首个错误，便于界面提示失败原因
     void onRecvAddLabelByAIFinish(int nSucceeded, int nFailed, QString sFirstError);
@@ -123,6 +130,8 @@ private:
     QAction             *m_aSearchConfig;
 
     QStringList         m_qLSelLabels;          // 选中的标签，可能是【标签管理类】中选中的，也可能是【当前目录文件的标签类】选中的
+    // A4：与 m_qLSelLabels 一一对应的"分组"（组 = 标签 + 它的全部子标签），搜索用这个匹配
+    QList<QSet<QString>> m_qLLabelGroups;
 
     SqliteOperation     *m_sqlOperation;        // 操作sqlite数据库
     ThreadSearch        *m_threadSearch;        // 处理根据标签查找文件的线程

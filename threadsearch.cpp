@@ -1,5 +1,6 @@
 #include "threadsearch.h"
 #include "adsoperation.h"
+#include <QDebug>
 
 #include "traversedirectory.h"
 
@@ -13,10 +14,10 @@ void ThreadSearch::stopThread()
     TraverseDirectory::stop();
 }
 
-void ThreadSearch::setPara(const QStringList &selDirs, const QStringList &tags, const labelLogic taglLogic)
+void ThreadSearch::setPara(const QStringList &selDirs, const QList<QSet<QString>> &qLLabelGroups, const labelLogic taglLogic)
 {
     m_selDirs = selDirs;
-    m_adsName = tags;
+    m_labelGroups = qLLabelGroups;
     m_tagLogic = taglLogic;
 }
 
@@ -31,13 +32,16 @@ void ThreadSearch::run()
     foreach(QString selDir, m_selDirs)
         TraverseDirectory::traverseDirectory(selDir, func, true);
 
+    qInfo() << "磁盘查找结束: scanned=" << m_nScanned << "matched=" << m_filePaths.size()
+            << "logic=" << int(m_tagLogic) << "groups=" << m_labelGroups;
     emit sigResult(m_filePaths);
 }
 
 bool ThreadSearch::searchFile(const QFileInfo& fileInfo)
 {
     QString sFilePath = fileInfo.absoluteFilePath();
-    if(ADSOperation::isHostFile(sFilePath, m_adsName, m_tagLogic))
+    ++m_nScanned;
+    if(ADSOperation::isHostFile(sFilePath, m_labelGroups, m_tagLogic))
         m_filePaths << sFilePath;
 
     emit sendProcessInfo(sFilePath);

@@ -15,6 +15,7 @@
 #include <functional>
 #include <algorithm>
 #include "adsoperation.h"
+#include "sqliteoperation.h"
 
 #include <libxml/parser.h>
 #include <libxml/tree.h>
@@ -219,6 +220,41 @@ void FormLabels::addItem(QStandardItem *parentItem)
     saveLabelToXmlFile();   // #11 新增标签后立即持久化
 }
 
+// A4：把选中的标签展开成"组"（组 = 标签 + 全部子标签），供搜索使用。
+QList<QSet<QString>> FormLabels::getSelLabelGroups() const
+{
+    QList<QSet<QString>> qLGroups;
+    QItemSelectionModel *selectionModel = m_tvAllLabels->selectionModel();
+    if (selectionModel == nullptr)
+        return qLGroups;
+
+    QModelIndexList selectedIndexes = selectionModel->selectedRows(0);
+    std::sort(selectedIndexes.begin(), selectedIndexes.end(),
+              [this](const QModelIndex &a, const QModelIndex &b) {
+                  return m_tvAllLabels->visualRect(a).top() < m_tvAllLabels->visualRect(b).top();
+              });
+
+    std::function<void(QStandardItem *, QSet<QString> &)> collect =
+        [&collect](QStandardItem *pItem, QSet<QString> &setNames) {
+            if (pItem == nullptr)
+                return;
+            setNames.insert(pItem->text());
+            for (int i = 0; i < pItem->rowCount(); ++i)
+                collect(pItem->child(i), setNames);
+        };
+
+    foreach (const QModelIndex &index, selectedIndexes) {
+        QStandardItem *pItem = m_modelAllLabels->itemFromIndex(index);
+        if (pItem == nullptr)
+            continue;
+        QSet<QString> setNames;
+        collect(pItem, setNames);
+        if (!setNames.isEmpty())
+            qLGroups << setNames;
+    }
+    return qLGroups;
+}
+
 void FormLabels::onActionAddTriggered()
 {
     QModelIndex curIdx = m_tvAllLabels->currentIndex();
@@ -259,9 +295,52 @@ void FormLabels::onActionDeleteTriggered()
     {
         return;
     }
-    int nCurRow = curIdx.row();
     QStandardItem *curItem = m_modelAllLabels->itemFromIndex(curIdx);
+    if (curItem == nullptr)
+        return;
+
+    const QString sLabel = curItem->text();
+    const int nCurRow = curIdx.row();
     QStandardItem *parentItem = curItem->parent();
+
+    // A2：删除只影响标签库，文件上的标签不会自动消失 —— 先问清楚，并给出"一并移除"的选项。
+    QStringList qLFiles;
+    if (m_sqlOperation != nullptr)
+        qLFiles = m_sqlOperation->filesUsingLabel(sLabel);
+
+    QMessageBox box(this);
+    box.setWindowTitle(tr("从标签库删除"));
+    box.setIcon(QMessageBox::Warning);
+    box.setText(tr("要从【标签库】删除标签【%1】吗？").arg(sLabel));
+    if (qLFiles.isEmpty()) {
+        box.setInformativeText(tr("缓存里没有记录到正在使用它的文件（只统计执行过【遍历文件】的目录）。\n"
+                                  "文件上的标签不会被删除。"));
+    } else {
+        box.setInformativeText(
+            tr("缓存中有 %1 个文件正在使用它（只统计遍历过的目录）。\n\n"
+               "「只从标签库删除」：这些文件上的标签会保留，之后显示为“库外标签”；\n"
+               "「一并从文件移除」：会把这些文件上的该标签也删掉。").arg(qLFiles.size()));
+    }
+    box.addButton(tr("只从标签库删除"), QMessageBox::AcceptRole);
+    QPushButton *pAlsoFiles = qLFiles.isEmpty() ? nullptr
+                                                : box.addButton(tr("一并从文件移除"), QMessageBox::ActionRole);
+    QPushButton *pCancel = box.addButton(tr("取消"), QMessageBox::RejectRole);
+    box.setDefaultButton(pCancel);
+    box.exec();
+
+    if (box.clickedButton() == pCancel || box.clickedButton() == nullptr)
+        return;
+
+    if (pAlsoFiles != nullptr && box.clickedButton() == pAlsoFiles) {
+        int nFailed = 0;
+        const int nOk = syncTagToFiles(false, sLabel, QString(), nFailed);
+        if (nFailed > 0) {
+            QMessageBox::warning(this, tr("从标签库删除"),
+                                 tr("已从 %1 个文件移除，%2 个文件失败（可能被占用或只读），"
+                                    "失败的仍保留该标签。").arg(nOk).arg(nFailed));
+        }
+    }
+
     if(parentItem == nullptr)
     {
         m_modelAllLabels->removeRow(nCurRow);
@@ -470,6 +549,87 @@ void FormLabels::onItemChanged(QStandardItem *item)
     m_committedText[pidx] = sLabel;
 
     saveLabelToXmlFile();   // #11 重命名后立即持久化
+
+    // A2：改名只改了标签库，文件上的旧标签不会自动跟着变。
+    // 这里排队弹一次询问，让用户明确选择"只改库"还是"连文件一起改"（可以撤销）。
+    if (!old.isEmpty() && !m_bSuppressSyncPrompt && m_sqlOperation != nullptr) {
+        QTimer::singleShot(0, this, [this, old, sLabel]() { promptSyncRenameToFiles(old, sLabel); });
+    }
+}
+
+/** A2：改名后询问是否同步到文件；可以撤销改名。 */
+void FormLabels::promptSyncRenameToFiles(const QString &sOldTag, const QString &sNewTag)
+{
+    if (m_sqlOperation == nullptr || sOldTag.isEmpty())
+        return;
+
+    const QStringList qLFiles = m_sqlOperation->filesUsingLabel(sOldTag);
+
+    QMessageBox box(this);
+    box.setWindowTitle(tr("重命名标签"));
+    box.setIcon(QMessageBox::Question);
+    box.setText(tr("标签【%1】已改名为【%2】。").arg(sOldTag, sNewTag));
+    if (qLFiles.isEmpty()) {
+        box.setInformativeText(
+            tr("注意：这次只改了【标签库】，文件上的【%1】不会被改名。\n\n"
+               "缓存里没有记录到正在使用它的文件（只统计执行过【遍历文件】的目录）。").arg(sOldTag));
+    } else {
+        box.setInformativeText(
+            tr("注意：现在只改了【标签库】，文件上的【%1】还在（缓存中记录到 %2 个文件在用，只统计遍历过的目录）。\n\n"
+               "要不要把这些文件上的【%1】也改成【%3】？").arg(sOldTag).arg(qLFiles.size()).arg(sNewTag));
+    }
+
+    QPushButton *pLibOnly = box.addButton(tr("只改标签库"), QMessageBox::AcceptRole);
+    QPushButton *pSync = qLFiles.isEmpty() ? nullptr : box.addButton(tr("同时改文件上的标签"), QMessageBox::ActionRole);
+    QPushButton *pUndo = box.addButton(tr("撤销改名"), QMessageBox::RejectRole);
+    box.setDefaultButton(pLibOnly);
+    box.exec();
+
+    if (box.clickedButton() == pUndo) {
+        // 程序化改回旧名：期间不要再弹同步询问。
+        m_bSuppressSyncPrompt = true;
+        const QList<QStandardItem *> items = m_modelAllLabels->findItems(sNewTag, Qt::MatchExactly | Qt::MatchRecursive);
+        for (QStandardItem *pItem : items) {
+            if (pItem != nullptr && pItem->text() == sNewTag) {
+                pItem->setText(sOldTag);
+                break;
+            }
+        }
+        m_bSuppressSyncPrompt = false;
+        return;
+    }
+
+    if (pSync != nullptr && box.clickedButton() == pSync) {
+        int nFailed = 0;
+        const int nOk = syncTagToFiles(true, sOldTag, sNewTag, nFailed);
+        QMessageBox::information(this, tr("重命名标签"),
+                                 nFailed == 0
+                                     ? tr("已把 %1 个文件上的【%2】改名为【%3】。").arg(nOk).arg(sOldTag, sNewTag)
+                                     : tr("已处理 %1 个文件，其中 %2 个失败（可能被占用或只读）。\n"
+                                          "失败的仍保留旧标签，可稍后重试。").arg(nOk).arg(nFailed));
+    }
+}
+
+/** A2：把改名/删除应用到文件；返回成功数，失败数累加到 nFailed。 */
+int FormLabels::syncTagToFiles(bool bRename, const QString &sOldTag, const QString &sNewTag, int &nFailed)
+{
+    nFailed = 0;
+    if (m_sqlOperation == nullptr)
+        return 0;
+
+    const QStringList qLFiles = m_sqlOperation->filesUsingLabel(sOldTag);
+    int nOk = 0;
+    foreach (const QString &sFilePath, qLFiles) {
+        const bool bOk = bRename ? ADSOperation::renameTag(sFilePath, sOldTag, sNewTag)
+                                 : ADSOperation::removeTag(sFilePath, sOldTag);
+        if (bOk) {
+            ++nOk;
+            m_sqlOperation->invalidateCacheForFile(sFilePath);
+        } else {
+            ++nFailed;
+        }
+    }
+    return nOk;
 }
 
 

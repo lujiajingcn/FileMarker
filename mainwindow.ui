@@ -115,16 +115,19 @@
     <bool>false</bool>
    </attribute>
    <addaction name="actionAddLabelbyAI"/>
+   <addaction name="separator"/>
    <addaction name="actionAddLabels"/>
    <addaction name="actionDelLabels"/>
+   <addaction name="separator"/>
    <addaction name="actionSearchFilesbyLabels"/>
    <addaction name="actionTraverseSelDirs"/>
+   <addaction name="separator"/>
    <addaction name="actionHelp"/>
   </widget>
   <widget class="QStatusBar" name="statusBar"/>
   <widget class="QDockWidget" name="dwLabels">
    <property name="windowTitle">
-    <string>标签库</string>
+    <string>标签库（分类）</string>
    </property>
    <attribute name="dockWidgetArea">
     <number>2</number>
@@ -158,10 +161,10 @@
      <normaloff>:/Resources/204-link.png</normaloff>:/Resources/204-link.png</iconset>
    </property>
    <property name="text">
-    <string>添加标签</string>
+    <string>添加到选中文件</string>
    </property>
    <property name="toolTip">
-    <string>为文件关联标签</string>
+    <string>把【标签库】中选中的标签追加到选中的文件（不覆盖文件原有标签）</string>
    </property>
    <property name="shortcut">
     <string>A</string>
@@ -197,7 +200,10 @@
      <normaloff>:/Resources/breaklink.png</normaloff>:/Resources/breaklink.png</iconset>
    </property>
    <property name="text">
-    <string>删除标签</string>
+    <string>清空文件标签</string>
+   </property>
+   <property name="toolTip">
+    <string>删除选中文件上的全部标签（不可撤销；只影响文件，不动【标签库】）</string>
    </property>
    <property name="shortcut">
     <string>D</string>

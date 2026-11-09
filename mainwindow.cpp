@@ -135,6 +135,16 @@ MainWindow::MainWindow(QWidget *parent) :
     // 銆愭爣绛剧鐞嗐€戜腑閫変腑鐨勬爣绛撅紝鍚屾鍒般€愭枃浠剁鐞嗐€戜腑
     connect(ui->dwcLabels, &FormLabels::sendSelLabels, ui->wFileBrowser, &FormFileBrowser::onRecvSelLabels);
 
+    // A4: search treats a selected parent label as "this label + all of its children".
+    // Must be connected AFTER the line above (which resets groups to singletons).
+    connect(ui->dwcLabels, &FormLabels::sendSelLabels, this, [this](QStringList) {
+        ui->wFileBrowser->onRecvLabelGroups(ui->dwcLabels->getSelLabelGroups());
+    });
+
+    // A2: give the label library the cache DB so rename/delete can report
+    // how many files use the label and optionally sync the change to files.
+    ui->dwcLabels->setSqlOperation(ui->wFileBrowser->sqlOperation());
+
     // 銆愬綋鍓嶇洰褰曟爣绛俱€戜腑閫変腑鐨勬爣绛撅紝鍚屾鍒般€愭枃浠剁鐞嗙被銆戜腑
     connect(ui->dwcCurDirLabels, &FormCurDirLabels::sendSelLabels, ui->wFileBrowser, &FormFileBrowser::onRecvSelLabels);
 

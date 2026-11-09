@@ -25,6 +25,7 @@
 #include "adsoperation.h"
 #include "thumbnailiconprovider.h"
 #include "editablefiledelegate.h"
+#include "tageditdialog.h"
 #include "utility.h"
 
 namespace {
@@ -304,12 +305,13 @@ void FormPageFiles::initDetailFileList()
      // 设置可以选中多行
     m_tvFiles->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_tvFiles->setModel(m_modelFiles);
-    // 【D6 修复】第 0~3 列装"拒绝编辑"代理，只有标签列（第 4 列）保留编辑器；
-    // 否则双击文件名/F2 会直接重命名磁盘文件（见 NoEditDelegate 注释）。
+    // 【D6 修复】第 0~3 列装"拒绝编辑"代理，禁止 F2/双击把文件名改到磁盘上。
     for (int nCol = 0; nCol <= 3; ++nCol)
         m_tvFiles->setItemDelegateForColumn(nCol, new NoEditDelegate(m_tvFiles));
-    // 标签列单独装代理，保证行内编辑器铺满单元格（见 TagColumnDelegate）。
-    m_tvFiles->setItemDelegateForColumn(4, new TagColumnDelegate(m_tvFiles));
+    // 【A3/B5】标签列也不再就地编辑：双击标签单元格改为弹出"增删式"标签对话框
+    // （在 onDoubleClicked 里处理），与缩略图的双击语义统一。
+    m_tvFiles->setItemDelegateForColumn(4, new NoEditDelegate(m_tvFiles));
+    m_tvFiles->setEditTriggers(QAbstractItemView::NoEditTriggers);
 
     m_tvFiles->setRootIndex(m_modelFiles->index(""));
     // 排序统一由 applySort 控制：表头可点击排序，但“标签”列（第 5 列）不参与，
@@ -386,7 +388,9 @@ void FormPageFiles::initThumbnailFileList()
     m_lstFiles->setContextMenuPolicy(Qt::CustomContextMenu);
     m_lstFiles->setMouseTracking(true);              // 悬停高亮需要鼠标移动事件
 
-    m_lstFiles->setEditTriggers(QAbstractItemView::DoubleClicked | QAbstractItemView::EditKeyPressed);
+    // 【B5】缩略图不再用"双击文件名/F2 就地重命名"：双击统一为"打开/进入"，
+    // 标签编辑走双击标签区（弹对话框），重命名走右键菜单。
+    m_lstFiles->setEditTriggers(QAbstractItemView::NoEditTriggers);
 
     m_delegate = new EditableDelegate(this);
     m_delegate->setIconSize(m_nIconSize);
@@ -705,6 +709,9 @@ void FormPageFiles::onCustomContextMenuRequested(const QPoint &pos)
     actionCopyPath->setEnabled(hasSelection);
     QAction *actionEditTags = menu.addAction(tr("编辑标签…"));
     actionEditTags->setEnabled(singleSelection);
+    // 【B5】两个视图都不再支持就地改名（双击=打开），重命名统一放在这里。
+    QAction *actionRename = menu.addAction(tr("重命名…"));
+    actionRename->setEnabled(singleSelection);
 
     menu.addSeparator();
 
@@ -795,6 +802,9 @@ void FormPageFiles::onCustomContextMenuRequested(const QPoint &pos)
     });
     connect(actionEditTags, &QAction::triggered, this, [this, clickedIndex]() {
         onEditTag(clickedIndex.isValid() ? clickedIndex : currentIndexInActiveView());
+    });
+    connect(actionRename, &QAction::triggered, this, [this, clickedIndex]() {
+        renameFile(clickedIndex.isValid() ? clickedIndex : currentIndexInActiveView());
     });
     connect(actionDetail, &QAction::triggered, this, &FormPageFiles::onTbDetailClicked);
     connect(actionThumbnail, &QAction::triggered, this, &FormPageFiles::onTbThumbnailClicked);
@@ -934,11 +944,14 @@ void FormPageFiles::onTbThumbnailClicked()
 
 void FormPageFiles::onDoubleClicked(const QModelIndex &index)
 {
-    // 第 5 列（标签列）的双击语义是“就地编辑标签”，不能同时打开文件/进入目录。
+    // 第 5 列（标签列）的双击语义是"编辑标签"，不能同时打开文件/进入目录。
+    // 【A3】改为弹出"增删式"标签对话框（不再就地编辑整行文本）。
     // 说明：0aead52 之前该列的 FilePathRole 会误返回标签字符串，openUrl 打开失败，
     // 看起来像“没有打开文件”；修正 FilePathRole 后必须在这里显式排除标签列。
-    if (index.column() == 4)
+    if (index.column() == 4) {
+        onEditTag(index);
         return;
+    }
 
     QFileInfo fileInfo = m_modelFiles->fileInfo(index);
     QString path = index.data(QFileSystemModel::FilePathRole).toString();
@@ -983,62 +996,18 @@ void FormPageFiles::onEditTag(const QModelIndex &index)
         return;
 
     // 按录入顺序显示当前标签（NTFS 枚举流是按流名排序的，不能直接用它）
-    QStringList adsNames = ADSOperation::listADSTagsInOrder(sFilePath);
-    const QString sOldText = adsNames.join(",");
-    // 【D8 修复】不用静态的 QInputDialog::getText（它的按钮文字来自 Qt 自带翻译，
-    // 未加载 .qm 时永远是英文 OK/Cancel），改为自建实例并显式设置中文按钮；
-    // 同时把对话框放宽，避免 Qt 报 "setGeometry: Unable to set geometry" 警告。
-    QInputDialog dlg(this);
-    dlg.setWindowTitle(tr("编辑标签"));
-    dlg.setLabelText(tr("多个标签用逗号、顿号或分号分隔（支持中英文）："));
-    dlg.setInputMode(QInputDialog::TextInput);
-    dlg.setTextValue(sOldText);
-    dlg.setOkButtonText(tr("确定"));
-    dlg.setCancelButtonText(tr("取消"));
-    dlg.setMinimumWidth(560);
-    dlg.resize(560, dlg.sizeHint().height());
+    const QStringList adsNames = ADSOperation::listADSTagsInOrder(sFilePath);
+
+    // 【A3】改用"列表 + 添加/移除"的编辑器：
+    // 以前是把全部标签当成一行文本编辑，用户全选后输入新名字就等于静默替换掉所有旧标签；
+    // 现在每个标签都是列表里的一项，增删都要显式操作，且非法名字在添加时就被拒绝。
+    TagEditDialog dlg(adsNames, QFileInfo(sFilePath).fileName(), this);
     if (dlg.exec() != QDialog::Accepted)
         return;
-    QString sNewTags = dlg.textValue();
 
-    // 没有改动就不要重写：历史标签可能合法包含 "，、；"，重新 split 会把一个标签拆成多个。
-    if (sNewTags == sOldText)
+    const QStringList qLLabels = dlg.tags();
+    if (qLLabels == adsNames)   // 没有改动就不要重写
         return;
-
-    // 先清空该文件全部标签，再按用户输入的顺序重新写入（P2-2）。
-    // 历史标签名可能合法包含 "，、；"：已有标签原样保留，只有新输入的标签才净化。
-    QStringList qLLabels;
-    QStringList qLChanged;
-    foreach (const QString &sLabel, Utility::splitLabelsPreservingExisting(sNewTags, adsNames)) {
-        if (adsNames.contains(sLabel)) {
-            if (!qLLabels.contains(sLabel))
-                qLLabels << sLabel;
-            continue;
-        }
-        const QString sSanitized = ADSOperation::sanitizeTagName(sLabel);
-        if (!sSanitized.isEmpty() && !qLLabels.contains(sSanitized)) {
-            qLLabels << sSanitized;
-            if (sSanitized != sLabel.trimmed())
-                qLChanged << sLabel + QStringLiteral("→") + sSanitized;
-        } else if (sSanitized.isEmpty() && !sLabel.trimmed().isEmpty()) {
-            qLChanged << sLabel + tr("（已忽略）");
-        }
-    }
-
-    // 【D2 修复】区分两种"空列表"：
-    //   - 用户把输入框清空 → 视为"清空全部标签"，照常执行；
-    //   - 输入非空但净化后一个都不剩（如 "???"、"<>"）→ 中止并提示，绝不静默清空。
-    // 以前两种都走 replaceTags(file, {})，会把文件原有标签全部删掉还返回成功。
-    if (qLLabels.isEmpty() && !sNewTags.trimmed().isEmpty()) {
-        QMessageBox::warning(this, tr("标签名无效"),
-                             tr("输入的标签名都不合法（不能用 : / \\ * ? \" < > | 和分隔符），"
-                                "未做任何修改。\n\n原始输入：%1")
-                                 .arg(sNewTags.trimmed()));
-        return;
-    }
-
-    if (!qLChanged.isEmpty())
-        emit sendHintMessage(tr("部分标签名已规范化：%1").arg(qLChanged.join("，")));
 
     const bool bOk = ADSOperation::replaceTags(sFilePath, qLLabels);
     emit sendTagsChanged(QStringList() << sFilePath);
@@ -1058,6 +1027,40 @@ void FormPageFiles::onEditTag(const QModelIndex &index)
 void FormPageFiles::recvDblClick(const QModelIndex &index)
 {
     onDoubleClicked(index);
+}
+
+/** 【B5】统一的重命名入口（右键菜单）。 */
+void FormPageFiles::renameFile(const QModelIndex &index)
+{
+    if (!index.isValid())
+        return;
+    const QModelIndex nameIndex = index.sibling(index.row(), 0);
+    const QString sOldName = m_modelFiles->fileName(nameIndex);
+    if (sOldName.isEmpty())
+        return;
+
+    QInputDialog dlg(this);
+    dlg.setWindowTitle(tr("重命名"));
+    dlg.setLabelText(tr("新名称（含扩展名）："));
+    dlg.setInputMode(QInputDialog::TextInput);
+    dlg.setTextValue(sOldName);
+    dlg.setOkButtonText(tr("重命名"));
+    dlg.setCancelButtonText(tr("取消"));
+    dlg.setMinimumWidth(520);
+    dlg.resize(520, dlg.sizeHint().height());
+    if (dlg.exec() != QDialog::Accepted)
+        return;
+
+    const QString sNewName = dlg.textValue().trimmed();
+    if (sNewName.isEmpty() || sNewName == sOldName)
+        return;
+
+    if (!m_modelFiles->setData(nameIndex, sNewName, Qt::EditRole)) {
+        QMessageBox::warning(this, tr("重命名失败"),
+                             tr("无法把【%1】改成【%2】。\n"
+                                "可能是名称不合法、已经存在同名文件，或文件正被占用。")
+                                 .arg(sOldName, sNewName));
+    }
 }
 
 // 切换缩略图尺寸：图标大小、格子大小、代理绘制尺寸、缩略图生成尺寸要一起改

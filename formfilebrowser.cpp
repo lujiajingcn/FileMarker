@@ -196,6 +196,19 @@ void FormFileBrowser::onTvNavigationClicked(const QModelIndex &index)
 void FormFileBrowser::onRecvSelLabels(QStringList qLSelLabels)
 {
     m_qLSelLabels = qLSelLabels;
+    // 没有收到"分组"信息时（例如从【当前目录中的标签】选择），每个标签自成一组。
+    m_qLLabelGroups.clear();
+    for (const QString &sLabel : qLSelLabels) {
+        QSet<QString> setGroup;
+        setGroup.insert(sLabel);
+        m_qLLabelGroups << setGroup;
+    }
+}
+
+/** A4：接收【标签库】给出的分组（每组 = 选中标签 + 它的全部子标签）。 */
+void FormFileBrowser::onRecvLabelGroups(const QList<QSet<QString>> &qLLabelGroups)
+{
+    m_qLLabelGroups = qLLabelGroups;
 }
 
 void FormFileBrowser::onActionAddLabelByAITriggered()
@@ -340,12 +353,44 @@ void FormFileBrowser::onActionSearchFilesbyLabelsTriggered()
     const QStringList qLSearchDirs = qLSelDirs;
 
     if(m_qLSelLabels.count() == 0){
-        QMessageBox::information(this, "提示", "未选中标签！");
+        QMessageBox::information(this, "提示", "请先在右侧【标签库（分类）】里选择要查找的标签（可多选）。");
         return;
     }
 
+    // A4：搜索条件是"分组"——每组 = 选中的标签 + 它的全部子标签。
+    // 因此"搜索父标签"能搜到只打了子标签的文件；多个条件之间仍按设置里的 AND/OR 组合。
+    if (m_qLLabelGroups.isEmpty()) {
+        for (const QString &sLabel : m_qLSelLabels) {
+            QSet<QString> setGroup;
+            setGroup.insert(sLabel);
+            m_qLLabelGroups << setGroup;
+        }
+    }
+
+    // 结果页回显条件时把"含子标签"写出来，让用户明确层级是参与匹配的。
+    QStringList qLConditionTexts;
+    foreach (const QSet<QString> &setGroup, m_qLLabelGroups) {
+        QStringList qLNames = QStringList(setGroup.values());
+        qLNames.sort();
+        // 组里"直接选中的那个标签"作为显示名，其余当子标签列出来
+        QString sRoot;
+        for (const QString &sName : qLNames) {
+            if (m_qLSelLabels.contains(sName)) {
+                sRoot = sName;
+                break;
+            }
+        }
+        if (sRoot.isEmpty() || qLNames.size() <= 1) {
+            qLConditionTexts << qLNames.join(QStringLiteral("/"));
+            continue;
+        }
+        QStringList qLChildren = qLNames;
+        qLChildren.removeAll(sRoot);
+        qLConditionTexts << tr("%1（含子标签：%2）").arg(sRoot, qLChildren.join("、"));
+    }
+
     ui->pageFilteredFiles->setSearchCondition(
-        tr("标签：%1；目录：%2").arg(m_qLSelLabels.join("、"), qLSearchDirs.join("；")));
+        tr("标签：%1；目录：%2").arg(qLConditionTexts.join("、"), qLSearchDirs.join("；")));
 
     // 诊断日志：如果以后再次出现搜索界面卡住，可从日志判断搜索范围与是否走了缓存。
     qInfo() << "开始搜索: dirs=" << qLSelDirs << "labels=" << m_qLSelLabels
@@ -355,7 +400,9 @@ void FormFileBrowser::onActionSearchFilesbyLabelsTriggered()
 
     if(sc.bFromCache){
         QStringList qLFilePaths, qLNotHitedDirs;
-        m_sqlOperation->searchFilesByLabels(qLSelDirs, m_qLSelLabels, sc.logic, qLFilePaths, qLNotHitedDirs);
+        m_sqlOperation->searchFilesByLabels(qLSelDirs, m_qLLabelGroups, sc.logic, qLFilePaths, qLNotHitedDirs);
+        qInfo() << "[搜索] 缓存命中文件=" << qLFilePaths.size() << " 未命中目录数=" << qLNotHitedDirs.size()
+                << " 分组数=" << m_qLLabelGroups.size() << " logic=" << int(sc.logic);
         if(qLNotHitedDirs.count() == 0) { // 查找的文件夹全部在缓存数据库中存在，则显示查找结果后结束。
             showFilteredFile(qLFilePaths);
             return;
@@ -365,6 +412,8 @@ void FormFileBrowser::onActionSearchFilesbyLabelsTriggered()
             qLSelDirs = qLNotHitedDirs;
         }
     }
+
+    qInfo() << "[搜索] 启动磁盘扫描 dirs=" << qLSelDirs;
 
     // P2-15：若前一个搜索线程仍在运行，直接返回。正常流程下搜索按钮运行期间已被禁用，
     // 此检查仅为防御性编程，避免旧线程的 finished lambda（m_threadSearch = nullptr）
@@ -377,7 +426,7 @@ void FormFileBrowser::onActionSearchFilesbyLabelsTriggered()
 
     showProcessPage(RUNNINGTHREAD::SEARCHFILE);// 从磁盘查找比较耗时，切换到处理进度页面
     m_threadSearch = new ThreadSearch(this);
-    m_threadSearch->setPara(qLSelDirs, m_qLSelLabels, sc.logic);
+    m_threadSearch->setPara(qLSelDirs, m_qLLabelGroups, sc.logic);
     connect(m_threadSearch, &ThreadSearch::sigResult, this, &FormFileBrowser::showFilteredFile);
     connect(m_threadSearch, &ThreadSearch::sendProcessInfo, ui->pageProgressInfo, &FormPageProgressInfo::onRecvProgress);
     // 注意：ThreadSearch 构造函数里已连接 finished->deleteLater，这里只需在线程结束后把指针置空，避免悬空指针。

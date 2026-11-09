@@ -44,6 +44,7 @@ SOURCES += \
         mainwindow.cpp \
         myqfilesystemmodel.cpp \
         sqliteoperation.cpp \
+        tageditdialog.cpp \
         threadaddtagbyai.cpp \
         threadsearch.cpp \
         threadtraversedirs.cpp \
@@ -70,6 +71,7 @@ HEADERS += \
         mainwindow.h \
         myqfilesystemmodel.h \
         sqliteoperation.h \
+        tageditdialog.h \
         threadaddtagbyai.h \
         threadsearch.h \
         threadtraversedirs.h \

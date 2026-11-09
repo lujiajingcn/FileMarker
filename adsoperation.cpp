@@ -614,12 +614,67 @@ bool ADSOperation::appendTags(const QString &filePath, const QStringList &tags)
     return bOk;
 }
 
+/**
+ ** 把文件上的某个标签改名（保留它在标签序列中的位置）。
+ ** 用于【标签库】重命名后"同时改文件上的标签"这个选项（A2）。
+ ** 文件上本来就没有这个标签时返回 true（视为无需处理）。
+ **/
+bool ADSOperation::renameTag(const QString &filePath, const QString &sOldTag, const QString &sNewTag)
+{
+    if (filePath.isEmpty() || sOldTag.trimmed().isEmpty())
+        return false;
+    const QString sNew = sanitizeTagName(sNewTag);
+    if (sNew.isEmpty())
+        return false;
+
+    const QStringList existing = listADSTagsInOrder(filePath);
+    QStringList qLNew;
+    bool bFound = false;
+    foreach (const QString &sTag, existing) {
+        if (sTag.compare(sOldTag, Qt::CaseInsensitive) == 0) {
+            bFound = true;
+            if (!qLNew.contains(sNew))
+                qLNew << sNew;
+            continue;
+        }
+        qLNew << sTag;
+    }
+    if (!bFound)
+        return true;
+    return replaceTags(filePath, qLNew);
+}
+
+/**
+ ** 从文件上移除某个标签（保留其余标签的顺序）。
+ ** 用于【标签库】删除标签时"同时从文件移除"这个选项（A2）。
+ ** 文件上本来就没有这个标签时返回 true。
+ **/
+bool ADSOperation::removeTag(const QString &filePath, const QString &sTag)
+{
+    if (filePath.isEmpty() || sTag.trimmed().isEmpty())
+        return false;
+
+    const QStringList existing = listADSTagsInOrder(filePath);
+    QStringList qLNew;
+    bool bFound = false;
+    foreach (const QString &sTagOfFile, existing) {
+        if (sTagOfFile.compare(sTag, Qt::CaseInsensitive) == 0) {
+            bFound = true;
+            continue;
+        }
+        qLNew << sTagOfFile;
+    }
+    if (!bFound)
+        return true;
+    return replaceTags(filePath, qLNew);
+}
+
 // 根据标签和标签的逻辑关系，判断给定的文件是否是目标文件
-bool ADSOperation::isHostFile(const QString &sFilePath, const QStringList &tags, labelLogic logic)
+bool ADSOperation::isHostFile(const QString &sFilePath, const QList<QSet<QString>> &qLLabelGroups, labelLogic logic)
 {
     // 没有指定标签时不应匹配任何文件：
     // 空集合是任意集合的子集，会让下面的 AND 判断误判为命中。
-    if (tags.isEmpty())
+    if (qLLabelGroups.isEmpty())
         return false;
 
     // 复用标签流枚举：只比较 FileMarker 自己的标签，第三方 ADS 不参与搜索。
@@ -627,14 +682,32 @@ bool ADSOperation::isHostFile(const QString &sFilePath, const QStringList &tags,
     if (adsNames.isEmpty())
         return false;
 
+    QSet<QString> setAdsNames;
+    for (const QString &sName : adsNames)
+        setAdsNames.insert(sName);
+
+    // A4：每个组 = 一个选中标签 + 它的全部子标签，组内 OR、组间按 AND/OR 组合。
     if (logic == labelLogic::OR) {
-        foreach (const QString &sTag, tags) {
-            if (adsNames.contains(sTag))
-                return true;
+        for (const QSet<QString> &setGroup : qLLabelGroups) {
+            for (QSet<QString>::const_iterator cItr = setGroup.cbegin(); cItr != setGroup.cend(); ++cItr) {
+                if (setAdsNames.contains(*cItr))
+                    return true;
+            }
         }
         return false;
     }
 
-    // AND：条件标签必须全部包含在文件的标签集合中
-    return Utility::isContains(adsNames, tags);
+    // AND：每个组里至少要命中一个标签
+    for (const QSet<QString> &setGroup : qLLabelGroups) {
+        bool bHit = false;
+        for (QSet<QString>::const_iterator cItr = setGroup.cbegin(); cItr != setGroup.cend(); ++cItr) {
+            if (setAdsNames.contains(*cItr)) {
+                bHit = true;
+                break;
+            }
+        }
+        if (!bHit)
+            return false;
+    }
+    return true;
 }

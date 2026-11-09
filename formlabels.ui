@@ -37,7 +37,7 @@
      <item row="0" column="1">
       <widget class="QToolButton" name="btnAddChild">
        <property name="toolTip">
-        <string>添加子标签</string>
+        <string>新建子标签</string>
        </property>
        <property name="text">
         <string>...</string>
@@ -77,7 +77,7 @@
      <item row="0" column="2">
       <widget class="QToolButton" name="btnDelete">
        <property name="toolTip">
-        <string>删除标签</string>
+        <string>从标签库删除</string>
        </property>
        <property name="text">
         <string>...</string>
@@ -139,7 +139,7 @@
      <normaloff>:/Resources/addnode.png</normaloff>:/Resources/addnode.png</iconset>
    </property>
    <property name="text">
-    <string>添加标签</string>
+    <string>新建标签</string>
    </property>
   </action>
   <action name="actionAddChild">
@@ -148,7 +148,7 @@
      <normaloff>:/Resources/addchildnode.png</normaloff>:/Resources/addchildnode.png</iconset>
    </property>
    <property name="text">
-    <string>添加子标签</string>
+    <string>新建子标签</string>
    </property>
   </action>
   <action name="actionDelete">
@@ -157,7 +157,7 @@
      <normaloff>:/Resources/deletenode.png</normaloff>:/Resources/deletenode.png</iconset>
    </property>
    <property name="text">
-    <string>删除标签</string>
+    <string>从标签库删除</string>
    </property>
   </action>
   <action name="actionMoveUp">

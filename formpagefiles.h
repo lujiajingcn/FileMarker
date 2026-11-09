@@ -125,8 +125,11 @@ private:
 
     void recvDblClick(const QModelIndex &index);
 
-    // 缩略图模式下双击标签区域时弹出输入框编辑该文件的标签（P2-2）。
+    // 双击标签区域 / 双击标签列时弹出"增删式"标签对话框（A3）。
     void onEditTag(const QModelIndex &index);
+
+    // 【B5】重命名入口：两个视图都不再就地改名，统一走右键【重命名…】。
+    void renameFile(const QModelIndex &index);
 
     // 切换缩略图尺寸档位（小/中/大）
     void setThumbnailSize(int iconSize);
