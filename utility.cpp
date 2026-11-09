@@ -79,38 +79,6 @@ void Utility::myMessageHandler(QtMsgType mType, const QMessageLogContext&, const
     }
 }
 
-// 根据xpath找到指定的节点集合。
-xmlXPathObjectPtr Utility::searchByXPath(xmlDocPtr doc, const xmlChar *xpath)
-{
-    xmlXPathContextPtr context;
-    xmlXPathObjectPtr result;
-    context = xmlXPathNewContext(doc);
-
-    if (context == nullptr)
-    {
-        // P3-26：改用 qWarning 替代 printf，确保日志能被全局 messageHandler 捕获写入文件。
-        qWarning("searchByXPath: context is NULL");
-        return nullptr;
-    }
-
-    result = xmlXPathEvalExpression(xpath, context);
-    xmlXPathFreeContext(context);
-    if (result == nullptr)
-    {
-        qWarning("searchByXPath: xmlXPathEvalExpression returned NULL");
-        return nullptr;
-    }
-
-    if (xmlXPathNodeSetIsEmpty(result->nodesetval))
-    {
-        xmlXPathFreeObject(result);
-        qWarning("searchByXPath: nodeset is empty");
-        return nullptr;
-    }
-
-    return result;
-}
-
 QString Utility::createUuid()
 {
     return QUuid::createUuid().toString().remove("{").remove("}").remove("-");

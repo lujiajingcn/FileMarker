@@ -92,10 +92,8 @@ FORMS += \
         formpageprogressinfo.ui \
         mainwindow.ui
 
-INCLUDEPATH += libxml
 
 LIBS += -L$$PWD/lib/ -lsqlite3
-LIBS += -L$$PWD/lib/ -llibxml2
 
 # 缩略图：Shell 缩略图接口(IShellItemImageFactory) 需要 shell32，位图转换需要 gdi32，
 # COM 初始化需要 ole32

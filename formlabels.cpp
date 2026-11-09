@@ -17,10 +17,6 @@
 #include "adsoperation.h"
 #include "sqliteoperation.h"
 
-#include <libxml/parser.h>
-#include <libxml/tree.h>
-#include <libxml/xpath.h>
-
 #include "common.h"
 #include "utility.h"
 

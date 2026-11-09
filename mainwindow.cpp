@@ -25,6 +25,10 @@ MainWindow::MainWindow(QWidget *parent) :
 {
     g_sAppDir = QCoreApplication::applicationDirPath();
 
+    // 日志要在 setupUi 之前装好：标签库（FormLabels）是在 setupUi 里构造的，
+    // 它读 labels.xml 失败时的 qCritical 必须能落进日志，否则用户只看到"标签库空了"。
+    initLogMessageHanlder();
+
     ui->setupUi(this);
 
     // 窗口移动/缩放后防抖保存，避免崩溃或强杀时丢失窗口状态

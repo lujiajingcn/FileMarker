@@ -7,10 +7,6 @@
 #include <QTextStream>
 #include <QMutex>
 
-#include <libxml/parser.h>
-#include <libxml/tree.h>
-#include <libxml/xpath.h>
-
 #include "common.h"
 
 class Utility
@@ -29,7 +25,6 @@ public:
     /** 设置文件路径：程序目录可写就用程序目录，否则回退到用户 AppData */
     static QString settingsFilePath();
 
-    static xmlXPathObjectPtr searchByXPath(xmlDocPtr doc, const xmlChar *xpath);
     static QString createUuid();
 
     /** 判断两个QStringList是否有相同的元素 */
