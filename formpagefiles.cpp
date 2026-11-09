@@ -30,6 +30,9 @@
 
 namespace {
 
+// 地址栏下拉里保留的历史目录条数
+const int RECENT_DIR_LIMIT = 10;
+
 // 虚拟根节点（“我的电脑”）的显示名：QFileSystemModel::myComputer() 返回的是英文
 // "My Computer"，和界面上的名称不同，这里统一使用界面名并兼容英文写法。
 const QString MY_COMPUTER_NAME = QStringLiteral("我的电脑");
@@ -195,7 +198,11 @@ FormPageFiles::FormPageFiles(QWidget *parent) :
     connect(ui->listView, &QListView::customContextMenuRequested,
             this, &FormPageFiles::onListViewCustomContextMenuRequested);
 
-    // todo 后续将已经访问过的路径都添加上
+    // 地址栏下拉：展示最近 10 次打开过的目录（持久化，重启后仍在）。
+    // 不用 QComboBox 的自动插入（InsertAtBottom），历史由 rememberPath() 统一维护。
+    ui->lookInCombo->setInsertPolicy(QComboBox::NoInsert);
+    ui->lookInCombo->setMaxVisibleItems(10);
+    loadRecentDirs();
     ui->lookInCombo->setEditText(m_sCurDir);
 
     // 地址栏是可编辑的（.ui 中 editable=true）：回车或选择历史项时按路径导航。
@@ -523,17 +530,59 @@ void FormPageFiles::refreshAddressBar()
 
 void FormPageFiles::rememberPath(const QString &sPath)
 {
-    // 最近访问的 20 个路径，去重后放到下拉框最前面
+    if (sPath.isEmpty())
+        return;
+
+    // 最近访问的 10 个目录：去重、最近的在最前面、写回 settings
+    const QString sClean = QDir::cleanPath(sPath);
+    m_qLRecentDirs.removeAll(sClean);
+    m_qLRecentDirs.prepend(sClean);
+    while (m_qLRecentDirs.size() > RECENT_DIR_LIMIT)
+        m_qLRecentDirs.removeLast();
+    saveRecentDirs();
+
+    // 用历史列表重建下拉项；地址栏文本单独设置，避免把"当前项"高亮成列表里的一项
     ui->lookInCombo->blockSignals(true);
-    const int nExist = ui->lookInCombo->findText(sPath);
-    if (nExist >= 0)
-        ui->lookInCombo->removeItem(nExist);
-    ui->lookInCombo->insertItem(0, sPath);
-    while (ui->lookInCombo->count() > 20)
-        ui->lookInCombo->removeItem(ui->lookInCombo->count() - 1);
+    ui->lookInCombo->clear();
+    ui->lookInCombo->addItems(m_qLRecentDirs);
     ui->lookInCombo->setCurrentIndex(-1);
-    ui->lookInCombo->setEditText(sPath);
+    ui->lookInCombo->setEditText(sClean);
     ui->lookInCombo->blockSignals(false);
+}
+
+/** 读取地址栏下拉历史（最多 10 条），并填充到 QComboBox。 */
+void FormPageFiles::loadRecentDirs()
+{
+    QSettings settings(Utility::settingsFilePath(), QSettings::IniFormat);
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+    settings.setIniCodec("UTF-8");
+#endif
+
+    const QStringList qLStored = settings.value(QStringLiteral("view/recentDirs")).toStringList();
+    m_qLRecentDirs.clear();
+    for (const QString &sDir : qLStored) {
+        if (m_qLRecentDirs.size() >= RECENT_DIR_LIMIT)
+            break;
+        const QString sClean = QDir::cleanPath(sDir);
+        if (!sClean.isEmpty() && !m_qLRecentDirs.contains(sClean))
+            m_qLRecentDirs << sClean;
+    }
+
+    ui->lookInCombo->blockSignals(true);
+    ui->lookInCombo->clear();
+    ui->lookInCombo->addItems(m_qLRecentDirs);
+    ui->lookInCombo->setCurrentIndex(-1);
+    ui->lookInCombo->blockSignals(false);
+}
+
+/** 把地址栏下拉历史写回 settings。 */
+void FormPageFiles::saveRecentDirs() const
+{
+    QSettings settings(Utility::settingsFilePath(), QSettings::IniFormat);
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+    settings.setIniCodec("UTF-8");
+#endif
+    settings.setValue(QStringLiteral("view/recentDirs"), m_qLRecentDirs);
 }
 
 void FormPageFiles::navigateToDir(const QString &sPath)

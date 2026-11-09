@@ -153,8 +153,12 @@ private:
     // 把地址栏文本恢复成当前目录（输入非法或导航失败时使用）
     void refreshAddressBar();
 
-    // 记录到地址栏下拉历史（最近 20 个，去重）
+    // 记录到地址栏下拉历史（最近 10 个，去重，持久化到 settings）
     void rememberPath(const QString &sPath);
+
+    // 地址栏下拉历史：从 settings 读取 / 写回（最多 10 条）
+    void loadRecentDirs();
+    void saveRecentDirs() const;
 
     // 扫描指定目录的直接子文件，读出它们的标签并发送给【当前目录标签】面板。
     // 分片执行（每片约 15ms），避免一次性枚举上千个文件的 ADS 卡住界面。
@@ -184,6 +188,7 @@ private:
     QStack<QString>         m_skBackward;           // 访问过的路径，用于后退功能
     QStack<QString>         m_skForward;            // 访问过的路径，用于前进功能
     QString                 m_sCurDir;             // 当前正在访问的路径
+    QStringList             m_qLRecentDirs;        // 地址栏下拉历史（最多 10 条，最近的在前）
     int                     m_nIconSize;            // 当前缩略图边长（逻辑像素）
     int                     m_nSortColumn;          // 当前排序列
     Qt::SortOrder           m_sortOrder;            // 当前排序方向
