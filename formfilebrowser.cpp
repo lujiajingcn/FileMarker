@@ -2,6 +2,9 @@
 #include "ui_formfilebrowser.h"
 
 #include <QHBoxLayout>
+#include <QIcon>
+#include <QPainter>
+#include <QPixmap>
 #include <QMessageBox>
 #include <QDebug>
 #include <QSettings>
@@ -16,10 +19,50 @@
 #include "utility.h"
 
 namespace {
-// 左侧目录树收起后留下的窄条宽度（正好放下那个 20x20 的收起/展开按钮）
-const int kNavRailWidth = 28;
+// 左侧目录树收起后留下的窄条宽度（正好放下那个收起/展开按钮）
+const int kNavRailWidth = 36;
 // 展开时目录树的最小宽度，避免被 splitter 压成一条缝
 const int kNavExpandedMinWidth = 160;
+
+/**
+ * 目录树"收起/展开"按钮的图标：一个圆角矩形 + 左侧分栏线，
+ * 与 DeepSeek Harness 左侧栏的折叠图标同款。
+ * 直接画出来，不依赖外部图片资源；按 2 倍分辨率绘制，高分屏下也清晰。
+ */
+QIcon makePanelToggleIcon(const QColor &color, int nSize = 20)
+{
+    const int nScale = 2;
+    QPixmap pixmap(nSize * nScale, nSize * nScale);
+    pixmap.fill(Qt::transparent);
+    pixmap.setDevicePixelRatio(nScale);
+
+    QPainter painter(&pixmap);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    // 注意：pixmap 已经设了 devicePixelRatio，QPainter 会自动按逻辑像素绘制，
+    // 这里不能再 scale()，否则图形会被放大一倍后裁掉右下角。
+
+    const qreal dMargin = 1.4;
+    const QRectF rcPanel(dMargin + 0.7, dMargin + 1.2,
+                         nSize - 2 * dMargin - 1.4, nSize - 2 * dMargin - 2.4);
+
+    QPen pen(color);
+    pen.setWidthF(1.5);
+    pen.setJoinStyle(Qt::RoundJoin);
+    painter.setPen(pen);
+    painter.setBrush(Qt::NoBrush);
+    painter.drawRoundedRect(rcPanel, 2.4, 2.4);
+
+    // 左侧分栏：比外框略粗一点，缩小后仍然能看出"侧边栏"的形状
+    QPen penDivider(color);
+    penDivider.setWidthF(2.0);
+    painter.setPen(penDivider);
+    const qreal xDivider = rcPanel.left() + rcPanel.width() * 0.34;
+    painter.drawLine(QPointF(xDivider, rcPanel.top() + 0.5),
+                     QPointF(xDivider, rcPanel.bottom() - 0.5));
+
+    painter.end();
+    return QIcon(pixmap);
+}
 }
 
 FormFileBrowser::FormFileBrowser(QWidget *parent) :
@@ -137,7 +180,7 @@ void FormFileBrowser::initNavPanelToggle()
     // 顶部条形控件：高度固定，收起后按钮仍然贴在最上面
     auto *pHeaderWidget = new QWidget(m_navPanel);
     pHeaderWidget->setObjectName(QStringLiteral("navHeader"));
-    pHeaderWidget->setFixedHeight(24);
+    pHeaderWidget->setFixedHeight(36);
     auto *pHeader = new QHBoxLayout(pHeaderWidget);
     pHeader->setContentsMargins(2, 2, 2, 2);
     pHeader->setSpacing(0);
@@ -145,13 +188,15 @@ void FormFileBrowser::initNavPanelToggle()
     m_btnToggleNav = new QToolButton(pHeaderWidget);
     m_btnToggleNav->setObjectName(QStringLiteral("btnToggleNav"));
     m_btnToggleNav->setAutoRaise(true);
-    m_btnToggleNav->setFixedSize(22, 22);
+    m_btnToggleNav->setFixedSize(30, 30);
+    m_btnToggleNav->setIconSize(QSize(20, 20));
+    m_btnToggleNav->setIcon(makePanelToggleIcon(QColor(0x33, 0x33, 0x33)));
+    m_btnToggleNav->setToolButtonStyle(Qt::ToolButtonIconOnly);
     m_btnToggleNav->setCursor(Qt::PointingHandCursor);
     m_btnToggleNav->setFocusPolicy(Qt::NoFocus);
-    // 系统默认字体下 ◀/▶ 偏小，这里放大一点，方便点到
     m_btnToggleNav->setStyleSheet(QStringLiteral(
-        "QToolButton{border:none;font-size:14px;color:#555;}"
-        "QToolButton:hover{background:#e5e5e5;border-radius:3px;}"));
+        "QToolButton{border:1px solid transparent;border-radius:4px;padding:0;}"
+        "QToolButton:hover{background:#e3e3e3;border-color:#d0d0d0;}"));
     pHeader->addWidget(m_btnToggleNav, 0, Qt::AlignLeft | Qt::AlignVCenter);
     pHeader->addStretch(1);
     // 对齐到顶部：目录树收起后布局里只剩这一条，不加 AlignTop 会被垂直居中
@@ -204,7 +249,6 @@ void FormFileBrowser::setNavPanelVisible(bool bVisible, bool bSave)
     if (bVisible) {
         m_navPanel->setMinimumWidth(kNavExpandedMinWidth);
         m_navPanel->setMaximumWidth(QWIDGETSIZE_MAX);
-        m_btnToggleNav->setText(QStringLiteral("◀"));
         m_btnToggleNav->setToolTip(tr("隐藏目录树"));
 
         // 用户手动展开时才按记忆宽度恢复；启动时保持 splitter 原有的比例
@@ -217,10 +261,9 @@ void FormFileBrowser::setNavPanelVisible(bool bVisible, bool bSave)
             }
         }
     } else {
-        // 收起后只留一条 24px 的窄条，按钮还在上面
+        // 收起后只留一条窄条，按钮还在上面
         m_navPanel->setMinimumWidth(kNavRailWidth);
         m_navPanel->setMaximumWidth(kNavRailWidth);
-        m_btnToggleNav->setText(QStringLiteral("▶"));
         m_btnToggleNav->setToolTip(tr("显示目录树"));
     }
 
