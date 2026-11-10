@@ -75,6 +75,9 @@ public:
     void updateEditorGeometry(QWidget *editor, const QStyleOptionViewItem &option, const QModelIndex &index) const override;
 
 signals:
+    /** 点了标签 chip 上的 ✕：把该标签从文件上删掉 */
+    void sendRemoveTag(const QModelIndex &index, const QString &sTag);
+
     void sendDblClick(const QModelIndex &index);
     // 保留给需要弹框编辑标签的场景（右键菜单“编辑标签”）
     void sendEditTag(const QModelIndex &index);

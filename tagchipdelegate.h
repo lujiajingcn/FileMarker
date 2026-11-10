@@ -34,6 +34,9 @@ public:
         return nullptr;
     }
 
+    /** 把 "a,b,c" 拆成标签列表（兼容全角逗号/顿号/分号）；缩略图视图也用它 */
+    static QStringList splitLabels(const QString &sLabels);
+
 signals:
     /** 用户点了某个标签上的 ✕ */
     void removeTagRequested(const QModelIndex &index, const QString &sTag);
@@ -49,8 +52,6 @@ private:
     /** 按列宽把标签排成一行 chip；放不下的就不画（列宽有限） */
     static QVector<Chip> layoutChips(const QStyleOptionViewItem &option, const QStringList &qLTags);
 
-    /** 把 "a,b,c" 拆成标签列表（兼容全角逗号/顿号/分号） */
-    static QStringList splitLabels(const QString &sLabels);
 };
 
 #endif // TAGCHIPDELEGATE_H

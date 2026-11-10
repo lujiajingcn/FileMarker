@@ -3,6 +3,7 @@
 #include <QtMath>
 #include <QFileInfo>
 
+#include "tagchipdelegate.h"
 #include "thumbnailiconprovider.h"
 
 namespace {
@@ -31,8 +32,101 @@ QFont tagFontFor(const QFont &base)
     return font;
 }
 
+// 缩略图里的标签 chip（药丸）
+const QColor COLOR_CHIP_BG(0xE8, 0xF5, 0xE9);
+const QColor COLOR_CHIP_BORDER(0xA5, 0xD6, 0xA7);
+const QColor COLOR_CHIP_TEXT(0x1B, 0x5E, 0x20);
+const QColor COLOR_CHIP_CLOSE(0x6B, 0x8E, 0x6E);
+
+struct TagChip
+{
+    QString sTag;
+    QRectF  rcChip;    // 相对 customRect 左上角
+    QRectF  rcClose;
+};
+
+struct TagChipLayout
+{
+    QVector<TagChip> chips;
+    int              nHeight = 0;   // 整个标签区的高度（0 表示没有标签）
+};
+
+/**
+ * 把标签排成"最多 nMaxRows 行、每行居中"的 chip 布局。
+ * 坐标以 (0,0) 为原点，调用方自行 translate 到目标区域。
+ */
+TagChipLayout buildTagChipLayout(const QFont &tagFont, const QStringList &qLTags,
+                                 int nWidth, int nMaxRows)
+{
+    TagChipLayout layout;
+    if (qLTags.isEmpty() || nWidth <= 0 || nMaxRows <= 0)
+        return layout;
+
+    const QFontMetrics fm(tagFont);
+    const int nChipHeight = fm.height() + 6;
+    const int nGap = 4;
+    const int nCloseSize = 10;
+
+    struct Row
+    {
+        QVector<int> qLIndex;
+        int          nWidth = 0;
+    };
+    QVector<Row> rows;
+    QVector<int> qLChipWidths;
+    QVector<QString> qLChipTags;
+
+    for (const QString &sTag : qLTags) {
+        const int nChipWidth = 7 + fm.horizontalAdvance(sTag) + 3 + nCloseSize + 5;
+        if (rows.isEmpty() || rows.last().nWidth + nGap + nChipWidth > nWidth) {
+            if (rows.size() >= nMaxRows)
+                break;   // 行数用完了，后面的标签不显示
+            rows.append(Row());
+        }
+        Row &row = rows.last();
+        row.qLIndex.append(qLChipTags.size());
+        row.nWidth += (row.qLIndex.size() > 1 ? nGap : 0) + nChipWidth;
+        qLChipTags.append(sTag);
+        qLChipWidths.append(nChipWidth);
+    }
+
+    layout.nHeight = rows.size() * nChipHeight + (rows.size() - 1) * 2;
+    int nTop = 0;
+    for (const Row &row : rows) {
+        int nLeft = qMax(0, (nWidth - row.nWidth) / 2);   // 每行居中
+        for (int i = 0; i < row.qLIndex.size(); ++i) {
+            const int nIndex = row.qLIndex.at(i);
+            const int nChipWidth = qLChipWidths.at(nIndex);
+
+            TagChip chip;
+            chip.sTag = qLChipTags.at(nIndex);
+            chip.rcChip = QRectF(nLeft, nTop, nChipWidth, nChipHeight);
+            chip.rcClose = QRectF(nLeft + nChipWidth - 5 - nCloseSize,
+                                  nTop + (nChipHeight - nCloseSize) / 2.0,
+                                  nCloseSize, nCloseSize);
+            layout.chips.append(chip);
+            nLeft += nChipWidth + nGap;
+        }
+        nTop += nChipHeight + 2;
+    }
+    return layout;
+}
+
 // 文件名按字符换行，最多 maxLines 行；放不下时最后一行加省略号。
 // 之前直接 drawText(TextWordWrap) 会被裁剪且没有省略号，用户看不出名字被截断。
+/**
+ * 取某个缩略图格子的标签列表。
+ * 目录行的标签列是占位符"—"，不能当成一个标签画成 chip。
+ */
+QStringList tagListFor(const QModelIndex &index)
+{
+    const QString sText =
+        index.sibling(index.row(), 4).data(Qt::DisplayRole).toString().trimmed();
+    if (sText.isEmpty() || sText == QStringLiteral("\u2014"))
+        return QStringList();
+    return TagChipDelegate::splitLabels(sText);
+}
+
 QStringList nameLinesFor(const QFontMetrics &fm, const QString &text, int width, int maxLines)
 {
     QStringList lines;
@@ -76,68 +170,6 @@ QStringList nameLinesFor(const QFontMetrics &fm, const QString &text, int width,
     return lines;
 }
 
-// 按“标签”为最小单位换行（绝不在一个标签中间断开），最多 maxLines 行；
-// 放不下时在最后一行末尾加省略号。这样缩略图里的 "十二" 不会被拆成 "十" + "二"。
-QStringList tagLinesFor(const QFontMetrics &fm, const QString &tagText, int width, int maxLines)
-{
-    QStringList lines;
-    if (tagText.isEmpty() || width <= 0 || maxLines <= 0)
-        return lines;
-
-    // Qt 5.14+ 使用 Qt::SkipEmptyParts；Qt6 已移除 QString::SkipEmptyParts。
-#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
-    const QStringList tags = tagText.split(QLatin1Char(','), Qt::SkipEmptyParts);
-#else
-    const QStringList tags = tagText.split(QLatin1Char(','), QString::SkipEmptyParts);
-#endif
-    QString current;
-    bool truncated = false;
-
-    for (int i = 0; i < tags.size(); ++i) {
-        const QString &sTag = tags.at(i);
-        const QString sNext = current.isEmpty() ? sTag : current + QLatin1Char(',') + sTag;
-
-        if (fm.horizontalAdvance(sNext) <= width) {
-            current = sNext;
-        } else if (current.isEmpty()) {
-            // 单个标签本身就超宽：独占一行并省略
-            lines << fm.elidedText(sTag, Qt::ElideRight, width);
-            if (lines.size() >= maxLines) {
-                truncated = (i + 1 < tags.size());
-                break;
-            }
-        } else {
-            lines << current;
-            current.clear();
-            if (lines.size() >= maxLines) {
-                truncated = true;
-                break;
-            }
-            if (fm.horizontalAdvance(sTag) <= width) {
-                current = sTag;
-            } else {
-                lines << fm.elidedText(sTag, Qt::ElideRight, width);
-                if (lines.size() >= maxLines) {
-                    truncated = (i + 1 < tags.size());
-                    break;
-                }
-            }
-        }
-    }
-
-    if (!current.isEmpty()) {
-        if (lines.size() < maxLines)
-            lines << current;
-        else
-            truncated = true;
-    }
-
-    // 还有没显示完的标签：在最后一行末尾补省略号
-    if (truncated && !lines.isEmpty())
-        lines.last() = fm.elidedText(lines.last() + QChar(0x2026), Qt::ElideRight, width);
-
-    return lines;
-}
 
 } // namespace
 
@@ -183,11 +215,12 @@ LayoutRects EditableDelegate::calculateRects(const QStyleOptionViewItem &option,
     const QFontMetrics tagFm(tagFontFor(option.font));
 
     const QString name = index.data(Qt::DisplayRole).toString();
-    const QString tags = index.sibling(index.row(), 4).data(Qt::DisplayRole).toString();
+    const QStringList qLTags = tagListFor(index);
 
     const int nameHeight = textHeightFor(nameFm, name, width, 2);
-    const QStringList tagLines = tagLinesFor(tagFm, tags, width, 2);
-    const int tagHeight = tagLines.size() * tagFm.lineSpacing();
+    const TagChipLayout chipLayout = buildTagChipLayout(
+        tagFontFor(option.font), qLTags, width, 2);
+    const int tagHeight = chipLayout.nHeight;
 
     const int totalHeight = m_iconSize
                             + (nameHeight > 0 ? ITEM_GAP + nameHeight : 0)
@@ -302,31 +335,36 @@ void EditableDelegate::paint(QPainter *painter, const QStyleOptionViewItem &opti
         painter->restore();
     }
 
-    // 标签：次要样式（小一号、半透明），与文件名区分层次。
-    // 按标签边界换行（不会把一个标签拆到两行），最多两行，超出部分省略。
+    // 标签：画成带 ✕ 的小药丸（和详情视图的标签列保持一致）
     if (!layout.customRect.isEmpty()) {
-        QColor tagColor = selected ? option.palette.color(QPalette::HighlightedText)
-                                   : option.palette.color(QPalette::Text);
-        tagColor.setAlpha(selected ? 230 : 150);
-
         const QFont tagFont = tagFontFor(option.font);
-        const QFontMetrics tagFm(tagFont);
-        const QStringList tagLines = tagLinesFor(tagFm,
-                                                 index.sibling(index.row(), 4).data(Qt::DisplayRole).toString(),
-                                                 layout.customRect.width(), 2);
+        const TagChipLayout chipLayout =
+            buildTagChipLayout(tagFont, tagListFor(index), layout.customRect.width(), 2);
+        if (!chipLayout.chips.isEmpty()) {
+            painter->save();
+            painter->setClipRect(layout.customRect);
+            painter->translate(layout.customRect.topLeft());
+            painter->setFont(tagFont);
+            painter->setRenderHint(QPainter::Antialiasing, true);
 
-        painter->save();
-        painter->setClipRect(layout.customRect);
-        painter->setFont(tagFont);
-        painter->setPen(tagColor);
-        for (int i = 0; i < tagLines.size(); ++i) {
-            const QRect lineRect(layout.customRect.left(),
-                                 layout.customRect.top() + i * tagFm.lineSpacing(),
-                                 layout.customRect.width(),
-                                 tagFm.lineSpacing());
-            painter->drawText(lineRect, Qt::AlignHCenter | Qt::AlignTop, tagLines.at(i));
+            for (const TagChip &chip : chipLayout.chips) {
+                const qreal dRadius = chip.rcChip.height() / 2.0;
+                painter->setPen(QPen(COLOR_CHIP_BORDER, 1.0));
+                painter->setBrush(COLOR_CHIP_BG);
+                painter->drawRoundedRect(chip.rcChip.adjusted(0.5, 0.5, -0.5, -0.5), dRadius, dRadius);
+
+                const QRectF rcText(chip.rcChip.left() + 7, chip.rcChip.top(),
+                                    chip.rcChip.width() - 7 - 13, chip.rcChip.height());
+                painter->setPen(COLOR_CHIP_TEXT);
+                painter->drawText(rcText, Qt::AlignVCenter | Qt::AlignLeft, chip.sTag);
+
+                painter->setPen(QPen(COLOR_CHIP_CLOSE, 1.2));
+                const QRectF rcClose = chip.rcClose.adjusted(2.5, 2.5, -2.5, -2.5);
+                painter->drawLine(rcClose.topLeft(), rcClose.bottomRight());
+                painter->drawLine(rcClose.bottomLeft(), rcClose.topRight());
+            }
+            painter->restore();
         }
-        painter->restore();
     }
 
     painter->restore();
@@ -334,6 +372,26 @@ void EditableDelegate::paint(QPainter *painter, const QStyleOptionViewItem &opti
 
 bool EditableDelegate::editorEvent(QEvent *event, QAbstractItemModel *model, const QStyleOptionViewItem &option, const QModelIndex &index)
 {
+    // 单击标签 chip 上的 ✕ = 删除这个标签（和详情视图的标签列一致）
+    if (event->type() == QEvent::MouseButtonRelease) {
+        auto *me = static_cast<QMouseEvent *>(event);
+        if (me->button() == Qt::LeftButton) {
+            const LayoutRects layout = calculateRects(option, index);
+            if (!layout.customRect.isEmpty()) {
+                const TagChipLayout chipLayout =
+                    buildTagChipLayout(tagFontFor(option.font), tagListFor(index),
+                                       layout.customRect.width(), 2);
+                const QPoint local = me->pos() - layout.customRect.topLeft();
+                for (const TagChip &chip : chipLayout.chips) {
+                    if (chip.rcClose.contains(local)) {
+                        emit sendRemoveTag(index, chip.sTag);
+                        return true;   // 吃掉点击，避免同时选中/进入编辑
+                    }
+                }
+            }
+        }
+    }
+
     if (event->type() == QEvent::MouseButtonDblClick)
     {
         QMouseEvent *me = static_cast<QMouseEvent*>(event);

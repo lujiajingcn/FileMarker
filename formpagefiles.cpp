@@ -432,6 +432,8 @@ void FormPageFiles::initThumbnailFileList()
 
     connect(m_delegate, &EditableDelegate::sendDblClick, this, &FormPageFiles::recvDblClick);
     connect(m_delegate, &EditableDelegate::sendEditTag, this, &FormPageFiles::onEditTag);
+    // 缩略图里点标签 chip 上的 ✕：删除该标签（与详情视图同一套逻辑）
+    connect(m_delegate, &EditableDelegate::sendRemoveTag, this, &FormPageFiles::onRemoveTagFromRow);
 
     // 悬停高亮：进入某项时高亮，鼠标离开视图时清除
     connect(m_lstFiles, &QAbstractItemView::entered, this, &FormPageFiles::onThumbnailHoverChanged);
