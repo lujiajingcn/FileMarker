@@ -41,15 +41,15 @@ bool FormLabels::eventFilter(QObject *watched, QEvent *event)
 {
     if (watched == m_labelsTree->viewport()) {
         if (event->type() == QEvent::MouseButtonPress) {
-            auto *pMouseEvent = static_cast<QMouseEvent *>(event);
-            if (pMouseEvent->button() == Qt::LeftButton) {
-                m_ptDragStart = pMouseEvent->pos();
+            auto *mouseEvent = static_cast<QMouseEvent *>(event);
+            if (mouseEvent->button() == Qt::LeftButton) {
+                m_ptDragStart = mouseEvent->pos();
                 m_mayStartDrag = true;
             }
         } else if (event->type() == QEvent::MouseMove && m_mayStartDrag) {
-            auto *pMouseEvent = static_cast<QMouseEvent *>(event);
-            if ((pMouseEvent->buttons() & Qt::LeftButton)
-                && (pMouseEvent->pos() - m_ptDragStart).manhattanLength()
+            auto *mouseEvent = static_cast<QMouseEvent *>(event);
+            if ((mouseEvent->buttons() & Qt::LeftButton)
+                && (mouseEvent->pos() - m_ptDragStart).manhattanLength()
                        >= QApplication::startDragDistance()) {
                 m_mayStartDrag = false;
                 startLabelDrag();
@@ -74,13 +74,13 @@ void FormLabels::startLabelDrag()
     if (qLLabels.isEmpty())
         return;
 
-    auto *pMime = new QMimeData;
-    pMime->setData(QString::fromLatin1(MIME_FILEMARKER_LABEL), qLLabels.join("\n").toUtf8());
-    pMime->setText(qLLabels.join(","));
+    auto *mime = new QMimeData;
+    mime->setData(QString::fromLatin1(MIME_FILEMARKER_LABEL), qLLabels.join("\n").toUtf8());
+    mime->setText(qLLabels.join(","));
 
-    auto *pDrag = new QDrag(m_labelsTree);
-    pDrag->setMimeData(pMime);
-    pDrag->exec(Qt::CopyAction);
+    auto *drag = new QDrag(m_labelsTree);
+    drag->setMimeData(mime);
+    drag->exec(Qt::CopyAction);
 }
 
 /** 方案A：标签库的命令不再放到主窗口菜单里，改为本面板的右键菜单（外加 dock 上的工具条）。 */
@@ -110,8 +110,8 @@ void FormLabels::onTreeContextMenuRequested(const QPoint &pos)
 
     if (!m_extraContextActions.isEmpty()) {
         menu.addSeparator();
-        for (QAction *pAction : m_extraContextActions)
-            menu.addAction(pAction);
+        for (QAction *menuAction : m_extraContextActions)
+            menu.addAction(menuAction);
     }
 
     // 恢复"发现新标签，是否加入标签库"的询问
@@ -146,7 +146,7 @@ void FormLabels::onTreeViewClicked(const QModelIndex &index)
     sendSelLabels(getSelLabels());
 }
 
-void FormLabels::onRecvLabels(QString sLabels)
+void FormLabels::onRecvLabels(const QString &sLabels)
 {
     // 支持中英文逗号/分号分隔，splitLabels 已做 trim、去空、去重
     QStringList qLNewLabels;
@@ -205,16 +205,16 @@ void FormLabels::promptAddNewLabels(const QStringList &qLInputLabels)
         box.setWindowTitle(tr("标签库"));
         box.setIcon(QMessageBox::Question);
         box.setText(tr("发现 %1 个新标签，是否加入标签库？\n\n%2").arg(qLNewLabels.size()).arg(sPreview));
-        QPushButton *pBtnAdd = box.addButton(tr("加入"), QMessageBox::AcceptRole);
-        QPushButton *pBtnSkip = box.addButton(tr("不加入"), QMessageBox::RejectRole);
-        QCheckBox *pRemember = new QCheckBox(tr("记住我的选择"), &box);
-        box.setCheckBox(pRemember);
-        box.setDefaultButton(pBtnAdd);
-        box.setEscapeButton(pBtnSkip);
+        QPushButton *addButton = box.addButton(tr("加入"), QMessageBox::AcceptRole);
+        QPushButton *btnSkip = box.addButton(tr("不加入"), QMessageBox::RejectRole);
+        QCheckBox *remember = new QCheckBox(tr("记住我的选择"), &box);
+        box.setCheckBox(remember);
+        box.setDefaultButton(addButton);
+        box.setEscapeButton(btnSkip);
         box.exec();
 
-        bAdd = (box.clickedButton() == pBtnAdd);
-        if (pRemember->isChecked())
+        bAdd = (box.clickedButton() == addButton);
+        if (remember->isChecked())
             settings.setValue(QStringLiteral("labels/autoAddFromFiles"), bAdd ? 1 : 2);
     }
 
@@ -232,7 +232,7 @@ void FormLabels::promptAddNewLabels(const QStringList &qLInputLabels)
     saveLabelToXmlFile();   // #11 外部写入标签后立即持久化
 }
 
-void FormLabels::onRecvLabelsGeneratedByAI(QString sLabels)
+void FormLabels::onRecvLabelsGeneratedByAI(const QString &sLabels)
 {
     bool bAlreadyHaveItem = false;
     QStandardItem *itemLabelsGeneratedByAI = nullptr;

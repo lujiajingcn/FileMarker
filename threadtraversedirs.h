@@ -24,7 +24,7 @@ class ThreadTraverseDirs : public QThread
 public:
     explicit ThreadTraverseDirs(QObject *parent = nullptr);
 
-    void setSelDirs(QStringList selDirs);
+    void setSelDirs(const QStringList &selDirs);
     void stopThread();
 
 protected:
@@ -34,11 +34,11 @@ protected:
 signals:
     // 结果里只包含"完整扫完"的目录；qLCompletedDirs 供上层登记 dirs 表（空目录也要登记），
     // bAborted 为 true 表示用户中途点了停止，此时未扫完的目录不会出现在任何结果里。
-    void sendResult(QMap<QString, FILE_TAGS> dirAndFileTags,
+    void sendResult(const QMap<QString, FILE_TAGS> &dirAndFileTags,
                     QMap<QString, QSet<QString>> dirAndTags,
-                    QStringList qLCompletedDirs,
+                    const QStringList &qLCompletedDirs,
                     bool bAborted);
-    void sendProcessInfo(QString sProcessedFilePath);
+    void sendProcessInfo(const QString &sProcessedFilePath);
 
 private:
     QStringList     m_selDirs;

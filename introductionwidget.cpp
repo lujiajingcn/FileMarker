@@ -328,24 +328,24 @@ QRect barContentRect(QWidget *bar, QWidget *coordinateParent)
         return QRect();
 
     QRect content;
-    if (auto *pToolBar = qobject_cast<QToolBar *>(bar)) {
-        const QList<QAction *> qLActions = pToolBar->actions();
-        for (QAction *pAction : qLActions) {
-            QWidget *pWidget = pToolBar->widgetForAction(pAction);
-            if (pWidget == nullptr || !pWidget->isVisible())
+    if (auto *toolBar = qobject_cast<QToolBar *>(bar)) {
+        const QList<QAction *> qLActions = toolBar->actions();
+        for (QAction *menuAction : qLActions) {
+            QWidget *barWidget = toolBar->widgetForAction(menuAction);
+            if (barWidget == nullptr || !barWidget->isVisible())
                 continue;
-            const QRect r(pWidget->mapTo(coordinateParent, QPoint(0, 0)), pWidget->size());
+            const QRect r(barWidget->mapTo(coordinateParent, QPoint(0, 0)), barWidget->size());
             content = content.isNull() ? r : content.united(r);
         }
-    } else if (auto *pMenuBar = qobject_cast<QMenuBar *>(bar)) {
-        const QList<QAction *> qLActions = pMenuBar->actions();
-        for (QAction *pAction : qLActions) {
-            if (!pAction->isVisible())
+    } else if (auto *menuBarWidget = qobject_cast<QMenuBar *>(bar)) {
+        const QList<QAction *> qLActions = menuBarWidget->actions();
+        for (QAction *menuAction : qLActions) {
+            if (!menuAction->isVisible())
                 continue;
-            const QRect r = pMenuBar->actionGeometry(pAction);
+            const QRect r = menuBarWidget->actionGeometry(menuAction);
             if (r.isNull())
                 continue;
-            const QRect mapped(r.topLeft() + pMenuBar->mapTo(coordinateParent, QPoint(0, 0)),
+            const QRect mapped(r.topLeft() + menuBarWidget->mapTo(coordinateParent, QPoint(0, 0)),
                                r.size());
             content = content.isNull() ? mapped : content.united(mapped);
         }

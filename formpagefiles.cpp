@@ -159,11 +159,11 @@ FormPageFiles::FormPageFiles(QWidget *parent) :
 
     // 下面几个动作只挂到两个文件视图上（WidgetWithChildrenShortcut），
     // 这样地址栏的输入框、右侧标签库的 Ctrl+A 都不会被抢走。
-    auto addToFileViews = [this](QAction *pAction) {
+    auto addToFileViews = [this](QAction *menuAction) {
         if (m_filesTree != nullptr)
-            m_filesTree->addAction(pAction);
+            m_filesTree->addAction(menuAction);
         if (m_filesList != nullptr)
-            m_filesList->addAction(pAction);
+            m_filesList->addAction(menuAction);
     };
 
     // Ctrl+A：全选当前目录里的文件。焦点在地址栏时仍然让输入框自己全选文本。
@@ -171,8 +171,8 @@ FormPageFiles::FormPageFiles(QWidget *parent) :
     m_actionSelectAll->setShortcut(QKeySequence(QKeySequence::SelectAll));
     m_actionSelectAll->setShortcutContext(Qt::WidgetWithChildrenShortcut);
     connect(m_actionSelectAll, &QAction::triggered, this, [this]() {
-        if (auto *pEdit = qobject_cast<QLineEdit *>(QApplication::focusWidget())) {
-            pEdit->selectAll();
+        if (auto *edit = qobject_cast<QLineEdit *>(QApplication::focusWidget())) {
+            edit->selectAll();
             return;
         }
         if (m_filesList != nullptr && m_filesList->isVisible())
@@ -498,19 +498,19 @@ bool FormPageFiles::eventFilter(QObject *watched, QEvent *event)
     const bool bIsFileView = (m_filesTree != nullptr && watched == m_filesTree->viewport())
                              || (m_filesList != nullptr && watched == m_filesList->viewport());
     if (bIsFileView && (event->type() == QEvent::DragEnter || event->type() == QEvent::DragMove)) {
-        auto *pDragEvent = static_cast<QDragMoveEvent *>(event);
-        if (pDragEvent->mimeData() != nullptr
-            && pDragEvent->mimeData()->hasFormat(QString::fromLatin1(MIME_FILEMARKER_LABEL))) {
-            pDragEvent->setDropAction(Qt::CopyAction);
-            pDragEvent->accept();
+        auto *dragEvent = static_cast<QDragMoveEvent *>(event);
+        if (dragEvent->mimeData() != nullptr
+            && dragEvent->mimeData()->hasFormat(QString::fromLatin1(MIME_FILEMARKER_LABEL))) {
+            dragEvent->setDropAction(Qt::CopyAction);
+            dragEvent->accept();
             return true;
         }
     } else if (bIsFileView && event->type() == QEvent::Drop) {
-        auto *pDropEvent = static_cast<QDropEvent *>(event);
-        if (pDropEvent->mimeData() != nullptr
-            && pDropEvent->mimeData()->hasFormat(QString::fromLatin1(MIME_FILEMARKER_LABEL))) {
+        auto *dropEvent = static_cast<QDropEvent *>(event);
+        if (dropEvent->mimeData() != nullptr
+            && dropEvent->mimeData()->hasFormat(QString::fromLatin1(MIME_FILEMARKER_LABEL))) {
             const QString sPayload = QString::fromUtf8(
-                pDropEvent->mimeData()->data(QString::fromLatin1(MIME_FILEMARKER_LABEL)));
+                dropEvent->mimeData()->data(QString::fromLatin1(MIME_FILEMARKER_LABEL)));
             QStringList qLLabels;
             for (const QString &sLabel : sPayload.split(QLatin1Char('\n'))) {
                 const QString sTrimmed = sLabel.trimmed();
@@ -518,14 +518,14 @@ bool FormPageFiles::eventFilter(QObject *watched, QEvent *event)
                     qLLabels << sTrimmed;
             }
 
-            QAbstractItemView *pView = nullptr;
+            QAbstractItemView *activeView = nullptr;
             if (m_filesList != nullptr && watched == m_filesList->viewport())
-                pView = m_filesList;
+                activeView = m_filesList;
             else
-                pView = m_filesTree;
-            const QModelIndex dropIndex = pView != nullptr ? pView->indexAt(pDropEvent->pos()) : QModelIndex();
-            pDropEvent->setDropAction(Qt::CopyAction);
-            pDropEvent->accept();
+                activeView = m_filesTree;
+            const QModelIndex dropIndex = activeView != nullptr ? activeView->indexAt(dropEvent->pos()) : QModelIndex();
+            dropEvent->setDropAction(Qt::CopyAction);
+            dropEvent->accept();
             applyDroppedLabels(qLLabels, dropIndex);
             return true;
         }

@@ -15,7 +15,7 @@ namespace TagExport {
 
 QList<FileTags> collectFromDirs(const QStringList &qLDirs,
                                 const std::function<bool(const QString &sFilePath)> &progress,
-                                QString *pError)
+                                QString *errorText)
 {
     QList<FileTags> qLResult;
     for (const QString &sDir : qLDirs) {
@@ -23,8 +23,8 @@ QList<FileTags> collectFromDirs(const QStringList &qLDirs,
             continue;
         const QDir dir(sDir);
         if (!dir.exists()) {
-            if (pError != nullptr)
-                *pError = QStringLiteral("目录不存在：%1").arg(sDir);
+            if (errorText != nullptr)
+                *errorText = QStringLiteral("目录不存在：%1").arg(sDir);
             continue;
         }
 
@@ -50,7 +50,7 @@ QList<FileTags> collectFromDirs(const QStringList &qLDirs,
 }
 
 bool writeJson(const QString &sFile, const QList<FileTags> &qLRecords,
-               const QString &sRoot, QString *pError)
+               const QString &sRoot, QString *errorText)
 {
     QJsonArray qLFiles;
     for (const FileTags &record : qLRecords) {
@@ -72,25 +72,25 @@ bool writeJson(const QString &sFile, const QList<FileTags> &qLRecords,
 
     QFile file(sFile);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-        if (pError != nullptr)
-            *pError = file.errorString();
+        if (errorText != nullptr)
+            *errorText = file.errorString();
         return false;
     }
     const QByteArray data = QJsonDocument(root).toJson(QJsonDocument::Indented);
     const bool bOk = file.write(data) == data.size();
     file.close();
-    if (!bOk && pError != nullptr)
-        *pError = file.errorString();
+    if (!bOk && errorText != nullptr)
+        *errorText = file.errorString();
     return bOk;
 }
 
-bool readJson(const QString &sFile, QList<FileTags> *pRecords,
-              QString *pRoot, QString *pError)
+bool readJson(const QString &sFile, QList<FileTags> *records,
+              QString *rootObject, QString *errorText)
 {
     QFile file(sFile);
     if (!file.open(QIODevice::ReadOnly)) {
-        if (pError != nullptr)
-            *pError = file.errorString();
+        if (errorText != nullptr)
+            *errorText = file.errorString();
         return false;
     }
     const QByteArray data = file.readAll();
@@ -99,22 +99,22 @@ bool readJson(const QString &sFile, QList<FileTags> *pRecords,
     QJsonParseError parseError;
     const QJsonDocument doc = QJsonDocument::fromJson(data, &parseError);
     if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
-        if (pError != nullptr)
-            *pError = QStringLiteral("不是有效的 JSON：%1").arg(parseError.errorString());
+        if (errorText != nullptr)
+            *errorText = QStringLiteral("不是有效的 JSON：%1").arg(parseError.errorString());
         return false;
     }
 
     const QJsonObject root = doc.object();
     if (root.value(QStringLiteral("app")).toString() != QStringLiteral("FileMarker")) {
-        if (pError != nullptr)
-            *pError = QStringLiteral("不是 FileMarker 导出的标签清单");
+        if (errorText != nullptr)
+            *errorText = QStringLiteral("不是 FileMarker 导出的标签清单");
         return false;
     }
 
-    if (pRoot != nullptr)
-        *pRoot = root.value(QStringLiteral("root")).toString();
+    if (rootObject != nullptr)
+        *rootObject = root.value(QStringLiteral("root")).toString();
 
-    pRecords->clear();
+    records->clear();
     const QJsonArray qLFiles = root.value(QStringLiteral("files")).toArray();
     for (const QJsonValue &value : qLFiles) {
         const QJsonObject obj = value.toObject();
@@ -125,7 +125,7 @@ bool readJson(const QString &sFile, QList<FileTags> *pRecords,
             record.qLTags << tag.toString();
         if (record.sPath.isEmpty() || record.qLTags.isEmpty())
             continue;
-        pRecords->append(record);
+        records->append(record);
     }
     return true;
 }

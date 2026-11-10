@@ -37,15 +37,15 @@ struct FileTags
  */
 QList<FileTags> collectFromDirs(const QStringList &qLDirs,
                                 const std::function<bool(const QString &sFilePath)> &progress,
-                                QString *pError);
+                                QString *errorText);
 
 /** 写 JSON 清单 */
 bool writeJson(const QString &sFile, const QList<FileTags> &qLRecords,
-               const QString &sRoot, QString *pError);
+               const QString &sRoot, QString *errorText);
 
 /** 读 JSON 清单 */
-bool readJson(const QString &sFile, QList<FileTags> *pRecords,
-              QString *pRoot, QString *pError);
+bool readJson(const QString &sFile, QList<FileTags> *records,
+              QString *rootObject, QString *errorText);
 
 struct ApplyResult
 {

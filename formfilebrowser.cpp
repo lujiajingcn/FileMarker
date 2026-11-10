@@ -145,9 +145,9 @@ FormFileBrowser::~FormFileBrowser()
     // 退出前先停掉并等待后台线程：QThread 运行中被销毁会触发 Qt 警告/崩溃，
     // 线程还可能继续回调已销毁的 UI 或写 ADS。
     // 先对所有线程发停止信号，让它们并行退出，再逐个等待，避免串行等待累计超时。
-    QThread *pSearch = m_threadSearch;
-    QThread *pTraverse = m_threadTraverseDirs;
-    QThread *pAI = m_threadAddLabelByAI;
+    QThread *search = m_threadSearch;
+    QThread *traverse = m_threadTraverseDirs;
+    QThread *aI = m_threadAddLabelByAI;
 
     if (m_threadSearch != nullptr)
         m_threadSearch->stopThread();
@@ -156,17 +156,17 @@ FormFileBrowser::~FormFileBrowser()
     if (m_threadAddLabelByAI != nullptr)
         m_threadAddLabelByAI->stopThread();
 
-    auto waitThread = [](QThread *pThread, const QString &sName) {
-        if (pThread == nullptr)
+    auto waitThread = [](QThread *thread, const QString &sName) {
+        if (thread == nullptr)
             return;
-        if (!pThread->wait(2000)) {
+        if (!thread->wait(2000)) {
             qWarning() << sName << "未能在 2 秒内退出，退出时将其分离";
-            pThread->setParent(nullptr);
+            thread->setParent(nullptr);
         }
     };
-    waitThread(pSearch, QStringLiteral("搜索线程"));
-    waitThread(pTraverse, QStringLiteral("遍历线程"));
-    waitThread(pAI, QStringLiteral("AI 线程"));
+    waitThread(search, QStringLiteral("搜索线程"));
+    waitThread(traverse, QStringLiteral("遍历线程"));
+    waitThread(aI, QStringLiteral("AI 线程"));
 
     // m_sqlOperation 在构造函数中 new 在堆上，从未释放，导致内存泄漏。
     delete m_sqlOperation;
@@ -184,19 +184,19 @@ void FormFileBrowser::initNavPanelToggle()
 {
     m_navPanel = new QWidget(this);
     m_navPanel->setObjectName(QStringLiteral("navPanel"));
-    auto *pLayout = new QVBoxLayout(m_navPanel);
-    pLayout->setContentsMargins(0, 0, 0, 0);
-    pLayout->setSpacing(0);
+    auto *layout = new QVBoxLayout(m_navPanel);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(0);
 
     // 顶部条形控件：高度固定，收起后按钮仍然贴在最上面
-    auto *pHeaderWidget = new QWidget(m_navPanel);
-    pHeaderWidget->setObjectName(QStringLiteral("navHeader"));
-    pHeaderWidget->setFixedHeight(36);
-    auto *pHeader = new QHBoxLayout(pHeaderWidget);
-    pHeader->setContentsMargins(2, 2, 2, 2);
-    pHeader->setSpacing(0);
+    auto *headerWidget = new QWidget(m_navPanel);
+    headerWidget->setObjectName(QStringLiteral("navHeader"));
+    headerWidget->setFixedHeight(36);
+    auto *header = new QHBoxLayout(headerWidget);
+    header->setContentsMargins(2, 2, 2, 2);
+    header->setSpacing(0);
 
-    m_btnToggleNav = new QToolButton(pHeaderWidget);
+    m_btnToggleNav = new QToolButton(headerWidget);
     m_btnToggleNav->setObjectName(QStringLiteral("btnToggleNav"));
     m_btnToggleNav->setAutoRaise(true);
     m_btnToggleNav->setFixedSize(30, 30);
@@ -208,15 +208,15 @@ void FormFileBrowser::initNavPanelToggle()
     m_btnToggleNav->setStyleSheet(QStringLiteral(
         "QToolButton{border:1px solid transparent;border-radius:4px;padding:0;}"
         "QToolButton:hover{background:#e3e3e3;border-color:#d0d0d0;}"));
-    pHeader->addWidget(m_btnToggleNav, 0, Qt::AlignLeft | Qt::AlignVCenter);
-    pHeader->addStretch(1);
+    header->addWidget(m_btnToggleNav, 0, Qt::AlignLeft | Qt::AlignVCenter);
+    header->addStretch(1);
     // 对齐到顶部：目录树收起后布局里只剩这一条，不加 AlignTop 会被垂直居中
-    pLayout->addWidget(pHeaderWidget, 0, Qt::AlignTop);
+    layout->addWidget(headerWidget, 0, Qt::AlignTop);
 
     // 先占住 splitter 的第 0 个位置，再把原来的目录树搬进容器
     ui->splitter->insertWidget(0, m_navPanel);
     m_navPanel->setMinimumWidth(kNavExpandedMinWidth);
-    pLayout->addWidget(ui->wFileNavigation, 1);
+    layout->addWidget(ui->wFileNavigation, 1);
 
     // 记住目录树原本的宽度，收起/展开时按它恢复
     m_navExpandedWidth = qBound(kNavExpandedMinWidth, ui->wFileNavigation->sizeHint().width(), 320);
@@ -376,7 +376,7 @@ void FormFileBrowser::showFilteredFile(QStringList qLFilteredFiles)
     qInfo() << "搜索完成: results=" << qLFilteredFiles.size();
 }
 
-void FormFileBrowser::onGotoFilePath(QString sFilePath)
+void FormFileBrowser::onGotoFilePath(const QString &sFilePath)
 {
     ui->stackedWidget->setCurrentWidget(ui->pageFiles);
     emit sendGotoFile(sFilePath);

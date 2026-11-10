@@ -90,16 +90,16 @@ void FormLabels::onActionDeleteTriggered()
                "「一并从文件移除」：会把这些文件上的该标签也删掉。").arg(qLFiles.size()));
     }
     box.addButton(tr("只从标签库删除"), QMessageBox::AcceptRole);
-    QPushButton *pAlsoFiles = qLFiles.isEmpty() ? nullptr
+    QPushButton *alsoFiles = qLFiles.isEmpty() ? nullptr
                                                 : box.addButton(tr("一并从文件移除"), QMessageBox::ActionRole);
-    QPushButton *pCancel = box.addButton(tr("取消"), QMessageBox::RejectRole);
-    box.setDefaultButton(pCancel);
+    QPushButton *cancel = box.addButton(tr("取消"), QMessageBox::RejectRole);
+    box.setDefaultButton(cancel);
     box.exec();
 
-    if (box.clickedButton() == pCancel || box.clickedButton() == nullptr)
+    if (box.clickedButton() == cancel || box.clickedButton() == nullptr)
         return;
 
-    if (pAlsoFiles != nullptr && box.clickedButton() == pAlsoFiles) {
+    if (alsoFiles != nullptr && box.clickedButton() == alsoFiles) {
         int nFailed = 0;
         const int nOk = syncTagToFiles(false, sLabel, QString(), nFailed);
         if (nFailed > 0) {
@@ -223,16 +223,16 @@ void FormLabels::onActionMoveLeftTriggered()
     if (parentItem == nullptr)
         return;   // 顶层节点没有"左移"
 
-    QStandardItem *pParentItem = parentItem->parent();
+    QStandardItem *parentLabel = parentItem->parent();
     const int nInsertRow = parentItem->index().row() + 1;
     const QList<QStandardItem *> rowCur = parentItem->takeRow(curIdx.row());
     if (rowCur.isEmpty())
         return;
 
-    if (pParentItem == nullptr)
+    if (parentLabel == nullptr)
         m_modelAllLabels->insertRow(nInsertRow, rowCur);
     else
-        pParentItem->insertRow(nInsertRow, rowCur);
+        parentLabel->insertRow(nInsertRow, rowCur);
 
     QStandardItem *movedItem = rowCur.value(0);
     if (movedItem != nullptr)
@@ -350,19 +350,19 @@ void FormLabels::promptSyncRenameToFiles(const QString &sOldTag, const QString &
                "要不要把这些文件上的【%1】也改成【%3】？").arg(sOldTag).arg(qLFiles.size()).arg(sNewTag));
     }
 
-    QPushButton *pLibOnly = box.addButton(tr("只改标签库"), QMessageBox::AcceptRole);
-    QPushButton *pSync = qLFiles.isEmpty() ? nullptr : box.addButton(tr("同时改文件上的标签"), QMessageBox::ActionRole);
-    QPushButton *pUndo = box.addButton(tr("撤销改名"), QMessageBox::RejectRole);
-    box.setDefaultButton(pLibOnly);
+    QPushButton *libOnly = box.addButton(tr("只改标签库"), QMessageBox::AcceptRole);
+    QPushButton *sync = qLFiles.isEmpty() ? nullptr : box.addButton(tr("同时改文件上的标签"), QMessageBox::ActionRole);
+    QPushButton *undo = box.addButton(tr("撤销改名"), QMessageBox::RejectRole);
+    box.setDefaultButton(libOnly);
     box.exec();
 
-    if (box.clickedButton() == pUndo) {
+    if (box.clickedButton() == undo) {
         // 程序化改回旧名：期间不要再弹同步询问。
         m_suppressSyncPrompt = true;
         const QList<QStandardItem *> items = m_modelAllLabels->findItems(sNewTag, Qt::MatchExactly | Qt::MatchRecursive);
-        for (QStandardItem *pItem : items) {
-            if (pItem != nullptr && pItem->text() == sNewTag) {
-                pItem->setText(sOldTag);
+        for (QStandardItem *labelItem : items) {
+            if (labelItem != nullptr && labelItem->text() == sNewTag) {
+                labelItem->setText(sOldTag);
                 break;
             }
         }
@@ -370,7 +370,7 @@ void FormLabels::promptSyncRenameToFiles(const QString &sOldTag, const QString &
         return;
     }
 
-    if (pSync != nullptr && box.clickedButton() == pSync) {
+    if (sync != nullptr && box.clickedButton() == sync) {
         int nFailed = 0;
         const int nOk = syncTagToFiles(true, sOldTag, sNewTag, nFailed);
         QMessageBox::information(this, tr("重命名标签"),
@@ -412,18 +412,18 @@ QString FormLabels::nextNewLabelName() const
 {
     QSet<QString> setNames;
     for (int i = 0; i < m_modelAllLabels->rowCount(); ++i) {
-        const QStandardItem *pItem = m_modelAllLabels->item(i);
-        if (pItem == nullptr)
+        const QStandardItem *labelItem = m_modelAllLabels->item(i);
+        if (labelItem == nullptr)
             continue;
         QList<const QStandardItem *> lstStack;
-        lstStack << pItem;
+        lstStack << labelItem;
         while (!lstStack.isEmpty()) {
-            const QStandardItem *pCur = lstStack.takeFirst();
-            if (pCur == nullptr)
+            const QStandardItem *cur = lstStack.takeFirst();
+            if (cur == nullptr)
                 continue;
-            setNames.insert(pCur->text().toCaseFolded());
-            for (int r = 0; r < pCur->rowCount(); ++r)
-                lstStack << pCur->child(r);
+            setNames.insert(cur->text().toCaseFolded());
+            for (int r = 0; r < cur->rowCount(); ++r)
+                lstStack << cur->child(r);
         }
     }
 

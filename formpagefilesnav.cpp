@@ -51,7 +51,7 @@ QString FormPageFiles::getCurDir()
     return m_curDir;
 }
 
-void FormPageFiles::curDirChanged(QString sCurDir)
+void FormPageFiles::curDirChanged(const QString &sCurDir)
 {
     m_skBackward.push_back(m_curDir);
     m_skForward.clear();
@@ -290,7 +290,7 @@ void FormPageFiles::onTvNavigationClicked(const QModelIndex &index)
     curDirChanged(path);
 }
 
-void FormPageFiles::recvGotoFile(QString sFilePath)
+void FormPageFiles::recvGotoFile(const QString &sFilePath)
 {
     // 用 QFileInfo 取父目录，正确处理盘符根（如 C:/file.txt 下 lastIndexOf('/') 会失效）。
     QFileInfo fi(sFilePath);

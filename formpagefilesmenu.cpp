@@ -65,95 +65,50 @@ void FormPageFiles::onCustomContextMenuRequested(const QPoint &pos)
     }
 
     const bool hasSelection = !targetFile.isEmpty();
-    const bool singleSelection = hasSelection;
     const QString firstFile = targetFile;
     // 选中的是文件夹时："打开"要在本程序里进去，"打开方式"无意义
     const bool bTargetIsDir = hasSelection && QFileInfo(targetFile).isDir();
 
     QMenu menu(this);
 
-    QAction *actionOpen = menu.addAction(tr("打开"));
-    actionOpen->setEnabled(hasSelection);
-    QAction *actionOpenWith = menu.addAction(tr("打开方式…"));
-    actionOpenWith->setEnabled(singleSelection && !bTargetIsDir);
-    QAction *actionReveal = menu.addAction(tr("在资源管理器中显示"));
-    actionReveal->setEnabled(hasSelection);
-    QAction *actionCopyPath = menu.addAction(tr("复制路径"));
-    actionCopyPath->setEnabled(hasSelection);
-    QAction *actionEditTags = menu.addAction(tr("编辑标签…"));
-    actionEditTags->setEnabled(singleSelection);
-    // 两个视图都不再支持就地改名（双击=打开），重命名统一放在这里。
-    QAction *actionRename = menu.addAction(tr("重命名…"));
-    actionRename->setEnabled(singleSelection);
+    // 文件操作项（打开 / 打开方式 / 资源管理器 / 复制路径 / 编辑标签 / 重命名）
+    addFileActions(&menu, targetFile, firstFile, clickedIndex, bTargetIsDir);
 
-    menu.addSeparator();
-
-    // 查看方式
+    // 查看方式 / 排序：菜单项构建各自独立，主函数只负责组织顺序
     QMenu *viewMenu = menu.addMenu(tr("查看"));
-    QAction *actionDetail = viewMenu->addAction(tr("详细信息"));
-    QAction *actionThumbnail = viewMenu->addAction(tr("缩略图"));
-    actionDetail->setCheckable(true);
-    actionThumbnail->setCheckable(true);
-    actionDetail->setChecked(ui->stackedWidget->currentIndex() == FILEPAGE::DETAIL);
-    actionThumbnail->setChecked(ui->stackedWidget->currentIndex() == FILEPAGE::THUMBNAIL);
-
-    // 缩略图尺寸档位（只在缩略图视图有意义，详情视图不显示，避免误导）
-    if (ui->stackedWidget->currentIndex() == FILEPAGE::THUMBNAIL) {
-        QMenu *sizeMenu = menu.addMenu(tr("缩略图大小"));
-        QActionGroup *sizeGroup = new QActionGroup(sizeMenu);
-        sizeGroup->setExclusive(true);
-        const QList<QPair<QString, int>> sizeOptions = {
-            { tr("小"), ICON_SIZE_SMALL },
-            { tr("中"), ICON_SIZE_MEDIUM },
-            { tr("大"), ICON_SIZE_LARGE },
-        };
-        for (const QPair<QString, int> &option : sizeOptions) {
-            QAction *action = sizeMenu->addAction(option.first);
-            action->setCheckable(true);
-            action->setChecked(option.second == m_iconSize);
-            action->setData(option.second);
-            sizeGroup->addAction(action);
-            connect(action, &QAction::triggered, this, [this, action]() {
-                setThumbnailSize(action->data().toInt());
-            });
-        }
-    }
-
-    // 排序：名称/大小/类型/修改日期 + 升降序
+    fillViewMenu(viewMenu);
     QMenu *sortMenu = menu.addMenu(tr("排序"));
-    QActionGroup *sortGroup = new QActionGroup(sortMenu);
-    sortGroup->setExclusive(true);
-    const QList<QPair<QString, int>> sortOptions = {
-        { tr("名称"), 0 },
-        { tr("大小"), 1 },
-        { tr("类型"), 2 },
-        { tr("修改日期"), 3 },
-    };
-    for (const QPair<QString, int> &option : sortOptions) {
-        QAction *action = sortMenu->addAction(option.first);
-        action->setCheckable(true);
-        action->setChecked(option.second == m_sortColumn);
-        sortGroup->addAction(action);
-        connect(action, &QAction::triggered, this, [this, option]() {
-            applySort(option.second, m_sortOrder);
-        });
-    }
-    sortMenu->addSeparator();
-    QAction *actionAscending = sortMenu->addAction(tr("升序"));
-    QAction *actionDescending = sortMenu->addAction(tr("降序"));
-    actionAscending->setCheckable(true);
-    actionDescending->setCheckable(true);
-    actionAscending->setChecked(m_sortOrder == Qt::AscendingOrder);
-    actionDescending->setChecked(m_sortOrder == Qt::DescendingOrder);
-    connect(actionAscending, &QAction::triggered, this, [this]() {
-        applySort(m_sortColumn, Qt::AscendingOrder);
-    });
-    connect(actionDescending, &QAction::triggered, this, [this]() {
-        applySort(m_sortColumn, Qt::DescendingOrder);
-    });
+    fillSortMenu(sortMenu);
 
     menu.addSeparator();
     QAction *actionRefresh = menu.addAction(tr("刷新"));
+
+    connect(actionRefresh, &QAction::triggered, this, &FormPageFiles::onBtnRefreshClicked);
+
+    menu.exec(globalPos);
+}
+
+/** 右键菜单里的文件操作项：打开 / 打开方式 / 在资源管理器中显示 / 复制路径 / 编辑标签 / 重命名。 */
+void FormPageFiles::addFileActions(QMenu *menu, const QString &targetFile,
+                                  const QString &firstFile, const QModelIndex &clickedIndex,
+                                  bool bTargetIsDir)
+{
+    const bool hasSelection = !targetFile.isEmpty();
+    const bool singleSelection = hasSelection;
+
+    QAction *actionOpen = menu->addAction(tr("打开"));
+    actionOpen->setEnabled(hasSelection);
+    QAction *actionOpenWith = menu->addAction(tr("打开方式…"));
+    actionOpenWith->setEnabled(singleSelection && !bTargetIsDir);
+    QAction *actionReveal = menu->addAction(tr("在资源管理器中显示"));
+    actionReveal->setEnabled(hasSelection);
+    QAction *actionCopyPath = menu->addAction(tr("复制路径"));
+    actionCopyPath->setEnabled(hasSelection);
+    QAction *actionEditTags = menu->addAction(tr("编辑标签…"));
+    actionEditTags->setEnabled(singleSelection);
+    // 两个视图都不再支持就地改名（双击=打开），重命名统一放在这里。
+    QAction *actionRename = menu->addAction(tr("重命名…"));
+    actionRename->setEnabled(singleSelection);
 
     connect(actionOpen, &QAction::triggered, this, [this, targetFile, bTargetIsDir]() {
         if (targetFile.isEmpty())
@@ -185,11 +140,79 @@ void FormPageFiles::onCustomContextMenuRequested(const QPoint &pos)
     connect(actionRename, &QAction::triggered, this, [this, clickedIndex]() {
         renameFile(clickedIndex.isValid() ? clickedIndex : currentIndexInActiveView());
     });
+}
+
+/** 右键菜单里的【查看】子菜单：详细信息 / 缩略图，以及缩略图尺寸档位。 */
+void FormPageFiles::fillViewMenu(QMenu *menu)
+{
+    // 查看方式
+    QAction *actionDetail = menu->addAction(tr("详细信息"));
+    QAction *actionThumbnail = menu->addAction(tr("缩略图"));
+    actionDetail->setCheckable(true);
+    actionThumbnail->setCheckable(true);
+    actionDetail->setChecked(ui->stackedWidget->currentIndex() == FILEPAGE::DETAIL);
+    actionThumbnail->setChecked(ui->stackedWidget->currentIndex() == FILEPAGE::THUMBNAIL);
+
+    // 缩略图尺寸档位（只在缩略图视图有意义，详情视图不显示，避免误导）
+    if (ui->stackedWidget->currentIndex() == FILEPAGE::THUMBNAIL) {
+        QMenu *sizeMenu = menu->addMenu(tr("缩略图大小"));
+        QActionGroup *sizeGroup = new QActionGroup(sizeMenu);
+        sizeGroup->setExclusive(true);
+        const QList<QPair<QString, int>> sizeOptions = {
+            { tr("小"), ICON_SIZE_SMALL },
+            { tr("中"), ICON_SIZE_MEDIUM },
+            { tr("大"), ICON_SIZE_LARGE },
+        };
+        for (const QPair<QString, int> &option : sizeOptions) {
+            QAction *action = sizeMenu->addAction(option.first);
+            action->setCheckable(true);
+            action->setChecked(option.second == m_iconSize);
+            action->setData(option.second);
+            sizeGroup->addAction(action);
+            connect(action, &QAction::triggered, this, [this, action]() {
+                setThumbnailSize(action->data().toInt());
+            });
+        }
+    }
+
     connect(actionDetail, &QAction::triggered, this, &FormPageFiles::onTbDetailClicked);
     connect(actionThumbnail, &QAction::triggered, this, &FormPageFiles::onTbThumbnailClicked);
-    connect(actionRefresh, &QAction::triggered, this, &FormPageFiles::onBtnRefreshClicked);
+}
 
-    menu.exec(globalPos);
+/** 右键菜单里的【排序】子菜单：按哪一列排、升序还是降序。 */
+void FormPageFiles::fillSortMenu(QMenu *menu)
+{
+    // 排序：名称/大小/类型/修改日期 + 升降序
+    QActionGroup *sortGroup = new QActionGroup(menu);
+    sortGroup->setExclusive(true);
+    const QList<QPair<QString, int>> sortOptions = {
+        { tr("名称"), 0 },
+        { tr("大小"), 1 },
+        { tr("类型"), 2 },
+        { tr("修改日期"), 3 },
+    };
+    for (const QPair<QString, int> &option : sortOptions) {
+        QAction *action = menu->addAction(option.first);
+        action->setCheckable(true);
+        action->setChecked(option.second == m_sortColumn);
+        sortGroup->addAction(action);
+        connect(action, &QAction::triggered, this, [this, option]() {
+            applySort(option.second, m_sortOrder);
+        });
+    }
+    menu->addSeparator();
+    QAction *actionAscending = menu->addAction(tr("升序"));
+    QAction *actionDescending = menu->addAction(tr("降序"));
+    actionAscending->setCheckable(true);
+    actionDescending->setCheckable(true);
+    actionAscending->setChecked(m_sortOrder == Qt::AscendingOrder);
+    actionDescending->setChecked(m_sortOrder == Qt::DescendingOrder);
+    connect(actionAscending, &QAction::triggered, this, [this]() {
+        applySort(m_sortColumn, Qt::AscendingOrder);
+    });
+    connect(actionDescending, &QAction::triggered, this, [this]() {
+        applySort(m_sortColumn, Qt::DescendingOrder);
+    });
 }
 
 void FormPageFiles::onTvFilesCustomContextMenuRequested(const QPoint &pos)
@@ -197,12 +220,12 @@ void FormPageFiles::onTvFilesCustomContextMenuRequested(const QPoint &pos)
     onCustomContextMenuRequested(pos);
 }
 
-void FormPageFiles::setSearchButtonMenu(QAction *pSearchAction, QMenu *pMenu)
+void FormPageFiles::setSearchButtonMenu(QAction *searchAction, QMenu *contextMenu)
 {
     // 只记录，真正建按钮在 setCommandActions() 里做。
     // 调用顺序：FormFileBrowser::setActions() 先调本函数、再调 setCommandActions()。
-    m_searchAction = pSearchAction;
-    m_searchMenu = pMenu;
+    m_searchAction = searchAction;
+    m_searchMenu = contextMenu;
 }
 
 void FormPageFiles::popupSearchMenu()
@@ -234,8 +257,8 @@ void FormPageFiles::setCommandActions(const QList<QAction *> &actions)
 
     m_commandBar->clear();
     bool bPendingSeparator = false;
-    for (QAction *pAction : actions) {
-        if (pAction == nullptr) {
+    for (QAction *menuAction : actions) {
+        if (menuAction == nullptr) {
             bPendingSeparator = !m_commandBar->actions().isEmpty();
             continue;
         }
@@ -244,19 +267,19 @@ void FormPageFiles::setCommandActions(const QList<QAction *> &actions)
             bPendingSeparator = false;
         }
         // "搜索"做成分裂按钮：点主区域直接按上次条件搜索，点右侧小箭头出条件菜单
-        if (pAction == m_searchAction && m_searchMenu != nullptr) {
-            auto *pSearchBtn = new QToolButton(m_commandBar);
-            m_searchButton = pSearchBtn;   // F3 弹菜单时用来定位
-            pSearchBtn->setDefaultAction(pAction);
-            pSearchBtn->setMenu(m_searchMenu);
-            pSearchBtn->setPopupMode(QToolButton::MenuButtonPopup);
-            pSearchBtn->setToolButtonStyle(Qt::ToolButtonIconOnly);
-            pSearchBtn->setIconSize(QSize(18, 18));
-            pSearchBtn->setAutoRaise(true);
-            m_commandBar->addWidget(pSearchBtn);
+        if (menuAction == m_searchAction && m_searchMenu != nullptr) {
+            auto *searchBtn = new QToolButton(m_commandBar);
+            m_searchButton = searchBtn;   // F3 弹菜单时用来定位
+            searchBtn->setDefaultAction(menuAction);
+            searchBtn->setMenu(m_searchMenu);
+            searchBtn->setPopupMode(QToolButton::MenuButtonPopup);
+            searchBtn->setToolButtonStyle(Qt::ToolButtonIconOnly);
+            searchBtn->setIconSize(QSize(18, 18));
+            searchBtn->setAutoRaise(true);
+            m_commandBar->addWidget(searchBtn);
             continue;
         }
-        m_commandBar->addAction(pAction);
+        m_commandBar->addAction(menuAction);
     }
 }
 

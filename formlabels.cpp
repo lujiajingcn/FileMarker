@@ -213,20 +213,20 @@ QList<QSet<QString>> FormLabels::getSelLabelGroups() const
               });
 
     std::function<void(QStandardItem *, QSet<QString> &)> collect =
-        [&collect](QStandardItem *pItem, QSet<QString> &setNames) {
-            if (pItem == nullptr)
+        [&collect](QStandardItem *labelItem, QSet<QString> &setNames) {
+            if (labelItem == nullptr)
                 return;
-            setNames.insert(pItem->text());
-            for (int i = 0; i < pItem->rowCount(); ++i)
-                collect(pItem->child(i), setNames);
+            setNames.insert(labelItem->text());
+            for (int i = 0; i < labelItem->rowCount(); ++i)
+                collect(labelItem->child(i), setNames);
         };
 
     for (const QModelIndex &index : selectedIndexes) {
-        QStandardItem *pItem = m_modelAllLabels->itemFromIndex(index);
-        if (pItem == nullptr)
+        QStandardItem *labelItem = m_modelAllLabels->itemFromIndex(index);
+        if (labelItem == nullptr)
             continue;
         QSet<QString> setNames;
-        collect(pItem, setNames);
+        collect(labelItem, setNames);
         if (!setNames.isEmpty())
             qLGroups << setNames;
     }
@@ -353,16 +353,16 @@ void FormLabels::traverseReadLabel(QStandardItem *item, QList<LabelInfo> &lstLab
     }
 }
 
-void FormLabels::updateAllLabelList(QVector<QString> vtAllLabels)
+void FormLabels::updateAllLabelList(const QVector<QString> &vtAllLabels)
 {
     m_modelAllLabels->removeRows(0, m_modelAllLabels->rowCount());
     m_setLabels.clear();
     m_committedText.clear();
-    for (QVector<QString>::iterator it = vtAllLabels.begin(); it != vtAllLabels.end(); it++)
+    for (const QString &sLabel : vtAllLabels)
     {
-        QStandardItem *item = createLabelItem(*it);
-        m_modelAllLabels->appendRow(item);
-        registerItem(item);
+        QStandardItem *labelItem = createLabelItem(sLabel);
+        m_modelAllLabels->appendRow(labelItem);
+        registerItem(labelItem);
     }
 }
 

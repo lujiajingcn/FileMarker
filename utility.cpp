@@ -55,8 +55,8 @@ void Utility::myMessageHandler(QtMsgType mType, const QMessageLogContext&, const
 
     // 程序退出收尾阶段日志设备可能已经断开/关闭，此时直接丢弃，
     // 否则会触发 "QIODevice::write (QObject): device not open"。
-    QIODevice *pDevice = tsLogInfo.device();
-    if (pDevice == nullptr || !pDevice->isOpen())
+    QIODevice *paintDevice = tsLogInfo.device();
+    if (paintDevice == nullptr || !paintDevice->isOpen())
         return;
 
     QString sFormatCurTime = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss");

@@ -14,7 +14,7 @@ public:
     explicit MyQFileSystemModel(QObject *parent = nullptr);
 
 signals:
-    void sendLabels(QString sFilePath, QString sLabels);
+    void sendLabels(const QString &sFilePath, const QString &sLabels);
 
 public:
     int columnCount( const QModelIndex & index ) const override;

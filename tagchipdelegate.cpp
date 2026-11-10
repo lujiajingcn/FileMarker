@@ -73,8 +73,8 @@ void TagChipDelegate::paint(QPainter *painter, const QStyleOptionViewItem &optio
     opt.text.clear();
 
     // 背景（交替行颜色、选中高亮、焦点框）仍交给样式画
-    QStyle *pStyle = opt.widget != nullptr ? opt.widget->style() : QApplication::style();
-    pStyle->drawControl(QStyle::CE_ItemViewItem, &opt, painter, opt.widget);
+    QStyle *chipStyle = opt.widget != nullptr ? opt.widget->style() : QApplication::style();
+    chipStyle->drawControl(QStyle::CE_ItemViewItem, &opt, painter, opt.widget);
 
     const QStringList qLTags = Utility::splitLabels(sLabels);
     // 目录那一行模型给的是占位符"—"，不能当成一个标签画成 chip
@@ -125,11 +125,11 @@ bool TagChipDelegate::editorEvent(QEvent *event, QAbstractItemModel *model,
                                   const QStyleOptionViewItem &option, const QModelIndex &index)
 {
     if (event->type() == QEvent::MouseButtonRelease) {
-        auto *pMouseEvent = static_cast<QMouseEvent *>(event);
-        if (pMouseEvent->button() == Qt::LeftButton) {
+        auto *mouseEvent = static_cast<QMouseEvent *>(event);
+        if (mouseEvent->button() == Qt::LeftButton) {
             const QStringList qLTags = Utility::splitLabels(index.data(Qt::DisplayRole).toString());
             for (const Chip &chip : layoutChips(option, qLTags)) {
-                if (chip.rcClose.contains(pMouseEvent->pos())) {
+                if (chip.rcClose.contains(mouseEvent->pos())) {
                     emit removeTagRequested(index, chip.sTag);
                     return true;   // 吃掉这次点击，避免顺带触发选中/双击
                 }

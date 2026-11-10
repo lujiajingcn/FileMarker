@@ -72,15 +72,15 @@ signals:
     // 能否撤销的状态变化（供菜单项启用/禁用）
     void sendUndoStateChanged(bool bCanUndo);
     void sendStop();
-    void sendShowFilteredFiles(QStringList qLFilteredFiles);
+    void sendShowFilteredFiles(const QStringList &qLFilteredFiles);
     void sendRefresh();
-    void sendGotoFile(QString sFilePath);
+    void sendGotoFile(const QString &sFilePath);
     void sendNavigationClicked(const QModelIndex &index);
     void sendDirAndLabels(QMap<QString, QSet<QString>> mapDirAndLabel);
     void sendClearDirLabels();
     void sendStatusMessage(const QString &sMsg);
-    void sendLabels(QString sLabels);
-    void sendLabelsGeneratedByAI(QString sLabels);
+    void sendLabels(const QString &sLabels);
+    void sendLabelsGeneratedByAI(const QString &sLabels);
 
 public:
     void showProcessPage(RUNNINGTHREAD rt);
@@ -89,19 +89,19 @@ public:
 public slots:
     void showFilteredFile(QStringList qLFilteredFiles);
 
-    void onGotoFilePath(QString sFilePath);
+    void onGotoFilePath(const QString &sFilePath);
 
     void onTvNavigationClicked(const QModelIndex &index);
 
-    void onRecvSelLabels(QStringList qLSelLabels);
+    void onRecvSelLabels(const QStringList &qLSelLabels);
 
     /** 来自【标签库】的分组（每组 = 选中标签 + 它的全部子标签），搜索时组内 OR、组间按设置的逻辑 */
     void onRecvLabelGroups(const QList<QSet<QString>> &qLLabelGroups);
 
     // 结束信号带上统计与首个错误，便于界面提示失败原因
-    void onRecvAddLabelByAIFinish(int nSucceeded, int nFailed, QString sFirstError);
+    void onRecvAddLabelByAIFinish(int nSucceeded, int nFailed, const QString &sFirstError);
 
-    void onRecvLabelsGeneratedByAI(QString sLabels);
+    void onRecvLabelsGeneratedByAI(const QString &sLabels);
 
 private slots:
     /** 调用aAI大模型来自动分析文件，为文件生成标签*/
@@ -120,15 +120,15 @@ private slots:
     void onActionTraverseSelDirsTriggered();
 
     // 多带"完整遍历过的目录"与"是否被中断"两个参数，未扫完的目录不入缓存。
-    void onRecvTraverseResult(QMap<QString, FILE_TAGS> dirAndFileTags,
+    void onRecvTraverseResult(const QMap<QString, FILE_TAGS> &dirAndFileTags,
                               QMap<QString, QSet<QString>> dirAndTags,
-                              QStringList qLCompletedDirs,
+                              const QStringList &qLCompletedDirs,
                               bool bAborted);
 
 
     void onRecvStopSearch();
 
-    void onRecvLabels(QString sFilePath, QString sLabels);
+    void onRecvLabels(const QString &sFilePath, const QString &sLabels);
 
 public slots:
     // 标签即将被改动：先记住改动前的标签，供"撤销上一次标签操作"

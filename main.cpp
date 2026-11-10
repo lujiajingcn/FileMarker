@@ -106,10 +106,10 @@ int main(int argc, char *argv[])
 
     MainWindow w;
     QObject::connect(&singleInstanceServer, &QLocalServer::newConnection, &w, [&w, &singleInstanceServer]() {
-        while (QLocalSocket *pSocket = singleInstanceServer.nextPendingConnection()) {
-            pSocket->readAll();
-            pSocket->disconnectFromServer();
-            pSocket->deleteLater();
+        while (QLocalSocket *localSocket = singleInstanceServer.nextPendingConnection()) {
+            localSocket->readAll();
+            localSocket->disconnectFromServer();
+            localSocket->deleteLater();
         }
         // 第二个实例被拦下了，给用户一点反馈，避免"双击没反应"的错觉
         w.showNormal();

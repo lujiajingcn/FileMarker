@@ -24,8 +24,8 @@ protected:
 
 signals:
     // 扫描结束时的完整结果；处理完由 FormFileBrowser::onRecvSearchResult 接手
-    void sigResult(QStringList qLHostFiles);
-    void sendProcessInfo(QString sProcessedFilePath);
+    void sigResult(const QStringList &qLHostFiles);
+    void sendProcessInfo(const QString &sProcessedFilePath);
 
 private:
     QStringList m_selDirs;

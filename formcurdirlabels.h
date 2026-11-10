@@ -25,7 +25,7 @@ public:
     ~FormCurDirLabels();
 
 signals:
-    void sendSelLabels(QStringList qLSelLabels);
+    void sendSelLabels(const QStringList &qLSelLabels);
 
 public slots:
     void onRecvDirAndLabels(QMap<QString, QSet<QString>> mapDirAndLabels);
@@ -39,7 +39,7 @@ private:
     void onTreeViewClicked(const QModelIndex &index);
 
     // 在最顶层找到指定内容的节点
-    QStandardItem *getItem(QString text);
+    QStandardItem *getItem(const QString &text);
 
     Ui::FormCurDirLabels *ui;
 

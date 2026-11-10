@@ -24,7 +24,7 @@ signals:
     void sendStop();
 
 public slots:
-    void onRecvProgress(QString sProcessedFilePath);
+    void onRecvProgress(const QString &sProcessedFilePath);
 
 private:
     // 停止按钮处理函数：构造函数中显式 connect，

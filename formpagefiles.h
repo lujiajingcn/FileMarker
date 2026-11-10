@@ -54,7 +54,7 @@ public:
     // 初始化缩略图显示的文件列表
     void initThumbnailFileList();
 
-    void curDirChanged(QString sCurDir);
+    void curDirChanged(const QString &sCurDir);
 
     QStringList getSelFilePath();
 
@@ -71,7 +71,7 @@ public:
 
 signals:
 
-    void sendLabels(QString sFilePath, QString sLabels);
+    void sendLabels(const QString &sFilePath, const QString &sLabels);
 
     // 当前目录直接子文件里出现的标签集合（进入目录/刷新后立即发送，供【当前目录标签】面板显示）
     void sendDirLabels(const QString &sDir, const QSet<QString> &labels);
@@ -96,7 +96,7 @@ public:
     void setCommandActions(const QList<QAction *> &actions);
 
     /** 给"搜索"命令指定一个下拉菜单：命令条上会把它做成"主点击搜索 + 小箭头出菜单"的分裂按钮 */
-    void setSearchButtonMenu(QAction *pSearchAction, QMenu *pMenu);
+    void setSearchButtonMenu(QAction *searchAction, QMenu *contextMenu);
 
     /** 弹出搜索按钮右侧的条件菜单（F3 / Ctrl+Shift+F） */
     void popupSearchMenu();
@@ -115,7 +115,7 @@ protected:
 
 public slots:
 
-    void recvGotoFile(QString sFilePath);
+    void recvGotoFile(const QString &sFilePath);
 
     void onTvNavigationClicked(const QModelIndex &index);
 
@@ -123,6 +123,12 @@ private:
     // 以下处理函数全部在构造函数中显式 connect，
     // 不再使用 on_<对象名>_<信号名> 的自动连接（connectSlotsByName）。
     void onTvFilesCustomContextMenuRequested(const QPoint &pos);
+
+    // 右键菜单里的两个子菜单：构建菜单项的动作在 formpagefilesmenu.cpp
+    void addFileActions(QMenu *menu, const QString &targetFile, const QString &firstFile,
+                        const QModelIndex &clickedIndex, bool bTargetIsDir);
+    void fillViewMenu(QMenu *menu);
+    void fillSortMenu(QMenu *menu);
 
     void onBackButtonClicked();
 
@@ -140,7 +146,7 @@ private:
 
     void onListViewCustomContextMenuRequested(const QPoint &pos);
 
-    void onRecvLabels(QString sFilePath, QString sLabels);
+    void onRecvLabels(const QString &sFilePath, const QString &sLabels);
 
     void recvDblClick(const QModelIndex &index);
 

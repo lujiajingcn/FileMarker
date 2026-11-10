@@ -205,9 +205,9 @@ void FormFileBrowser::onActionTraverseSelDirsTriggered()
     m_threadTraverseDirs->start();
 }
 
-void FormFileBrowser::onRecvTraverseResult(QMap<QString, FILE_TAGS> dirAndFileTags,
+void FormFileBrowser::onRecvTraverseResult(const QMap<QString, FILE_TAGS> &dirAndFileTags,
                                            QMap<QString, QSet<QString>> dirAndTags,
-                                           QStringList qLCompletedDirs,
+                                           const QStringList &qLCompletedDirs,
                                            bool bAborted)
 {
     // 注意：insertRecord 内部已经按目录做“先删后插”，因此这里不能再整体清空
@@ -257,26 +257,26 @@ void FormFileBrowser::initSearchButtonMenu()
 {
     m_searchMenu = new QMenu(this);
 
-    QMenu *pLogicMenu = m_searchMenu->addMenu(tr("标签关系"));
-    auto *pLogicGroup = new QActionGroup(this);
-    pLogicGroup->setExclusive(true);
-    m_logicAndAction = pLogicMenu->addAction(tr("与：同时满足所有标签"));
-    m_logicOrAction = pLogicMenu->addAction(tr("或：满足任意一个标签"));
-    for (QAction *pAction : {m_logicAndAction, m_logicOrAction}) {
-        pAction->setCheckable(true);
-        pLogicGroup->addAction(pAction);
+    QMenu *logicMenu = m_searchMenu->addMenu(tr("标签关系"));
+    auto *logicGroup = new QActionGroup(this);
+    logicGroup->setExclusive(true);
+    m_logicAndAction = logicMenu->addAction(tr("与：同时满足所有标签"));
+    m_logicOrAction = logicMenu->addAction(tr("或：满足任意一个标签"));
+    for (QAction *menuAction : {m_logicAndAction, m_logicOrAction}) {
+        menuAction->setCheckable(true);
+        logicGroup->addAction(menuAction);
     }
     connect(m_logicAndAction, &QAction::triggered, this, [this]() { applySearchLogic(labelLogic::AND); });
     connect(m_logicOrAction, &QAction::triggered, this, [this]() { applySearchLogic(labelLogic::OR); });
 
-    QMenu *pSourceMenu = m_searchMenu->addMenu(tr("数据来源"));
-    auto *pSourceGroup = new QActionGroup(this);
-    pSourceGroup->setExclusive(true);
-    m_sourceCache = pSourceMenu->addAction(tr("优先从缓存数据库（快，可能过期）"));
-    m_sourceDisk = pSourceMenu->addAction(tr("直接从磁盘（慢，最新）"));
-    for (QAction *pAction : {m_sourceCache, m_sourceDisk}) {
-        pAction->setCheckable(true);
-        pSourceGroup->addAction(pAction);
+    QMenu *sourceMenu = m_searchMenu->addMenu(tr("数据来源"));
+    auto *sourceGroup = new QActionGroup(this);
+    sourceGroup->setExclusive(true);
+    m_sourceCache = sourceMenu->addAction(tr("优先从缓存数据库（快，可能过期）"));
+    m_sourceDisk = sourceMenu->addAction(tr("直接从磁盘（慢，最新）"));
+    for (QAction *menuAction : {m_sourceCache, m_sourceDisk}) {
+        menuAction->setCheckable(true);
+        sourceGroup->addAction(menuAction);
     }
     connect(m_sourceCache, &QAction::triggered, this, [this]() { applySearchSource(true); });
     connect(m_sourceDisk, &QAction::triggered, this, [this]() { applySearchSource(false); });

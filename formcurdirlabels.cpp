@@ -67,7 +67,7 @@ void FormCurDirLabels::onTreeViewClicked(const QModelIndex &index)
     sendSelLabels(qLLabels);
 }
 
-QStandardItem *FormCurDirLabels::getItem(QString text)
+QStandardItem *FormCurDirLabels::getItem(const QString &text)
 {
     int rowCount = m_modelLabels->rowCount();
     for (int i = 0; i < rowCount; i++){

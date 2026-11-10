@@ -36,7 +36,7 @@ ThreadAddTagByAI::ThreadAddTagByAI(QObject *parent) : QThread(parent)
     connect(this, &ThreadAddTagByAI::finished, this, &QObject::deleteLater);
 }
 
-void ThreadAddTagByAI::setDirs(QStringList dirs)
+void ThreadAddTagByAI::setDirs(const QStringList &dirs)
 {
     m_dirs = dirs;
 }

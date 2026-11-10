@@ -12,7 +12,7 @@ ConfigOperation::ConfigOperation()
 
 }
 
-SearchConfig ConfigOperation::readSearchConfig(QString sConfigFilePath)
+SearchConfig ConfigOperation::readSearchConfig(const QString &sConfigFilePath)
 {
     SearchConfig sc;
 
@@ -43,7 +43,7 @@ SearchConfig ConfigOperation::readSearchConfig(QString sConfigFilePath)
     return sc;
 }
 
-void ConfigOperation::writeSearchConfig(QString sConfigFilePath, SearchConfig sc)
+void ConfigOperation::writeSearchConfig(const QString &sConfigFilePath, SearchConfig sc)
 {
     QSettings settings(sConfigFilePath, QSettings::Format::IniFormat);
     if (settings.status() != QSettings::NoError)

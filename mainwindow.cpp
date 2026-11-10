@@ -138,11 +138,11 @@ MainWindow::MainWindow(QWidget *parent) :
         box.setText(tr("扫描了 %1 个文件，以下 %2 个标签没有被任何文件使用：\n\n%3\n\n"
                        "从标签库删除后不可撤销，是否继续？")
                         .arg(nScanned).arg(qLUnused.size()).arg(sPreview));
-        QPushButton *pDelete = box.addButton(tr("删除"), QMessageBox::DestructiveRole);
-        QPushButton *pCancel = box.addButton(tr("取消"), QMessageBox::RejectRole);
-        box.setDefaultButton(pCancel);
+        QPushButton *deleteButton = box.addButton(tr("删除"), QMessageBox::DestructiveRole);
+        QPushButton *cancel = box.addButton(tr("取消"), QMessageBox::RejectRole);
+        box.setDefaultButton(cancel);
         box.exec();
-        if (box.clickedButton() == pDelete)
+        if (box.clickedButton() == deleteButton)
             ui->dwcLabels->removeLabels(qLUnused);
     });
 

@@ -25,8 +25,8 @@ class ConfigOperation
 public:
     ConfigOperation();
 
-    static SearchConfig readSearchConfig(QString sConfigFilePath);
-    static void writeSearchConfig(QString sConfigFilePath, SearchConfig sc);
+    static SearchConfig readSearchConfig(const QString &sConfigFilePath);
+    static void writeSearchConfig(const QString &sConfigFilePath, SearchConfig sc);
 };
 
 #endif // CONFIGOPERATION_H

@@ -55,7 +55,7 @@ public:
     QList<QSet<QString>> getSelLabelGroups() const;
 
     // 刷新全部标签列表
-    void updateAllLabelList(QVector<QString> vtAllLabels);
+    void updateAllLabelList(const QVector<QString> &vtAllLabels);
 
     /** 返回标签库中所有标签名（跳过 AI 分组节点本身，包含其子标签） */
     QStringList allLabels() const;
@@ -64,7 +64,7 @@ public:
     bool removeLabels(const QStringList &qLLabels);
 
 signals:
-    void sendSelLabels(QStringList qLSelLabels);
+    void sendSelLabels(const QStringList &qLSelLabels);
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
@@ -92,9 +92,9 @@ protected:
     void addItem(QStandardItem *parentItem = nullptr);
 
 public slots:
-    void onRecvLabels(QString sLabels);
+    void onRecvLabels(const QString &sLabels);
 
-    void onRecvLabelsGeneratedByAI(QString sLabels);
+    void onRecvLabelsGeneratedByAI(const QString &sLabels);
 
 private:
     // 标签管理动作与标签树点击的处理函数：全部在构造函数中显式 connect，

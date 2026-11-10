@@ -31,13 +31,13 @@ public:
      * qLCompletedDirs 是"被完整遍历过"的目录（可能没有带标签的文件），用于登记 dirs 表；
      * 只传完整目录，未扫完的目录绝不能进缓存。
      */
-    void insertRecord(QMap<QString, FILE_TAGS> dirAndFileTags, const QStringList &qLCompletedDirs = QStringList());
+    void insertRecord(const QMap<QString, FILE_TAGS> &dirAndFileTags, const QStringList &qLCompletedDirs = QStringList());
     /**
      * 根据给定的标签"组"和逻辑关系，在选中的文件夹中查找文件。
      * 每个组 = 用户选中的一个标签 + 它的所有子标签；组内 OR、组间按 nLabelLogic 组合。
      * 这样"搜索父标签能搜到打了子标签的文件"，而 AND 仍然是"每个条件都要命中"。
      */
-    void searchFilesByLabels(QStringList qLSelDirs,
+    void searchFilesByLabels(const QStringList &qLSelDirs,
                              const QList<QSet<QString>> &qLLabelGroups,
                              int nLabelLogic,
                              QStringList &qLFilePaths,

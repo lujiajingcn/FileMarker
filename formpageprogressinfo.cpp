@@ -20,7 +20,7 @@ FormPageProgressInfo::~FormPageProgressInfo()
     delete ui;
 }
 
-void FormPageProgressInfo::onRecvProgress(QString sProcessedFilePath)
+void FormPageProgressInfo::onRecvProgress(const QString &sProcessedFilePath)
 {
     ui->plainTextEdit->appendPlainText(sProcessedFilePath);
     ui->plainTextEdit->moveCursor(QTextCursor::End);

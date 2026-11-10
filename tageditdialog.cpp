@@ -18,50 +18,50 @@ TagEditDialog::TagEditDialog(const QStringList &qLExistingTags, const QString &s
     setWindowTitle(tr("编辑标签"));
     resize(540, 420);
 
-    QVBoxLayout *pVLayout = new QVBoxLayout(this);
+    QVBoxLayout *vLayout = new QVBoxLayout(this);
 
-    QLabel *pFileLabel = new QLabel(tr("文件：%1").arg(sFileName), this);
-    pFileLabel->setWordWrap(true);
-    pVLayout->addWidget(pFileLabel);
+    QLabel *fileLabel = new QLabel(tr("文件：%1").arg(sFileName), this);
+    fileLabel->setWordWrap(true);
+    vLayout->addWidget(fileLabel);
 
-    QLabel *pListLabel = new QLabel(tr("当前标签（选中后点【移除所选】可删除；保存时以这个列表为准）："), this);
-    pListLabel->setWordWrap(true);
-    pVLayout->addWidget(pListLabel);
+    QLabel *listLabel = new QLabel(tr("当前标签（选中后点【移除所选】可删除；保存时以这个列表为准）："), this);
+    listLabel->setWordWrap(true);
+    vLayout->addWidget(listLabel);
 
     m_list = new QListWidget(this);
     m_list->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_list->addItems(qLExistingTags);
-    pVLayout->addWidget(m_list, 1);
+    vLayout->addWidget(m_list, 1);
 
-    QHBoxLayout *pAddLayout = new QHBoxLayout();
+    QHBoxLayout *editorLayout = new QHBoxLayout();
     m_edit = new QLineEdit(this);
     m_edit->setPlaceholderText(tr("输入要追加的标签，多个用逗号/顿号/分号分隔，回车添加"));
     m_edit->setClearButtonEnabled(true);
-    pAddLayout->addWidget(m_edit, 1);
+    editorLayout->addWidget(m_edit, 1);
 
-    QPushButton *pBtnAdd = new QPushButton(tr("添加"), this);
-    pBtnAdd->setDefault(true);
-    pAddLayout->addWidget(pBtnAdd);
+    QPushButton *addButton = new QPushButton(tr("添加"), this);
+    addButton->setDefault(true);
+    editorLayout->addWidget(addButton);
 
-    QPushButton *pBtnRemove = new QPushButton(tr("移除所选"), this);
-    pAddLayout->addWidget(pBtnRemove);
-    pVLayout->addLayout(pAddLayout);
+    QPushButton *btnRemove = new QPushButton(tr("移除所选"), this);
+    editorLayout->addWidget(btnRemove);
+    vLayout->addLayout(editorLayout);
 
     m_summary = new QLabel(this);
     m_summary->setStyleSheet(QStringLiteral("color:#666;"));
-    pVLayout->addWidget(m_summary);
+    vLayout->addWidget(m_summary);
 
-    QDialogButtonBox *pButtonBox = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel, this);
+    QDialogButtonBox *buttonBox = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel, this);
     // 显式设置中文按钮：QDialogButtonBox 的默认文字来自 Qt 自带翻译，未加载 .qm 时是英文。
-    pButtonBox->button(QDialogButtonBox::Save)->setText(tr("保存"));
-    pButtonBox->button(QDialogButtonBox::Cancel)->setText(tr("取消"));
-    pVLayout->addWidget(pButtonBox);
+    buttonBox->button(QDialogButtonBox::Save)->setText(tr("保存"));
+    buttonBox->button(QDialogButtonBox::Cancel)->setText(tr("取消"));
+    vLayout->addWidget(buttonBox);
 
-    connect(pBtnAdd, &QPushButton::clicked, this, &TagEditDialog::addFromInput);
-    connect(pBtnRemove, &QPushButton::clicked, this, &TagEditDialog::removeSelected);
+    connect(addButton, &QPushButton::clicked, this, &TagEditDialog::addFromInput);
+    connect(btnRemove, &QPushButton::clicked, this, &TagEditDialog::removeSelected);
     connect(m_edit, &QLineEdit::returnPressed, this, &TagEditDialog::addFromInput);
-    connect(pButtonBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
-    connect(pButtonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
+    connect(buttonBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
+    connect(buttonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
     connect(m_list, &QListWidget::itemSelectionChanged, this, &TagEditDialog::updateSummary);
 
     updateSummary();
@@ -109,8 +109,8 @@ void TagEditDialog::addFromInput()
 void TagEditDialog::removeSelected()
 {
     const QList<QListWidgetItem *> qLSel = m_list->selectedItems();
-    for (QListWidgetItem *pItem : qLSel)
-        delete m_list->takeItem(m_list->row(pItem));
+    for (QListWidgetItem *labelItem : qLSel)
+        delete m_list->takeItem(m_list->row(labelItem));
     updateSummary();
 }
 

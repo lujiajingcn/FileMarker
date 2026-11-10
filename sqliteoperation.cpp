@@ -226,7 +226,7 @@ void SqliteOperation::invalidateCacheForFile(const QString &sFilePath)
         invalidateDirCache(sRoot);
 }
 
-void SqliteOperation::insertRecord(QMap<QString, FILE_TAGS> dirAndFileTags, const QStringList &qLCompletedDirs)
+void SqliteOperation::insertRecord(const QMap<QString, FILE_TAGS> &dirAndFileTags, const QStringList &qLCompletedDirs)
 {
     // dirs 表必须和文件行在同一个事务里。否则文件行回滚了、目录却仍标着"已缓存"，
     // 之后按缓存搜索会命中"有目录、没数据"的空壳，永远查不到文件。
@@ -313,7 +313,7 @@ void SqliteOperation::insertRecord(QMap<QString, FILE_TAGS> dirAndFileTags, cons
 }
 
 
-void SqliteOperation::searchFilesByLabels(QStringList qLSelDirs,
+void SqliteOperation::searchFilesByLabels(const QStringList &qLSelDirs,
                                           const QList<QSet<QString>> &qLLabelGroups,
                                           int nLabelLogic,
                                           QStringList &qLFilePaths,

@@ -60,11 +60,11 @@ void FormPageFiles::onDeleteLabels()
         sFileList += tr("\n…另有 %1 个文件").arg(qLSelFilePaths.size() - 5);
     box.setText(tr("将删除以下 %1 个文件的全部标签（删除后可用 Ctrl+Z 撤销）：\n\n%2\n\n是否继续？")
                     .arg(qLSelFilePaths.size()).arg(sFileList));
-    QPushButton *pBtnDelete = box.addButton(tr("删除"), QMessageBox::DestructiveRole);
-    QPushButton *pBtnCancel = box.addButton(tr("取消"), QMessageBox::RejectRole);
-    box.setDefaultButton(pBtnCancel);
+    QPushButton *btnDelete = box.addButton(tr("删除"), QMessageBox::DestructiveRole);
+    QPushButton *btnCancel = box.addButton(tr("取消"), QMessageBox::RejectRole);
+    box.setDefaultButton(btnCancel);
     box.exec();
-    if (box.clickedButton() != pBtnDelete)
+    if (box.clickedButton() != btnDelete)
         return;
 
     // 删除前广播一次：上层会把"删除之前的标签"记下来，供 Ctrl+Z 撤销
@@ -169,7 +169,7 @@ void FormPageFiles::continueDirLabelScan()
     }
 }
 
-void FormPageFiles::onRecvLabels(QString sFilePath, QString sLabels)
+void FormPageFiles::onRecvLabels(const QString &sFilePath, const QString &sLabels)
 {
     emit sendLabels(sFilePath, sLabels);
 }

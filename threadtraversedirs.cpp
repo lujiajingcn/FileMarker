@@ -17,7 +17,7 @@ void ThreadTraverseDirs::stopThread()
     TraverseDirectory::stop();
 }
 
-void ThreadTraverseDirs::setSelDirs(QStringList selDirs)
+void ThreadTraverseDirs::setSelDirs(const QStringList &selDirs)
 {
     m_selDirs = selDirs;
 }

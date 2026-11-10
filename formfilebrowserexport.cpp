@@ -158,16 +158,16 @@ void FormFileBrowser::importTagsFromFile()
     askBox.setText(tr("备份里共有 %1 个文件、%2 个标签。\n\n"
                       "写回时如何处理文件上已有的标签？（批量写盘，无法整体撤销）")
                        .arg(qLRecords.size()).arg(nTags));
-    QPushButton *pOverwrite = askBox.addButton(tr("覆盖原有标签"), QMessageBox::AcceptRole);
-    QPushButton *pAppend = askBox.addButton(tr("追加到原有标签"), QMessageBox::AcceptRole);
+    QPushButton *overwrite = askBox.addButton(tr("覆盖原有标签"), QMessageBox::AcceptRole);
+    QPushButton *append = askBox.addButton(tr("追加到原有标签"), QMessageBox::AcceptRole);
     askBox.addButton(tr("取消"), QMessageBox::RejectRole);
-    askBox.setDefaultButton(pAppend);
+    askBox.setDefaultButton(append);
     askBox.exec();
-    QAbstractButton *pClicked = askBox.clickedButton();
-    if (pClicked != static_cast<QAbstractButton *>(pOverwrite)
-        && pClicked != static_cast<QAbstractButton *>(pAppend))
+    QAbstractButton *clicked = askBox.clickedButton();
+    if (clicked != static_cast<QAbstractButton *>(overwrite)
+        && clicked != static_cast<QAbstractButton *>(append))
         return;
-    const bool bOverwrite = (pClicked == static_cast<QAbstractButton *>(pOverwrite));
+    const bool bOverwrite = (clicked == static_cast<QAbstractButton *>(overwrite));
 
     if (m_longOperationRunning) {
         QMessageBox::information(this, tr("导入标签"), tr("上一个导入/导出还没结束，请稍候。"));

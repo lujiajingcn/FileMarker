@@ -28,7 +28,7 @@
 #include "tagexport.h"
 #include "utility.h"
 
-void FormFileBrowser::onRecvSelLabels(QStringList qLSelLabels)
+void FormFileBrowser::onRecvSelLabels(const QStringList &qLSelLabels)
 {
     m_selectedLabels = qLSelLabels;
     // 没有收到"分组"信息时（例如从【当前目录中的标签】选择），每个标签自成一组。
@@ -67,11 +67,11 @@ void FormFileBrowser::onActionAddLabelByAITriggered()
     connect(m_threadAddLabelByAI, &ThreadAddTagByAI::sendFinish, this, &FormFileBrowser::onRecvAddLabelByAIFinish);
     connect(m_threadAddLabelByAI, &ThreadAddTagByAI::sendTags, this, &FormFileBrowser::onRecvLabelsGeneratedByAI);
     // AI 返回的 summary 之前被丢弃，这里记入日志（程序无专门展示 UI）。
-    connect(m_threadAddLabelByAI, &ThreadAddTagByAI::sendSummary, this, [](QString s){
+    connect(m_threadAddLabelByAI, &ThreadAddTagByAI::sendSummary, this, [](const QString &s){
         qInfo() << "AI 摘要:" << s;
     });
     connect(m_threadAddLabelByAI, &ThreadAddTagByAI::sendTagChanged, this,
-            [this](QString sFilePath) {
+            [this](const QString &sFilePath) {
                 if (m_sqlOperation != nullptr)
                     m_sqlOperation->invalidateCacheForFile(sFilePath);   // 按文件反查遍历根
             });
@@ -85,7 +85,7 @@ void FormFileBrowser::onActionAddLabelByAITriggered()
     m_threadAddLabelByAI->start();
 }
 
-void FormFileBrowser::onRecvAddLabelByAIFinish(int nSucceeded, int nFailed, QString sFirstError)
+void FormFileBrowser::onRecvAddLabelByAIFinish(int nSucceeded, int nFailed, const QString &sFirstError)
 {
     showFilesWidget();
     setActionState(ADDTAGBYAI_FINISH);
@@ -115,7 +115,7 @@ void FormFileBrowser::onRecvAddLabelByAIFinish(int nSucceeded, int nFailed, QStr
     }
 }
 
-void FormFileBrowser::onRecvLabelsGeneratedByAI(QString sLabels)
+void FormFileBrowser::onRecvLabelsGeneratedByAI(const QString &sLabels)
 {
     emit sendLabelsGeneratedByAI(sLabels);
 }
@@ -228,7 +228,7 @@ void FormFileBrowser::undoLastTagOperation()
         emit sendStatusMessage(tr("已撤销上一次标签操作（%1 个文件）。").arg(nTotal));
 }
 
-void FormFileBrowser::onRecvLabels(QString sFilePath, QString sLabels)
+void FormFileBrowser::onRecvLabels(const QString &sFilePath, const QString &sLabels)
 {
     // 内联编辑/弹框编辑标签时，只作用于被编辑的那一个文件，
     // 不再误覆盖当前选中的其它文件（批量打标签请用工具栏“添加标签”按钮）。

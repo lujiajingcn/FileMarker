@@ -84,7 +84,7 @@ FormPageFilterdFiles::~FormPageFilterdFiles()
     delete ui;
 }
 
-void FormPageFilterdFiles::onShowFilteredFiles(QStringList qLFilteredFiles)
+void FormPageFilterdFiles::onShowFilteredFiles(const QStringList &qLFilteredFiles)
 {
     if (m_tagScanTimer != nullptr)
         m_tagScanTimer->stop();
