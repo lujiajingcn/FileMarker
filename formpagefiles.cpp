@@ -284,9 +284,6 @@ FormPageFiles::~FormPageFiles()
 }
 
 
-
-
-
 void FormPageFiles::initDetailFileList()
 {
     m_tvFiles = ui->tvFiles;
@@ -430,15 +427,9 @@ void FormPageFiles::initThumbnailFileList()
 }
 
 
-
-
-
-
-
 /** 读取地址栏下拉历史（最多 10 条），并填充到 QComboBox。 */
 
 /** 把地址栏下拉历史写回 settings。 */
-
 
 
 // 不再需要拦截 Paint 事件来更新工具按钮。
@@ -483,13 +474,6 @@ QStringList FormPageFiles::getSelDirs()
 }
 
 
-
-
-
-
-
-
-
 /** F3 / Ctrl+Shift+F：把"查找条件"菜单弹在搜索按钮下方（键盘也能改条件）。 */
 
 
@@ -529,13 +513,6 @@ void FormPageFiles::onBtnRefreshClicked()
 }
 
 
-
-
-
-
-
-
-
 /**
  * 点了标签 chip 上的 ✕：把该标签从文件上删掉。
  * 走和"编辑标签"同一套流程：先记撤销现场，再写盘，失败时提示并刷新。
@@ -543,7 +520,6 @@ void FormPageFiles::onBtnRefreshClicked()
 
 
 /** 统一的重命名入口（右键菜单）。 */
-
 
 
 bool FormPageFiles::eventFilter(QObject *watched, QEvent *event)
@@ -652,5 +628,4 @@ QModelIndex FormPageFiles::currentIndexInActiveView() const
         return m_lstFiles->currentIndex();
     return m_tvFiles->currentIndex();
 }
-
 

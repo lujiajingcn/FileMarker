@@ -19,28 +19,79 @@
 .PARAMETER OutDir
     输出目录，默认 dist。
 
+.PARAMETER QtDir
+    Qt 的 mingw 套件目录（形如 ...\5.13.0\mingw73_64）。
+    不传时依次尝试：环境变量 QTDIR → .pro 里 qmake 记录的路径 → 常见安装位置。
+
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File package.ps1
     powershell -ExecutionPolicy Bypass -File package.ps1 -Config Debug -BuildDir build-review
+    powershell -ExecutionPolicy Bypass -File package.ps1 -QtDir "D:\Qt\5.13.0\mingw73_64"
 #>
 param(
     [string] $BuildDir = "..\build-review",
     [ValidateSet("Debug", "Release")]
     [string] $Config = "Release",
-    [string] $OutDir = "dist"
+    [string] $OutDir = "dist",
+    [string] $QtDir = ""
 )
 
 $ErrorActionPreference = "Stop"
 
 # ---- 路径 ----
 $ProjectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
-$QtBin = "E:\V_C\Qt\Qt5.13.0\5.13.0\mingw73_64\bin"
-$MinGwBin = "E:\V_C\Qt\Qt5.13.0\Tools\mingw730_64\bin"
-$WindepLoy = Join-Path $QtBin "windeployqt.exe"
 
-if (-not (Test-Path $WindepLoy)) {
-    throw "找不到 windeployqt：$WindepLoy（请确认 Qt 5.13 安装路径）"
+# 找 Qt 套件目录：参数 > QTDIR 环境变量 > qmake 在 PATH 里 > 常见安装位置
+function Resolve-QtDir {
+    param([string] $Explicit, [string] $ProjectRoot)
+
+    $candidates = New-Object System.Collections.Generic.List[string]
+    if ($Explicit) { $candidates.Add($Explicit) }
+    if ($env:QTDIR) { $candidates.Add($env:QTDIR) }
+
+    # Qt Creator 会把套件路径记在 .pro.user 里，有就直接用
+    $proUser = Join-Path $ProjectRoot "FileMarker.pro.user"
+    if (Test-Path $proUser) {
+        $match = Select-String -Path $proUser -Pattern 'mingw73_64' -List
+        if ($match) {
+            $found = [regex]::Match($match.Line, '[A-Za-z]:[\\/][^"'';]*mingw73_64')
+            if ($found.Success) { $candidates.Add($found.Value) }
+        }
+    }
+
+    $qmake = Get-Command qmake.exe -ErrorAction SilentlyContinue
+    if ($qmake) { $candidates.Add((Split-Path -Parent $qmake.Source | Split-Path -Parent) + "\bin") }
+
+    foreach ($root in @("E:\V_C\Qt", "C:\Qt", "D:\Qt")) {
+        if (-not (Test-Path $root)) { continue }
+        Get-ChildItem $root -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+            $kit = Join-Path $_.FullName "mingw73_64"
+            if (Test-Path $kit) { $candidates.Add($kit) }
+            Get-ChildItem $_.FullName -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+                $inner = Join-Path $_.FullName "mingw73_64"
+                if (Test-Path $inner) { $candidates.Add($inner) }
+            }
+        }
+    }
+
+    foreach ($c in $candidates) {
+        if (-not $c) { continue }
+        if (Test-Path (Join-Path $c "bin\windeployqt.exe")) { return $c }
+    }
+    return ""
 }
+
+if (-not $QtDir) { $QtDir = Resolve-QtDir -Explicit "" -ProjectRoot $ProjectRoot }
+if (-not $QtDir -or -not (Test-Path (Join-Path $QtDir "bin\windeployqt.exe"))) {
+    throw ("找不到 Qt 套件目录。请用 -QtDir 指定，例如：" + [Environment]::NewLine +
+           '  powershell -File package.ps1 -QtDir "D:\Qt\5.13.0\mingw73_64"' + [Environment]::NewLine +
+           "也可以设置环境变量 QTDIR 指向该目录。")
+}
+
+$QtBin = Join-Path $QtDir "bin"
+$MinGwBin = Join-Path (Split-Path -Parent (Split-Path -Parent $QtDir)) "Tools\mingw730_64\bin"
+$WindepLoy = Join-Path $QtBin "windeployqt.exe"
+Write-Host "==> 使用 Qt：$QtDir" -ForegroundColor Cyan
 
 $subDir = if ($Config -eq "Debug") { "debug" } else { "release" }
 $exePath = Join-Path (Join-Path $ProjectRoot $BuildDir) (Join-Path $subDir "FileMarker.exe")

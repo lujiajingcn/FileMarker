@@ -348,7 +348,6 @@ void FormFileBrowser::restoreLastDir()
 }
 
 
-
 void FormFileBrowser::showProcessPage(RUNNINGTHREAD rt)
 {
     ui->stackedWidget->setCurrentWidget(ui->pageProgressInfo);
@@ -397,10 +396,6 @@ void FormFileBrowser::onTvNavigationClicked(const QModelIndex &index)
 }
 
 
-
-
-
-
 /**
  * 使用标签名作为ads文件名，创建一系列文件，形如
  * filepath1:label1
@@ -416,16 +411,4 @@ void FormFileBrowser::onTvNavigationClicked(const QModelIndex &index)
  * 如果上次标记完以后移动或删除文件，则可能查找不准确。
  * 选中多个文件夹时，有可能有些文件夹在缓存数据库中没有信息，这些文件夹直接从磁盘查找
 */
-
-
-
-
-
-
-
-
-
-
-
-
 

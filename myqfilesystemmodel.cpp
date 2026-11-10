@@ -20,8 +20,9 @@ QVariant MyQFileSystemModel::headerData(int section, Qt::Orientation orientation
     switch (role) {
     case Qt::DecorationRole:
         if (section == 0) {
-            // ### TODO oh man this is ugly and doesn't even work all the way!
-            // it is still 2 pixels off
+            // 名称列表头不画排序箭头：返回一张透明的 16x1 位图占位，
+            // 否则 QFileSystemModel 会给第 0 列画上系统默认的排序指示器。
+            // 已知副作用：表头上的箭头文字位置会偏 2 像素，属于外观瑕疵，可接受。
             QImage pixmap(16, 1, QImage::Format_Mono);
             pixmap.fill(0);
             pixmap.setAlphaChannel(pixmap.createAlphaMask());

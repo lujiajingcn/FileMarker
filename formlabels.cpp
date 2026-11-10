@@ -65,8 +65,6 @@ FormLabels::FormLabels(QWidget *parent) :
 }
 
 
-
-
 FormLabels::~FormLabels()
 {
     // 退出时保存失败不能弹模态框（事件循环已结束），改为写备份文件并记日志
@@ -74,7 +72,6 @@ FormLabels::~FormLabels()
     saveLabelToXmlFile();
     delete ui;
 }
-
 
 
 QStringList FormLabels::allLabels() const
@@ -238,16 +235,6 @@ QList<QSet<QString>> FormLabels::getSelLabelGroups() const
 }
 
 
-
-
-
-
-
-
-
-
-
-
 QStandardItem* FormLabels::createLabelItem(const QString &name, const QString &uuid)
 {
     QStandardItem *item = new QStandardItem(name);
@@ -266,7 +253,6 @@ void FormLabels::registerItem(QStandardItem *item)
     for (int i = 0; i < item->rowCount(); ++i)
         registerItem(item->child(i));
 }
-
 
 
 // 依据当前模型重建去重集合与“已提交文本”映射（用于删除等结构性变更后保持一致）。
@@ -380,7 +366,4 @@ void FormLabels::updateAllLabelList(QVector<QString> vtAllLabels)
         registerItem(item);
     }
 }
-
-
-
 

@@ -50,4 +50,3 @@ bool ThreadSearch::searchFile(const QFileInfo& fileInfo)
     return true;
 }
 
-
