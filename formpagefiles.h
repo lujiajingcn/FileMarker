@@ -214,6 +214,7 @@ private:
     // 方案A：页面顶部的命令条（承载 AI/添加/清空/查找/遍历/查找条件）
     QToolBar               *m_commandBar = nullptr;
     TagChipDelegate        *m_tagChipDelegate = nullptr;  // 标签列的 chip 代理（带 ✕ 删除）
+    QAction                *m_actionRename = nullptr;    // F2 重命名（作用于当前视图的选中项）
     QAction                *m_pSearchAction = nullptr;  // 命令条上要做成分裂按钮的"搜索"动作
     QMenu                  *m_pSearchMenu = nullptr;    // 它的下拉菜单（由 FormFileBrowser 提供）
 

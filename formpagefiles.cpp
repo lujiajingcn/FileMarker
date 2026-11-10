@@ -1,6 +1,7 @@
 #include "formpagefiles.h"
 #include "ui_formpagefiles.h"
 
+#include <QKeySequence>
 #include <QMenu>
 #include <QDesktopServices>
 #include <QUrl>
@@ -198,6 +199,19 @@ FormPageFiles::FormPageFiles(QWidget *parent) :
             this, &FormPageFiles::onTvFilesCustomContextMenuRequested);
     connect(ui->listView, &QListView::customContextMenuRequested,
             this, &FormPageFiles::onListViewCustomContextMenuRequested);
+
+    // F2 重命名：作用于当前视图里选中的那一项（两个视图都支持）。
+    // 用 WidgetWithChildrenShortcut：只有焦点在文件页里时才生效，
+    // 不会在标签库/地址栏等地方误触发。
+    m_actionRename = new QAction(tr("重命名…"), this);
+    m_actionRename->setShortcut(QKeySequence(Qt::Key_F2));
+    m_actionRename->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+    connect(m_actionRename, &QAction::triggered, this, [this]() {
+        const QModelIndex index = currentIndexInActiveView();
+        if (index.isValid())
+            renameFile(index);
+    });
+    addAction(m_actionRename);
 
     // 地址栏下拉：展示最近 10 次打开过的目录（持久化，重启后仍在）。
     // 不用 QComboBox 的自动插入（InsertAtBottom），历史由 rememberPath() 统一维护。

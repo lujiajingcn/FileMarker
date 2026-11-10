@@ -111,6 +111,9 @@
    <property name="toolTip">
     <string>根据标签查找文件</string>
    </property>
+   <property name="shortcut">
+    <string>Ctrl+F</string>
+   </property>
   </action>
   <action name="actionAddLabels">
    <property name="icon">
@@ -159,6 +162,9 @@
    </property>
    <property name="toolTip">
     <string>删除选中文件上的全部标签（可用 Ctrl+Z 撤销；只影响文件，不动【标签库】）</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+C</string>
    </property>
   </action>
   <action name="actionExit">
