@@ -393,11 +393,16 @@ void IntroductionWidget::paintEvent(QPaintEvent *)
     if (m_stepPointerAnchor) {
         const QPoint anchorPos = m_stepPointerAnchor->mapTo(parentWidget(), QPoint{0, 0});
         const QRect anchorRect(anchorPos, m_stepPointerAnchor->size());
-        // 工具栏/菜单栏这类控件是"整条"长条，但真正有内容的只有左边一小段。
+        // 工具栏/菜单栏这类控件是"整条"长条，但真正有内容的只有左边一小段，
         // 直接按控件矩形照亮会把右边大片空白也点亮，所以这类目标改用"内容区域"。
-        const QRect targetRect = isBarLikeTarget(m_stepPointerAnchor)
-                                     ? barContentRect(m_stepPointerAnchor, parentWidget())
-                                     : anchorRect;
+        // 状态栏这种取不到子项内容的，仍然退回控件自身的矩形，不能退化成空矩形
+        // （空矩形加 18px 外扩会跑到窗口左上角，第 6 页之前就是这样）。
+        QRect targetRect = anchorRect;
+        if (isBarLikeTarget(m_stepPointerAnchor)) {
+            const QRect contentRect = barContentRect(m_stepPointerAnchor, parentWidget());
+            if (!contentRect.isEmpty())
+                targetRect = contentRect;
+        }
         const QRect spotlightRect = targetRect.adjusted(-SPOTLIGHTMARGIN,
                                                         -SPOTLIGHTMARGIN,
                                                         SPOTLIGHTMARGIN,
