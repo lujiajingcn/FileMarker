@@ -218,6 +218,9 @@ const int SPOTLIGHT_INSET_Y = 2;   // 上下各外扩多少
  *   目标在上/下  -> 竖直箭头，落在目标的上边缘或下边缘外侧。
  * 箭头贴着控件、长度固定，不跨越整屏空白。
  */
+// isBarLikeTarget 定义在下面的匿名命名空间里，这里先声明一下
+namespace { bool isBarLikeTarget(const QPointer<QWidget> &anchor); }
+
 void IntroductionWidget::drawPointerArrow(QPainter &painter, const QRect &anchorRect)
 {
     const int arrowLength = 42;   // 箭头总长
@@ -236,9 +239,14 @@ void IntroductionWidget::drawPointerArrow(QPainter &painter, const QRect &anchor
 
     // 箭头落在高亮区的"正中"：水平箭头取目标的竖直中线，
     // 竖直箭头取目标的水平中线，这样箭头正对着被照亮的区域。
+    //
+    // 工具栏、菜单栏这类"横条"一律画竖直箭头（在顶部就由下往上指）：
+    // 它们的内容常常挤在左侧，按主导轴算会变成横着指，反而不像是在指"这一条"。
+    const bool bVerticalOnly = isBarLikeTarget(m_stepPointerAnchor);
+
     QPoint tip;        // 箭尖
     QPointF unit;      // 从箭尖指向正文块的方向（箭头指向的反方向）
-    if (qAbs(dx) >= qAbs(dy)) {
+    if (!bVerticalOnly && qAbs(dx) >= qAbs(dy)) {
         const int y = anchorCenter.y();
         if (dx > 0) {
             tip = QPoint(anchorRect.left() - gap, y);
