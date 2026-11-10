@@ -46,6 +46,11 @@ void Utility::shutdownLog()
 
 void Utility::myMessageHandler(QtMsgType mType, const QMessageLogContext&, const QString& sMsg)
 {
+    // libpng 对第三方图片 ICC 描述的告警（如 "iCCP: known incorrect sRGB profile"）
+    // 只影响颜色配置解读，不影响显示，写进日志只会淹没真正的问题，直接丢弃。
+    if (sMsg.startsWith(QLatin1String("libpng warning:")))
+        return;
+
     QMutexLocker locker(&mutex);
 
     // 程序退出收尾阶段日志设备可能已经断开/关闭，此时直接丢弃，

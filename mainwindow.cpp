@@ -57,8 +57,6 @@ MainWindow::MainWindow(QWidget *parent) :
         ui->wFileBrowser->restoreLastDir();
     });
 
-    initLogMessageHanlder();
-
     // 显式连接菜单动作（此前依赖 on_<对象名>_<信号名> 的自动连接）
     connect(ui->actionHelp, &QAction::triggered, this, &MainWindow::onActionHelpTriggered);
     connect(ui->actionAuthor, &QAction::triggered, this, &MainWindow::onActionAuthorTriggered);
