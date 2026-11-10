@@ -64,6 +64,18 @@ MainWindow::MainWindow(QWidget *parent) :
     // 菜单栏只剩【文件】里的退出项（方案A：文件命令已下沉到文件浏览页的命令条）
     connect(ui->actionExit, &QAction::triggered, this, &QWidget::close);
 
+    // 【文件】菜单：标签导出/导入。
+    // 标签存在 NTFS 数据流里，文件拷到 U 盘(FAT32)/压缩包/网盘时会被丢掉，导出是唯一的兜底手段。
+    QAction *actionExportTags = new QAction(tr("导出标签…"), this);
+    ui->menuFileManage->insertAction(ui->actionExit, actionExportTags);
+    connect(actionExportTags, &QAction::triggered, ui->wFileBrowser, &FormFileBrowser::exportTagsToFile);
+
+    QAction *actionImportTags = new QAction(tr("导入标签…"), this);
+    ui->menuFileManage->insertAction(ui->actionExit, actionImportTags);
+    connect(actionImportTags, &QAction::triggered, ui->wFileBrowser, &FormFileBrowser::importTagsFromFile);
+
+    ui->menuFileManage->insertSeparator(ui->actionExit);
+
     // 清理未使用标签：扫描选中目录（含子目录），把没有任何文件使用的库标签删掉
     QAction *actionCleanupLabels = new QAction(tr("清理未使用标签…"), this);
     ui->dwcLabels->addContextMenuAction(actionCleanupLabels);

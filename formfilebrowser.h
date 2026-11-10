@@ -61,6 +61,12 @@ public:
     // 启动时恢复上次访问的目录
     void restoreLastDir();
 
+    /** 把选中目录（或当前目录）下所有文件的标签导出成 JSON 备份 */
+    void exportTagsToFile();
+
+    /** 从 JSON 备份把标签写回文件（支持指定新的根目录、覆盖或追加） */
+    void importTagsFromFile();
+
 signals:
     // 能否撤销的状态变化（供菜单项启用/禁用）
     void sendUndoStateChanged(bool bCanUndo);

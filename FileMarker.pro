@@ -44,6 +44,7 @@ SOURCES += \
         myqfilesystemmodel.cpp \
         sqliteoperation.cpp \
         tagchipdelegate.cpp \
+        tagexport.cpp \
         tageditdialog.cpp \
         threadaddtagbyai.cpp \
         threadsearch.cpp \
@@ -71,6 +72,7 @@ HEADERS += \
         myqfilesystemmodel.h \
         sqliteoperation.h \
         tagchipdelegate.h \
+        tagexport.h \
         tageditdialog.h \
         threadaddtagbyai.h \
         threadsearch.h \
