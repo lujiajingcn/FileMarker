@@ -158,7 +158,7 @@
     <string>清空文件标签</string>
    </property>
    <property name="toolTip">
-    <string>删除选中文件上的全部标签（不可撤销；只影响文件，不动【标签库】）</string>
+    <string>删除选中文件上的全部标签（可用 Ctrl+Z 撤销；只影响文件，不动【标签库】）</string>
    </property>
   </action>
   <action name="actionExit">

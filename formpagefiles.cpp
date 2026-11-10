@@ -263,10 +263,14 @@ QString FormPageFiles::getCurDir()
 void FormPageFiles::onDeleteLabels()
 {
     QStringList qLSelFilePaths = getSelFilePath();
-    if (qLSelFilePaths.isEmpty())
+    if (qLSelFilePaths.isEmpty()) {
+        // 没选文件时原来直接 return，点了按钮像没反应，这里给一句提示
+        emit sendHintMessage(tr("请先在文件列表里选中要清空标签的文件。"));
         return;
+    }
 
-    // 删除标签是不可撤销的破坏性操作：先让用户确认，避免误点工具栏就清空全部标签。
+    // 清空标签是破坏性操作：先让用户确认，避免误点工具栏就清空全部标签。
+    // 删除前的标签会被记录，可再用 Ctrl+Z 撤销（撤销入口见【撤销上一次标签操作】）。
     QMessageBox box(this);
     box.setWindowTitle(tr("删除标签"));
     box.setIcon(QMessageBox::Warning);
@@ -275,7 +279,7 @@ void FormPageFiles::onDeleteLabels()
     QString sFileList = qLSelFilePaths.mid(0, 5).join(QStringLiteral("\n"));
     if (qLSelFilePaths.size() > 5)
         sFileList += tr("\n…另有 %1 个文件").arg(qLSelFilePaths.size() - 5);
-    box.setText(tr("将删除以下 %1 个文件的全部标签，且无法撤销：\n\n%2\n\n是否继续？")
+    box.setText(tr("将删除以下 %1 个文件的全部标签（删除后可用 Ctrl+Z 撤销）：\n\n%2\n\n是否继续？")
                     .arg(qLSelFilePaths.size()).arg(sFileList));
     QPushButton *pBtnDelete = box.addButton(tr("删除"), QMessageBox::DestructiveRole);
     QPushButton *pBtnCancel = box.addButton(tr("取消"), QMessageBox::RejectRole);
@@ -284,7 +288,7 @@ void FormPageFiles::onDeleteLabels()
     if (box.clickedButton() != pBtnDelete)
         return;
 
-    // 删除前广播一次，供上层记录"删除之前的标签"用于撤销
+    // 删除前广播一次：上层会把"删除之前的标签"记下来，供 Ctrl+Z 撤销
     emit sendBeforeTagsChanged(qLSelFilePaths);
 
     bool bAllOk = true;
