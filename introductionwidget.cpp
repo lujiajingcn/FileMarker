@@ -252,51 +252,58 @@ bool IntroductionWidget::eventFilter(QObject *obj, QEvent *ev)
 
 const int SPOTLIGHTMARGIN = 18;
 
-/** 从矩形中心朝 target 方向，求射线与矩形边界的交点 */
-static QPoint pointOnRectTowards(const QRect &rect, const QPoint &target)
-{
-    const QPoint center = rect.center();
-    const int dx = target.x() - center.x();
-    const int dy = target.y() - center.y();
-    if (dx == 0 && dy == 0)
-        return center;
-
-    const qreal halfW = rect.width() / 2.0;
-    const qreal halfH = rect.height() / 2.0;
-    qreal t = std::numeric_limits<qreal>::max();
-    if (dx != 0)
-        t = qMin(t, halfW / qAbs(dx));
-    if (dy != 0)
-        t = qMin(t, halfH / qAbs(dy));
-    return QPoint(qRound(center.x() + dx * t), qRound(center.y() + dy * t));
-}
 
 /**
  * 在锚点外侧画一小段指向锚点的箭头。
  *
- * 位置规则：沿"正文块中心 -> 锚点中心"的射线，与"锚点外扩 gap 的矩形"相交得到箭尖，
- * 箭头再沿反方向回退固定长度 —— 所以箭头永远贴着被高亮的控件、朝它指，
- * 不会出现横跨整屏空白的长线。
+ * 箭头只走水平或垂直，不画斜线：斜箭头在视觉上显得歪斜、和界面网格也对不齐。
+ *   目标在左/右  -> 水平箭头，落在目标的左边缘或右边缘外侧；
+ *   目标在上/下  -> 竖直箭头，落在目标的上边缘或下边缘外侧。
+ * 箭头贴着控件、长度固定，不跨越整屏空白。
  */
 void IntroductionWidget::drawPointerArrow(QPainter &painter, const QRect &anchorRect)
 {
     const int arrowLength = 42;   // 箭头总长
-    const int gap = 10;           // 箭尖与控件外沿的距离
+    const int gap = 14;           // 箭尖与控件外沿的距离（留出箭头头部的空间）
+    const int clampMargin = 16;   // 箭头沿边落点时，离控件拐角的最小距离
 
-    const QPoint textCenter = m_textWidget->geometry().center();
+    const QRect textRect = m_textWidget->geometry();
+    const QPoint textCenter = textRect.center();
     if (anchorRect.contains(textCenter)) {
         // 正文块本身就在高亮区里（例如整个文件区），没有可指的方向
         return;
     }
 
-    const QRect outsideRect = anchorRect.adjusted(-gap, -gap, gap, gap);
-    const QPoint tip = pointOnRectTowards(outsideRect, textCenter);
-    const QPointF dir(textCenter.x() - tip.x(), textCenter.y() - tip.y());
-    const qreal len = std::hypot(dir.x(), dir.y());
-    if (len < 0.1)
-        return;
+    const QPoint anchorCenter = anchorRect.center();
+    const int dx = anchorCenter.x() - textCenter.x();
+    const int dy = anchorCenter.y() - textCenter.y();
 
-    const QPointF unit(dir.x() / len, dir.y() / len);   // 由箭尖指向正文块
+    QPoint tip;        // 箭尖
+    QPointF unit;      // 从箭尖指向正文块的方向（箭头指向的反方向）
+    if (qAbs(dx) >= qAbs(dy)) {
+        const int y = qBound(anchorRect.top() + clampMargin,
+                             textCenter.y(),
+                             anchorRect.bottom() - clampMargin);
+        if (dx > 0) {
+            tip = QPoint(anchorRect.left() - gap, y);
+            unit = QPointF(-1.0, 0.0);
+        } else {
+            tip = QPoint(anchorRect.right() + gap, y);
+            unit = QPointF(1.0, 0.0);
+        }
+    } else {
+        const int x = qBound(anchorRect.left() + clampMargin,
+                             textCenter.x(),
+                             anchorRect.right() - clampMargin);
+        if (dy > 0) {
+            tip = QPoint(x, anchorRect.top() - gap);
+            unit = QPointF(0.0, -1.0);
+        } else {
+            tip = QPoint(x, anchorRect.bottom() + gap);
+            unit = QPointF(0.0, 1.0);
+        }
+    }
+
     const QPointF tail = QPointF(tip) + unit * arrowLength;
 
     painter.save();
@@ -308,10 +315,10 @@ void IntroductionWidget::drawPointerArrow(QPainter &painter, const QRect &anchor
     painter.drawLine(tail, QPointF(tip));
 
     // 箭头头部：两条斜线，张开约 90 度
-    const qreal head = 16.0;
-    const qreal baseAngle = std::atan2(unit.y(), unit.x());   // 由箭尖朝外
+    const qreal head = 15.0;
+    const qreal dirAngle = std::atan2(-unit.y(), -unit.x());   // 箭头指向
     for (int nSide = -1; nSide <= 1; nSide += 2) {
-        const qreal a = baseAngle - nSide * M_PI / 4.0;
+        const qreal a = dirAngle + nSide * M_PI / 4.0;
         painter.drawLine(QPointF(tip),
                          QPointF(tip.x() + head * std::cos(a),
                                  tip.y() + head * std::sin(a)));
