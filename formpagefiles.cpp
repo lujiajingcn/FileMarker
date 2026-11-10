@@ -493,6 +493,22 @@ QStringList FormPageFiles::getSelDirs()
 /** F3 / Ctrl+Shift+F：把"查找条件"菜单弹在搜索按钮下方（键盘也能改条件）。 */
 
 
+/** 标签写盘后只刷新受影响的文件（不再整目录重读 ADS）。 */
+void FormPageFiles::refreshAfterTagChange(const QStringList &qLFilePaths)
+{
+    for (const QString &sFilePath : qLFilePaths)
+        m_modelFiles->clearTagCacheForFile(sFilePath);
+
+    if (m_tvFiles != nullptr)
+        m_tvFiles->viewport()->update();
+    if (m_lstFiles != nullptr)
+        m_lstFiles->viewport()->update();
+
+    // 【当前目录标签】面板还是要重算（它展示整个目录的标签集合）
+    emit sendDirLabels(m_sCurDir, QSet<QString>());
+    QTimer::singleShot(100, this, [this]() { scanDirLabels(m_sCurDir, true); });
+}
+
 void FormPageFiles::onBtnRefreshClicked()
 {
     QModelIndex curIndex = m_modelFiles->index(m_sCurDir);
@@ -612,7 +628,7 @@ void FormPageFiles::applyDroppedLabels(const QStringList &qLLabels, const QModel
     }
 
     emit sendTagsChanged(qLTargets);
-    onBtnRefreshClicked();
+    refreshAfterTagChange(qLTargets);
 
     if (nFailed > 0) {
         QMessageBox::warning(this, tr("添加标签失败"),

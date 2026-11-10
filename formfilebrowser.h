@@ -198,6 +198,7 @@ private:
     QStringList         m_qLLastSearchDirs;     // 上一次搜索用的目录，重扫时复用
     QStringList         m_qLRescanDirs;         // 非空表示这次搜索是重扫，用这些目录
     bool                m_bForceDiskScan = false;
+    bool                m_bLongOperationRunning = false;  // 导入/导出进行中：防止重入
 };
 
 #endif // FILEBROWSER_H

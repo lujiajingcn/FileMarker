@@ -64,7 +64,6 @@ Copy-Item $exePath $stageDir
 Write-Host "==> windeployqt 补齐 Qt 运行库" -ForegroundColor Cyan
 $env:PATH = "$QtBin;$MinGwBin;$env:PATH"
 $deployArgs = @(
-    "--no-translations",
     "--no-system-d3d-compiler",
     "--no-opengl-sw",
     "--compiler-runtime",
@@ -86,6 +85,24 @@ if (Test-Path $libDir) {
         Write-Host ("    + {0}" -f $_.Name)
     }
 }
+# Qt 自带控件的中文翻译（文件对话框、消息框的按钮等）。
+# windeployqt 会把所有语言的 .qm 都拷过来（几十种、多出 5 MB），这里只留中文。
+$translationsDir = Join-Path $stageDir "translations"
+if (Test-Path $translationsDir) {
+    Get-ChildItem $translationsDir -Filter "qt_*.qm" |
+        Where-Object { $_.Name -notin @("qt_zh_CN.qm", "qt_zh_TW.qm") } |
+        Remove-Item -Force
+}
+$qtTranslationsSrc = Join-Path (Split-Path -Parent $QtBin) "translations"
+foreach ($qm in @("qt_zh_CN.qm", "qt_zh_TW.qm")) {
+    $src = Join-Path $qtTranslationsSrc $qm
+    if (Test-Path $src) {
+        New-Item -ItemType Directory -Force -Path $translationsDir | Out-Null
+        Copy-Item $src $translationsDir -Force
+        Write-Host ("    + translations/{0}" -f $qm)
+    }
+}
+
 # AI 打标脚本：程序和脚本在同一目录才能找到
 $pyScript = Join-Path $ProjectRoot "extract_and_tag.py"
 if (Test-Path $pyScript) {

@@ -78,7 +78,7 @@ void FormPageFiles::onDeleteLabels()
         }
     }
     emit sendTagsChanged(qLSelFilePaths);
-    onBtnRefreshClicked();
+    refreshAfterTagChange(qLSelFilePaths);
 
     if (!bAllOk) {
         const QString sList = qLFailedFiles.mid(0, 5).join(QStringLiteral("\n"));
@@ -197,7 +197,7 @@ void FormPageFiles::onEditTag(const QModelIndex &index)
     emit sendBeforeTagsChanged(QStringList() << sFilePath);   // 供"撤销上一次标签操作"
     const bool bOk = ADSOperation::replaceTags(sFilePath, qLLabels);
     emit sendTagsChanged(QStringList() << sFilePath);
-    onBtnRefreshClicked();
+    refreshAfterTagChange(QStringList() << sFilePath);
 
     if (!bOk) {
         QMessageBox::warning(this, tr("保存标签失败"),
@@ -223,7 +223,7 @@ void FormPageFiles::onRemoveTagFromRow(const QModelIndex &index, const QString &
     emit sendBeforeTagsChanged(QStringList() << sFilePath);
     const bool bOk = ADSOperation::removeTag(sFilePath, sTag);
     emit sendTagsChanged(QStringList() << sFilePath);
-    onBtnRefreshClicked();
+    refreshAfterTagChange(QStringList() << sFilePath);
 
     if (!bOk) {
         QMessageBox::warning(this, tr("删除标签失败"),

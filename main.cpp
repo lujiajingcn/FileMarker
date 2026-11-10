@@ -3,10 +3,13 @@
 #include <QApplication>
 #include <QByteArray>
 #include <QDir>
+#include <QFile>
+#include <QLibraryInfo>
 #include <QLockFile>
 #include <QLocalServer>
 #include <QLocalSocket>
 #include <QString>
+#include <QTranslator>
 
 #include <cstdio>
 #include <cstdlib>
@@ -50,6 +53,22 @@ int main(int argc, char *argv[])
     QApplication a(argc, argv);
     a.setApplicationName(QStringLiteral("FileMarker"));
     a.setApplicationVersion(QStringLiteral("1.0.0"));
+
+    // Qt 自带控件（文件对话框、消息框的标准按钮等）的中文文案要靠 qt_zh_CN.qm。
+    // 打包版把它放在 exe 旁边的 translations 目录；开发环境找不到时退回 Qt 安装目录。
+    QTranslator qtTranslator;
+    QString sQtQmPath = a.applicationDirPath() + QStringLiteral("/translations/qt_zh_CN.qm");
+    if (!QFile::exists(sQtQmPath)) {
+        sQtQmPath.clear();
+        const QString sQtTranslations = QLibraryInfo::location(QLibraryInfo::TranslationsPath);
+        const QString sCandidate = sQtTranslations + QStringLiteral("/qt_zh_CN.qm");
+        if (!sQtTranslations.isEmpty() && QFile::exists(sCandidate))
+            sQtQmPath = sCandidate;
+    }
+    if (!sQtQmPath.isEmpty() && qtTranslator.load(sQtQmPath))
+        a.installTranslator(&qtTranslator);
+    else
+        qWarning() << "未找到 Qt 中文翻译 qt_zh_CN.qm，部分系统按钮会显示英文";
 
     // ---- 单实例保护 ----
     // labels.xml 是在退出时才整体写一遍的，两个实例同时开着，后关掉的会把

@@ -159,8 +159,8 @@ FormFileBrowser::~FormFileBrowser()
     auto waitThread = [](QThread *pThread, const QString &sName) {
         if (pThread == nullptr)
             return;
-        if (!pThread->wait(5000)) {
-            qWarning() << sName << "未能在 5 秒内退出，退出时将其分离";
+        if (!pThread->wait(2000)) {
+            qWarning() << sName << "未能在 2 秒内退出，退出时将其分离";
             pThread->setParent(nullptr);
         }
     };
@@ -373,8 +373,16 @@ void FormFileBrowser::exportTagsToFile()
     if (sTarget.isEmpty())
         return;
 
+    // 应用级模态 + 重入保护：导出期间 processEvents() 会继续处理别处的输入，
+    // 只有把整个程序都置为模态，用户才点不到"导入/遍历/AI 打标"这些会同时写盘的操作。
+    if (m_bLongOperationRunning) {
+        QMessageBox::information(this, tr("导出标签"), tr("上一个导入/导出还没结束，请稍候。"));
+        return;
+    }
+    m_bLongOperationRunning = true;
+
     QProgressDialog progress(tr("正在读取文件标签…"), tr("取消"), 0, 0, this);
-    progress.setWindowModality(Qt::WindowModal);
+    progress.setWindowModality(Qt::ApplicationModal);
     progress.setMinimumDuration(0);
 
     int nScanned = 0;
@@ -390,6 +398,7 @@ void FormFileBrowser::exportTagsToFile()
         },
         &sError);
     progress.close();
+    m_bLongOperationRunning = false;
 
     if (!sError.isEmpty())
         QMessageBox::warning(this, tr("导出标签"), sError);
@@ -479,8 +488,14 @@ void FormFileBrowser::importTagsFromFile()
         return;
     const bool bOverwrite = (pClicked == static_cast<QAbstractButton *>(pOverwrite));
 
+    if (m_bLongOperationRunning) {
+        QMessageBox::information(this, tr("导入标签"), tr("上一个导入/导出还没结束，请稍候。"));
+        return;
+    }
+    m_bLongOperationRunning = true;
+
     QProgressDialog progress(tr("正在写回标签…"), tr("取消"), 0, qLRecords.size(), this);
-    progress.setWindowModality(Qt::WindowModal);
+    progress.setWindowModality(Qt::ApplicationModal);
     progress.setMinimumDuration(0);
 
     int nDone = 0;
@@ -495,6 +510,7 @@ void FormFileBrowser::importTagsFromFile()
             return !progress.wasCanceled();
         });
     progress.close();
+    m_bLongOperationRunning = false;
 
     // 缓存与界面同步
     for (const TagExport::FileTags &record : qLRecords) {

@@ -152,6 +152,12 @@ void MyQFileSystemModel::clearTagCache()
     m_tagCache.clear();
 }
 
+void MyQFileSystemModel::clearTagCacheForFile(const QString &sFilePath)
+{
+    if (!sFilePath.isEmpty())
+        m_tagCache.remove(sFilePath);
+}
+
 void MyQFileSystemModel::cacheTagsForFile(const QString &sFilePath, const QStringList &tags)
 {
     if (sFilePath.isEmpty())

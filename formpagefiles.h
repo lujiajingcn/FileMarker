@@ -186,6 +186,12 @@ private:
     /** 把从标签库拖过来的标签写到目标文件上（dropIndex 无效时作用于选中的文件） */
     void applyDroppedLabels(const QStringList &qLLabels, const QModelIndex &dropIndex);
 
+    /**
+     * 标签写盘之后刷新界面。只让这几个文件的标签缓存失效，
+     * 不再像以前那样把整个模型的缓存清空（大目录里每打一个标签就全量重读 ADS）。
+     */
+    void refreshAfterTagChange(const QStringList &qLFilePaths);
+
     // 应用排序（列：0 名称 / 1 大小 / 2 类型 / 3 修改日期）
     void applySort(int column, Qt::SortOrder order);
 

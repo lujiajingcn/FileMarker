@@ -28,6 +28,8 @@ public:
 
     // 清空标签缓存（如刷新目录时调用），避免 ADS 被增删后界面仍显示旧标签。
     void clearTagCache();
+    /** 只让某个文件的标签缓存失效（改过标签后用，避免整目录重读 ADS） */
+    void clearTagCacheForFile(const QString &sFilePath);
 
     // 把目录标签扫描已经读到的结果预热进模型缓存，绘制时不必再同步枚举 ADS
     void cacheTagsForFile(const QString &sFilePath, const QStringList &tags);
