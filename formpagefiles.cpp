@@ -959,6 +959,14 @@ void FormPageFiles::onTvNavigationClicked(const QModelIndex &index)
     curDirChanged(path);
 }
 
+void FormPageFiles::setSearchButtonMenu(QAction *pSearchAction, QMenu *pMenu)
+{
+    // 只记录，真正建按钮在 setCommandActions() 里做。
+    // 调用顺序：FormFileBrowser::setActions() 先调本函数、再调 setCommandActions()。
+    m_pSearchAction = pSearchAction;
+    m_pSearchMenu = pMenu;
+}
+
 void FormPageFiles::setCommandActions(const QList<QAction *> &actions)
 {
     if (m_commandBar == nullptr) {
@@ -983,6 +991,18 @@ void FormPageFiles::setCommandActions(const QList<QAction *> &actions)
         if (bPendingSeparator) {
             m_commandBar->addSeparator();
             bPendingSeparator = false;
+        }
+        // "搜索"做成分裂按钮：点主区域直接按上次条件搜索，点右侧小箭头出条件菜单
+        if (pAction == m_pSearchAction && m_pSearchMenu != nullptr) {
+            auto *pSearchBtn = new QToolButton(m_commandBar);
+            pSearchBtn->setDefaultAction(pAction);
+            pSearchBtn->setMenu(m_pSearchMenu);
+            pSearchBtn->setPopupMode(QToolButton::MenuButtonPopup);
+            pSearchBtn->setToolButtonStyle(Qt::ToolButtonIconOnly);
+            pSearchBtn->setIconSize(QSize(18, 18));
+            pSearchBtn->setAutoRaise(true);
+            m_commandBar->addWidget(pSearchBtn);
+            continue;
         }
         m_commandBar->addAction(pAction);
     }

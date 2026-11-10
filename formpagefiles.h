@@ -26,6 +26,7 @@
 class EditableDelegate;
 class ThumbnailIconProvider;
 class QTimer;
+class QMenu;
 
 namespace Ui {
 class FormPageFiles;
@@ -91,6 +92,9 @@ public:
      * 传 nullptr 表示插入一个分隔符；这些 QAction 仍归主窗口所有（可同时挂在菜单里）。
      */
     void setCommandActions(const QList<QAction *> &actions);
+
+    /** 给"搜索"命令指定一个下拉菜单：命令条上会把它做成"主点击搜索 + 小箭头出菜单"的分裂按钮 */
+    void setSearchButtonMenu(QAction *pSearchAction, QMenu *pMenu);
 
 protected:
     // 双击文件夹则进入该文件夹，双击文件则打开该文件。
@@ -205,6 +209,8 @@ private:
 
     // 方案A：页面顶部的命令条（承载 AI/添加/清空/查找/遍历/查找条件）
     QToolBar               *m_commandBar = nullptr;
+    QAction                *m_pSearchAction = nullptr;  // 命令条上要做成分裂按钮的"搜索"动作
+    QMenu                  *m_pSearchMenu = nullptr;    // 它的下拉菜单（由 FormFileBrowser 提供）
 
 private:
     Ui::FormPageFiles *ui;

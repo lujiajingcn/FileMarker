@@ -9,6 +9,7 @@
 #include <QWidget>
 
 class QToolButton;
+class QMenu;
 
 #include "sqliteoperation.h"
 #include "threadsearch.h"
@@ -152,6 +153,17 @@ private:
     QAction             *m_aSearch;
     QAction             *m_aTraverse;
     QAction             *m_aSearchConfig;
+
+    // 搜索按钮右侧的小箭头菜单：直接切换"标签关系 / 数据来源"，不用每次弹对话框
+    QMenu               *m_searchMenu = nullptr;
+    QAction             *m_aLogicAnd = nullptr;
+    QAction             *m_aLogicOr = nullptr;
+    QAction             *m_aSourceCache = nullptr;
+    QAction             *m_aSourceDisk = nullptr;
+    void                 initSearchButtonMenu();
+    void                 refreshSearchButtonMenu();
+    void                 applySearchLogic(labelLogic logic);
+    void                 applySearchSource(bool bFromCache);
 
     QStringList         m_qLSelLabels;          // 选中的标签，可能是【标签管理类】中选中的，也可能是【当前目录文件的标签类】选中的
     // 与 m_qLSelLabels 一一对应的"分组"（组 = 标签 + 它的全部子标签），搜索用这个匹配

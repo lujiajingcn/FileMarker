@@ -5,6 +5,8 @@
 #include <QIcon>
 #include <QPainter>
 #include <QPixmap>
+#include <QActionGroup>
+#include <QMenu>
 #include <QMessageBox>
 #include <QDebug>
 #include <QSettings>
@@ -310,6 +312,10 @@ void FormFileBrowser::setActions(QAction *aAddLabelByAI, QAction *aAddLabel, QAc
     connect(m_aSearchConfig, &QAction::triggered, this, &FormFileBrowser::onActionSearchConfigTriggered);
 
     ui->pageFiles->setAction(aDelLabel);
+
+    // 搜索按钮右侧的小箭头菜单（先建好再交给页面，页面建命令条时用它做分裂按钮）
+    initSearchButtonMenu();
+    ui->pageFiles->setSearchButtonMenu(aSearch, m_searchMenu);
 
     // 方案A：把"作用于文件列表"的命令做成页面顶部的命令条（主窗口不再有全局工具栏）。
     // nullptr 表示分隔符。
@@ -722,6 +728,83 @@ void FormFileBrowser::onActionSearchConfigTriggered()
 {
     DlgSearchConfig dlg(this, g_sAppDir + "/" + SEARCH_CONFIG_FILE);
     dlg.exec();
+}
+
+/**
+ * 搜索按钮右侧小箭头菜单的内容。
+ *
+ * 主按钮点一下 = 直接用上次保存的条件搜索（不再每次弹对话框）；
+ * 想改条件时点小箭头：
+ *   - 搜索条件…          -> 打开原来的查找条件对话框
+ *   - 标签关系：与/或     -> 最常改的一个开关，直接切
+ *   - 数据来源：缓存/磁盘 -> 另一个常改的开关，直接切
+ */
+void FormFileBrowser::initSearchButtonMenu()
+{
+    m_searchMenu = new QMenu(this);
+
+    QAction *pConfigAction = m_searchMenu->addAction(tr("搜索条件…"));
+    connect(pConfigAction, &QAction::triggered, this, &FormFileBrowser::onActionSearchConfigTriggered);
+
+    m_searchMenu->addSeparator();
+
+    QMenu *pLogicMenu = m_searchMenu->addMenu(tr("标签关系"));
+    auto *pLogicGroup = new QActionGroup(this);
+    pLogicGroup->setExclusive(true);
+    m_aLogicAnd = pLogicMenu->addAction(tr("与：同时满足所有标签"));
+    m_aLogicOr = pLogicMenu->addAction(tr("或：满足任意一个标签"));
+    for (QAction *pAction : {m_aLogicAnd, m_aLogicOr}) {
+        pAction->setCheckable(true);
+        pLogicGroup->addAction(pAction);
+    }
+    connect(m_aLogicAnd, &QAction::triggered, this, [this]() { applySearchLogic(labelLogic::AND); });
+    connect(m_aLogicOr, &QAction::triggered, this, [this]() { applySearchLogic(labelLogic::OR); });
+
+    QMenu *pSourceMenu = m_searchMenu->addMenu(tr("数据来源"));
+    auto *pSourceGroup = new QActionGroup(this);
+    pSourceGroup->setExclusive(true);
+    m_aSourceCache = pSourceMenu->addAction(tr("优先从缓存数据库（快，可能过期）"));
+    m_aSourceDisk = pSourceMenu->addAction(tr("直接从磁盘（慢，最新）"));
+    for (QAction *pAction : {m_aSourceCache, m_aSourceDisk}) {
+        pAction->setCheckable(true);
+        pSourceGroup->addAction(pAction);
+    }
+    connect(m_aSourceCache, &QAction::triggered, this, [this]() { applySearchSource(true); });
+    connect(m_aSourceDisk, &QAction::triggered, this, [this]() { applySearchSource(false); });
+
+    connect(m_searchMenu, &QMenu::aboutToShow, this, &FormFileBrowser::refreshSearchButtonMenu);
+}
+
+/** 打开菜单前按当前配置刷新勾选状态（对话框里改过也能反映出来）。 */
+void FormFileBrowser::refreshSearchButtonMenu()
+{
+    const SearchConfig sc = ConfigOperation::readSearchConfig(g_sAppDir + "/" + SEARCH_CONFIG_FILE);
+    if (m_aLogicAnd != nullptr && m_aLogicOr != nullptr) {
+        m_aLogicAnd->setChecked(sc.logic == labelLogic::AND);
+        m_aLogicOr->setChecked(sc.logic == labelLogic::OR);
+    }
+    if (m_aSourceCache != nullptr && m_aSourceDisk != nullptr) {
+        m_aSourceCache->setChecked(sc.bFromCache);
+        m_aSourceDisk->setChecked(!sc.bFromCache);
+    }
+}
+
+void FormFileBrowser::applySearchLogic(labelLogic logic)
+{
+    SearchConfig sc = ConfigOperation::readSearchConfig(g_sAppDir + "/" + SEARCH_CONFIG_FILE);
+    sc.logic = logic;
+    ConfigOperation::writeSearchConfig(g_sAppDir + "/" + SEARCH_CONFIG_FILE, sc);
+    emit sendStatusMessage(tr("查找条件已更新：标签关系 = %1")
+                               .arg(logic == labelLogic::AND ? tr("与") : tr("或")));
+}
+
+void FormFileBrowser::applySearchSource(bool bFromCache)
+{
+    SearchConfig sc = ConfigOperation::readSearchConfig(g_sAppDir + "/" + SEARCH_CONFIG_FILE);
+    sc.bFromCache = bFromCache;
+    ConfigOperation::writeSearchConfig(g_sAppDir + "/" + SEARCH_CONFIG_FILE, sc);
+    emit sendStatusMessage(tr("查找条件已更新：数据来源 = %1")
+                               .arg(bFromCache ? tr("缓存数据库") : tr("磁盘扫描")));
 }
 
 void FormFileBrowser::onRecvStopSearch()
