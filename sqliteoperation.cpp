@@ -5,6 +5,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include "utility.h"
+#include "searchmatch.h"
 
 SqliteOperation::SqliteOperation()
 {
@@ -307,38 +308,6 @@ void SqliteOperation::insertRecord(QMap<QString, FILE_TAGS> dirAndFileTags, cons
     }
 }
 
-// 按"标签组"判断一行缓存是否命中。
-// 组内是 OR（选了父标签就等于选了它整棵子树），组间按 AND/OR 组合。
-static bool isFileMatchLabelGroups(const QSet<QString> &setFileLabels,
-                                   const QList<QSet<QString>> &qLLabelGroups,
-                                   int nLabelLogic)
-{
-    if (qLLabelGroups.isEmpty())
-        return false;
-
-    if (nLabelLogic != labelLogic::AND) {
-        for (const QSet<QString> &setGroup : qLLabelGroups) {
-            for (QSet<QString>::const_iterator cItr = setGroup.cbegin(); cItr != setGroup.cend(); ++cItr) {
-                if (setFileLabels.contains(*cItr))
-                    return true;
-            }
-        }
-        return false;
-    }
-
-    for (const QSet<QString> &setGroup : qLLabelGroups) {
-        bool bHit = false;
-        for (QSet<QString>::const_iterator cItr = setGroup.cbegin(); cItr != setGroup.cend(); ++cItr) {
-            if (setFileLabels.contains(*cItr)) {
-                bHit = true;
-                break;
-            }
-        }
-        if (!bHit)
-            return false;
-    }
-    return true;
-}
 
 void SqliteOperation::searchFilesByLabels(QStringList qLSelDirs, const QList<QSet<QString>> &qLLabelGroups, int nLabelLogic, QStringList &qLFilePaths, QStringList &qLNotHitedDirs)
 {
@@ -389,7 +358,7 @@ void SqliteOperation::searchFilesByLabels(QStringList qLSelDirs, const QList<QSe
             // 防御性兼容：即使迁移失败/旧库只读，也按去掉 :$DATA 后的名字比较
             sLabels.remove(QStringLiteral(":$DATA"), Qt::CaseInsensitive);
             const QSet<QString> setLabelsOfFilePath = Utility::toSet(sLabels.split(QLatin1Char(',')));
-            if (isFileMatchLabelGroups(setLabelsOfFilePath, qLLabelGroups, nLabelLogic)
+            if (SearchMatch::matchesFileLabels(setLabelsOfFilePath, qLLabelGroups, nLabelLogic)
                     && QFileInfo::exists(sFilePath)) {
                 qLFilePaths << sFilePath;
             }

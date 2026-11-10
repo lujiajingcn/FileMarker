@@ -83,7 +83,11 @@ protected:
 
     void traverseWriteLabel(QStandardItem *item, const QList<LabelInfo> &lstLabelInfo);
     void traverseReadLabel(QStandardItem *item, QList<LabelInfo> &lstLabelInfo);
-    void saveLabelToXmlFile();
+    /** 保存标签库；返回是否成功（失败时会提示或写备份） */
+    bool saveLabelToXmlFile();
+
+    bool                     m_bShuttingDown = false;      // 析构期间不弹模态框
+    bool                     m_bSaveFailureWarned = false; // 失败提示只弹一次
 
     void addItem(QStandardItem *parentItem = nullptr);
 

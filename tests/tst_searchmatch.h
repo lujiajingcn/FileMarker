@@ -21,6 +21,10 @@ private slots:
     void childLabelMatchesParentGroup();
     void untaggedFileNeverMatches();
 
+    // 下面几条直接用共享匹配函数，等价于"缓存查询"走的那条路径
+    void sharedMatcherAndOr();
+    void sharedMatcherEmptyInputs();
+
 private:
     /** 建一个带指定标签的文件，返回路径 */
     QString makeFileWithTags(const QString &sName, const QStringList &qLTags);

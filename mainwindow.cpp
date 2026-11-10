@@ -248,6 +248,11 @@ void MainWindow::initLogMessageHanlder()
 }
 
 // 参考了 Qt Creator 的 UI Tour 功能，原始代码为 https://github.com/qt-creator/qt-creator/blob/qds/4.5/src/plugins/welcome/introductionwidget.cpp
+void MainWindow::showHintMessage(const QString &sMessage)
+{
+    statusBar()->showMessage(sMessage, 5000);
+}
+
 void MainWindow::onActionHelpTriggered()
 {
     auto *wIntroduction = new IntroductionWidget(this);

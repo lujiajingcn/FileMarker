@@ -7,6 +7,7 @@
 
 #include "adsoperation.h"
 #include "common.h"
+#include "searchmatch.h"
 
 void TstSearchMatch::initTestCase()
 {
@@ -82,6 +83,44 @@ void TstSearchMatch::childLabelMatchesParentGroup()
     QVERIFY(ADSOperation::isHostFile(m_sFileChild, qLGroups, labelLogic::AND));
     QVERIFY(ADSOperation::isHostFile(m_sFileChild, qLGroups, labelLogic::OR));
     QVERIFY(!ADSOperation::isHostFile(m_sFileB, qLGroups, labelLogic::AND));
+}
+
+// 共享匹配函数（缓存查询用的就是它）—— AND / OR 语义
+void TstSearchMatch::sharedMatcherAndOr()
+{
+    QSet<QString> fileAB;
+    fileAB << QStringLiteral("A") << QStringLiteral("B");
+    QSet<QString> fileA;
+    fileA << QStringLiteral("A");
+
+    QSet<QString> gA; gA.insert(QStringLiteral("A"));
+    QSet<QString> gB; gB.insert(QStringLiteral("B"));
+    QSet<QString> gC; gC.insert(QStringLiteral("C"));
+    const QList<QSet<QString>> qLGroups = QList<QSet<QString>>() << gA << gB;
+
+    QVERIFY(SearchMatch::matchesFileLabels(fileAB, qLGroups, labelLogic::AND));
+    QVERIFY(!SearchMatch::matchesFileLabels(fileA, qLGroups, labelLogic::AND));
+    QVERIFY(SearchMatch::matchesFileLabels(fileA, qLGroups, labelLogic::OR));
+
+    // 加一个文件上没有的组：AND 立刻不成立，OR 仍然成立
+    QList<QSet<QString>> qLGroupsPlus = qLGroups;
+    qLGroupsPlus << gC;
+    QVERIFY(!SearchMatch::matchesFileLabels(fileAB, qLGroupsPlus, labelLogic::AND));
+    QVERIFY(SearchMatch::matchesFileLabels(fileAB, qLGroupsPlus, labelLogic::OR));
+}
+
+// 空输入：没有标签条件、或文件本身没有标签，都不该命中
+void TstSearchMatch::sharedMatcherEmptyInputs()
+{
+    QSet<QString> fileA;
+    fileA << QStringLiteral("A");
+    QSet<QString> gA; gA.insert(QStringLiteral("A"));
+    const QList<QSet<QString>> qLGroups = QList<QSet<QString>>() << gA;
+
+    QVERIFY(!SearchMatch::matchesFileLabels(fileA, QList<QSet<QString>>(), labelLogic::AND));
+    QVERIFY(!SearchMatch::matchesFileLabels(fileA, QList<QSet<QString>>(), labelLogic::OR));
+    QVERIFY(!SearchMatch::matchesFileLabels(QSet<QString>(), qLGroups, labelLogic::AND));
+    QVERIFY(!SearchMatch::matchesFileLabels(QSet<QString>(), qLGroups, labelLogic::OR));
 }
 
 void TstSearchMatch::untaggedFileNeverMatches()

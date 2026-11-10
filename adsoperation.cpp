@@ -13,6 +13,7 @@
 #include <string>
 #include "common.h"
 #include "utility.h"
+#include "searchmatch.h"
 
 ADSOperation::ADSOperation()
 {
@@ -672,12 +673,8 @@ bool ADSOperation::removeTag(const QString &filePath, const QString &sTag)
 // 根据标签和标签的逻辑关系，判断给定的文件是否是目标文件
 bool ADSOperation::isHostFile(const QString &sFilePath, const QList<QSet<QString>> &qLLabelGroups, labelLogic logic)
 {
-    // 没有指定标签时不应匹配任何文件：
-    // 空集合是任意集合的子集，会让下面的 AND 判断误判为命中。
-    if (qLLabelGroups.isEmpty())
-        return false;
-
-    // 复用标签流枚举：只比较 FileMarker 自己的标签，第三方 ADS 不参与搜索。
+    // 匹配规则统一在 SearchMatch 里实现（缓存查询用的是同一份），这里只负责把标签拿出来。
+    // listADSFileName 已经过滤掉第三方 ADS，只保留 FileMarker 自己的标签。
     const QStringList adsNames = listADSFileName(sFilePath);
     if (adsNames.isEmpty())
         return false;
@@ -686,28 +683,5 @@ bool ADSOperation::isHostFile(const QString &sFilePath, const QList<QSet<QString
     for (const QString &sName : adsNames)
         setAdsNames.insert(sName);
 
-    // 每个组 = 一个选中标签 + 它的全部子标签，组内 OR、组间按 AND/OR 组合。
-    if (logic == labelLogic::OR) {
-        for (const QSet<QString> &setGroup : qLLabelGroups) {
-            for (QSet<QString>::const_iterator cItr = setGroup.cbegin(); cItr != setGroup.cend(); ++cItr) {
-                if (setAdsNames.contains(*cItr))
-                    return true;
-            }
-        }
-        return false;
-    }
-
-    // AND：每个组里至少要命中一个标签
-    for (const QSet<QString> &setGroup : qLLabelGroups) {
-        bool bHit = false;
-        for (QSet<QString>::const_iterator cItr = setGroup.cbegin(); cItr != setGroup.cend(); ++cItr) {
-            if (setAdsNames.contains(*cItr)) {
-                bHit = true;
-                break;
-            }
-        }
-        if (!bHit)
-            return false;
-    }
-    return true;
+    return SearchMatch::matchesFileLabels(setAdsNames, qLLabelGroups, logic);
 }

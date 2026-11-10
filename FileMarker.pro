@@ -7,6 +7,7 @@
 QT       += core gui sql
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
+QT += network
 
 TARGET = FileMarker
 TEMPLATE = app
@@ -45,6 +46,7 @@ SOURCES += \
         main.cpp \
         mainwindow.cpp \
         myqfilesystemmodel.cpp \
+        searchmatch.cpp \
         sqliteoperation.cpp \
         tagchipdelegate.cpp \
         tagexport.cpp \
@@ -74,6 +76,7 @@ HEADERS += \
         introductionwidget.h \
         mainwindow.h \
         myqfilesystemmodel.h \
+        searchmatch.h \
         sqliteoperation.h \
         tagchipdelegate.h \
         tagexport.h \

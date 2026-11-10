@@ -2,6 +2,10 @@
 
 #include <QApplication>
 #include <QByteArray>
+#include <QDir>
+#include <QLockFile>
+#include <QLocalServer>
+#include <QLocalSocket>
 #include <QString>
 
 #include <cstdio>
@@ -44,7 +48,57 @@ int main(int argc, char *argv[])
     qInstallMessageHandler(earlyMessageHandler);
 
     QApplication a(argc, argv);
+    a.setApplicationName(QStringLiteral("FileMarker"));
+    a.setApplicationVersion(QStringLiteral("1.0.0"));
+
+    // ---- 单实例保护 ----
+    // labels.xml 是在退出时才整体写一遍的，两个实例同时开着，后关掉的会把
+    // 先关掉那次的标签库编辑整体覆盖掉；sqlite 缓存也会互相抢锁。
+    // 所以第二次启动不去开新窗口，而是把已有窗口叫到前台。
+    //
+    // 用 QLockFile 而不是 QLocalServer 本身来判重：Windows 的命名管道支持多个
+    // 同名实例，QLocalServer::listen 在 Windows 上第二次也能成功，靠它判重不可靠。
+    // 锁文件放临时目录，进程异常退出时 QLockFile 会按 PID 判断成失效锁并接管。
+    const QString sLockPath = QDir(QDir::tempPath()).filePath(QStringLiteral("FileMarker.lock"));
+    QLockFile singleInstanceLock(sLockPath);
+    singleInstanceLock.setStaleLockTime(30000);
+
+    if (!singleInstanceLock.tryLock(200)) {
+        // 已有实例在跑：尽量把它叫到前台，然后自己退出
+        const QString sServerName = QStringLiteral("FileMarker.SingleInstance");
+        QLocalSocket socket;
+        socket.connectToServer(sServerName);
+        if (socket.waitForConnected(500)) {
+            socket.write("raise");
+            socket.flush();
+            socket.waitForBytesWritten(500);
+            socket.disconnectFromServer();
+        }
+        return 0;
+    }
+
+    // 锁拿到了：再起一个本地 socket 服务，用来接收"把窗口叫出来"的请求
+    const QString sServerName = QStringLiteral("FileMarker.SingleInstance");
+    QLocalServer singleInstanceServer;
+    QLocalServer::removeServer(sServerName);   // 清掉上次异常退出的残留
+    if (!singleInstanceServer.listen(sServerName)) {
+        qWarning() << "单实例通知服务创建失败（不影响程序运行）:" << singleInstanceServer.errorString();
+    }
+
     MainWindow w;
+    QObject::connect(&singleInstanceServer, &QLocalServer::newConnection, &w, [&w, &singleInstanceServer]() {
+        while (QLocalSocket *pSocket = singleInstanceServer.nextPendingConnection()) {
+            pSocket->readAll();
+            pSocket->disconnectFromServer();
+            pSocket->deleteLater();
+        }
+        // 第二个实例被拦下了，给用户一点反馈，避免"双击没反应"的错觉
+        w.showNormal();
+        w.raise();
+        w.activateWindow();
+        w.showHintMessage(QObject::tr("FileMarker 已经在运行，已切换到现有窗口。"));
+    });
+
     w.show();
 
     return a.exec();

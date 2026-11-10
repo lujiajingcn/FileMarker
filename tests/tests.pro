@@ -33,6 +33,7 @@ SOURCES += \
     tst_searchmatch.cpp \
     ../adsoperation.cpp \
     ../xmloperation.cpp \
+    ../searchmatch.cpp \
     ../utility.cpp \
     ../common.cpp
 

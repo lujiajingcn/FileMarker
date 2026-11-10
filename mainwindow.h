@@ -19,6 +19,9 @@ public:
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
+    /** 在状态栏提示一句话（单实例拦下第二次启动时用） */
+    void showHintMessage(const QString &sMessage);
+
 protected:
     void initLogMessageHanlder();
     void moveEvent(QMoveEvent *event) override;

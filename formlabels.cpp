@@ -8,6 +8,9 @@
 #include <QPushButton>
 #include <QApplication>
 #include <QDebug>
+#include <QDir>
+#include <QDateTime>
+#include <QStandardPaths>
 #include <QDrag>
 #include <QMimeData>
 #include <QAction>
@@ -121,6 +124,8 @@ void FormLabels::startLabelDrag()
 
 FormLabels::~FormLabels()
 {
+    // 退出时保存失败不能弹模态框（事件循环已结束），改为写备份文件并记日志
+    m_bShuttingDown = true;
     saveLabelToXmlFile();
     delete ui;
 }
@@ -804,7 +809,7 @@ void FormLabels::resyncSets()
         registerItem(m_modelAllLabels->item(i));
 }
 
-void FormLabels::saveLabelToXmlFile()
+bool FormLabels::saveLabelToXmlFile()
 {
     XmlOperation xOperation;
     QList<LabelInfo> lstLabelInfo;
@@ -822,8 +827,41 @@ void FormLabels::saveLabelToXmlFile()
         labelInfo.sName = item->text();
         lstLabelInfo.push_back(labelInfo);
     }
-    QString sXmlFile = g_sAppDir + "/" + LABEL_FILE;
-    xOperation.saveXml(sXmlFile.toStdString().c_str(), lstLabelInfo);
+    const QString sXmlFile = g_sAppDir + "/" + LABEL_FILE;
+    if (xOperation.saveXml(sXmlFile.toStdString().c_str(), lstLabelInfo))
+        return true;
+
+    // 保存失败：目录只读、磁盘满、文件被占用等。以前这里直接忽略返回值，
+    // 用户改了半天标签库、退出后全没了却毫无提示。
+    qCritical() << "保存标签库失败:" << sXmlFile;
+
+    // 兜底：另存一份到用户目录，至少不让这次的编辑彻底消失
+    const QString sBackupDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    QString sBackupFile;
+    if (!sBackupDir.isEmpty() && QDir().mkpath(sBackupDir)) {
+        sBackupFile = sBackupDir + QStringLiteral("/labels-recovered-")
+                      + QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd-HHmmss"))
+                      + QStringLiteral(".xml");
+        if (!xOperation.saveXml(sBackupFile.toStdString().c_str(), lstLabelInfo))
+            sBackupFile.clear();
+        else
+            qCritical() << "标签库已备份到:" << sBackupFile;
+    }
+
+    if (m_bShuttingDown) {
+        // 退出阶段只是记日志，不再打扰用户
+        return false;
+    }
+
+    if (!m_bSaveFailureWarned) {
+        m_bSaveFailureWarned = true;
+        QString sDetail = sBackupFile.isEmpty()
+                              ? tr("请检查程序目录是否可写、磁盘是否已满。")
+                              : tr("这次的编辑已临时另存到：\n%1").arg(sBackupFile);
+        QMessageBox::warning(this, tr("标签库保存失败"),
+                             tr("标签库没能写入：\n%1\n\n%2").arg(sXmlFile, sDetail));
+    }
+    return false;
 }
 
 void FormLabels::traverseWriteLabel(QStandardItem *item, const QList<LabelInfo> &lstLabelInfo)
