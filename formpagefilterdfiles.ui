@@ -45,14 +45,50 @@
       </widget>
      </item>
      <item>
-      <widget class="QLabel" name="lblResultCount">
-       <property name="text">
-        <string>搜索结果 0 项</string>
+      <layout class="QHBoxLayout" name="hBoxResultLine">
+       <property name="spacing">
+        <number>8</number>
        </property>
-       <property name="styleSheet">
-        <string notr="true">color:#555;</string>
-       </property>
-      </widget>
+       <item>
+        <widget class="QLabel" name="lblResultCount">
+         <property name="text">
+          <string>搜索结果 0 项</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">color:#555;</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QToolButton" name="btnRescan">
+         <property name="text">
+          <string>重新扫描</string>
+         </property>
+         <property name="toolTip">
+          <string>不用缓存，直接从磁盘重新查一遍（结果一定是最新的，但比缓存慢）</string>
+         </property>
+         <property name="toolButtonStyle">
+          <enum>Qt::ToolButtonTextOnly</enum>
+         </property>
+         <property name="cursor">
+          <cursorShape>PointingHandCursor</cursorShape>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <spacer name="spacerResultLine">
+         <property name="orientation">
+          <enum>Qt::Horizontal</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>40</width>
+           <height>20</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+      </layout>
      </item>
     </layout>
    </item>

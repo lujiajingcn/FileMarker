@@ -29,6 +29,8 @@ signals:
     void sendGotoFile(QString sFilePath);
     // 用户点击“返回目录”时，通知外层切回文件列表页面
     void sendBackRequested();
+    // 用户点【重新扫描】：不用缓存，直接从磁盘把这次搜索重跑一遍
+    void sendRescanRequested();
 
 public slots:
     void onShowFilteredFiles(QStringList qLFilteredFiles);

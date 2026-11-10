@@ -1,4 +1,5 @@
 #include "sqliteoperation.h"
+#include <QDateTime>
 #include <common.h>
 #include <QDebug>
 #include <QDir>
@@ -65,6 +66,28 @@ void SqliteOperation::createTable()
     {
         qCritical("create table dirs fails: %s", qPrintable(query1.lastError().text()));
     }
+
+    // dirs 表加"缓存写入时间"列：结果页要告诉用户"这份缓存是多久之前的"。
+    // 老库没有这一列，启动时补一次（ALTER TABLE 失败就只影响时间显示，不影响搜索）。
+    bool bHasUpdatedAt = false;
+    {
+        QSqlQuery infoQuery(m_sqlDB);
+        if (infoQuery.exec(QStringLiteral("PRAGMA table_info(%1)").arg(TABLE_NAME_DIR))) {
+            while (infoQuery.next()) {
+                if (infoQuery.value(1).toString() == QLatin1String("updatedAt")) {
+                    bHasUpdatedAt = true;
+                    break;
+                }
+            }
+        }
+    }
+    if (!bHasUpdatedAt) {
+        QSqlQuery alterQuery(m_sqlDB);
+        if (!alterQuery.exec(QStringLiteral("ALTER TABLE %1 ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
+                                 .arg(TABLE_NAME_DIR))) {
+            qWarning() << "为 dirs 表添加 updatedAt 列失败:" << alterQuery.lastError().text();
+        }
+    }
 }
 
 void SqliteOperation::migrateLegacyLabels()
@@ -90,6 +113,33 @@ void SqliteOperation::migrateLegacyLabels()
     QSqlQuery markQuery(m_sqlDB);
     if (!markQuery.exec(QStringLiteral("PRAGMA user_version = 1")))
         qWarning() << "写入迁移版本失败:" << markQuery.lastError().text();
+}
+
+/**
+ * 这批目录里"最旧"的那份缓存是什么时候写入的。
+ * 返回无效 QDateTime 表示查不到（老库还没这一列，或目录没登记过）。
+ */
+QDateTime SqliteOperation::oldestCacheTime(const QStringList &qLDirs) const
+{
+    if (qLDirs.isEmpty())
+        return QDateTime();
+
+    qint64 nOldest = 0;
+    QSqlQuery query(m_sqlDB);
+    query.prepare(QString("SELECT updatedAt FROM %1 WHERE dir = :dir").arg(TABLE_NAME_DIR));
+    for (const QString &sDir : qLDirs) {
+        query.bindValue(":dir", sDir);
+        if (!query.exec() || !query.next())
+            continue;
+        const qint64 nTime = query.value(0).toLongLong();
+        if (nTime <= 0)
+            continue;
+        if (nOldest == 0 || nTime < nOldest)
+            nOldest = nTime;
+    }
+    if (nOldest <= 0)
+        return QDateTime();
+    return QDateTime::fromSecsSinceEpoch(nOldest);
 }
 
 void SqliteOperation::invalidateDirCache(const QString &sDir)
@@ -195,14 +245,25 @@ void SqliteOperation::insertRecord(QMap<QString, FILE_TAGS> dirAndFileTags, cons
 
     QSqlQuery query(m_sqlDB);
     // 使用 INSERT OR IGNORE 写入目录，dir 列有 UNIQUE 约束，重复遍历同一目录不会报错。
-    query.prepare(QString("INSERT OR IGNORE INTO %1 (dir) VALUES (:dir)").arg(TABLE_NAME_DIR));
+    // updatedAt 记录"这份缓存是什么时候写的"，结果页据此提示缓存有多旧。
+    const qint64 nNow = QDateTime::currentSecsSinceEpoch();
+    query.prepare(QString("INSERT OR IGNORE INTO %1 (dir, updatedAt) VALUES (:dir, :ts)").arg(TABLE_NAME_DIR));
+    QSqlQuery touchQuery(m_sqlDB);
+    touchQuery.prepare(QString("UPDATE %1 SET updatedAt = :ts WHERE dir = :dir").arg(TABLE_NAME_DIR));
     for (int i = 0; i < qLAllDirs.count(); i++) {
         query.bindValue(":dir", qLAllDirs.at(i));
+        query.bindValue(":ts", nNow);
         if(!query.exec()) {
             QString sErrorMsg = QString("向表dirs中插入数据失败：%1").arg(query.lastError().text());
             qCritical("%s", sErrorMsg.toStdString().c_str());
             m_sqlDB.rollback();
             return;
+        }
+        // 目录已存在时 INSERT OR IGNORE 不会更新，这里再刷一次时间
+        touchQuery.bindValue(":ts", nNow);
+        touchQuery.bindValue(":dir", qLAllDirs.at(i));
+        if (!touchQuery.exec()) {
+            qWarning() << "更新缓存时间失败:" << qLAllDirs.at(i) << touchQuery.lastError().text();
         }
     }
 

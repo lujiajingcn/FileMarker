@@ -69,6 +69,8 @@ FormPageFilterdFiles::FormPageFilterdFiles(QWidget *parent) :
 
     // “返回目录”：由外层 FormFileBrowser 切回文件列表页面
     connect(ui->btnBack, &QToolButton::clicked, this, &FormPageFilterdFiles::sendBackRequested);
+    // 【重新扫描】：让外层忽略缓存、重新走一遍磁盘搜索
+    connect(ui->btnRescan, &QToolButton::clicked, this, &FormPageFilterdFiles::sendRescanRequested);
     connect(m_tvFilteredFiles, &QTreeView::doubleClicked,
             this, &FormPageFilterdFiles::onTvFilteredFilesDoubleClicked);
 

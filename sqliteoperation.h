@@ -55,6 +55,9 @@ public:
      */
     QStringList filesUsingLabel(const QString &sLabel) const;
 
+    /** 这批目录里最旧的一份缓存是什么时候写入的；无效 QDateTime 表示查不到 */
+    QDateTime oldestCacheTime(const QStringList &qLDirs) const;
+
 public:
     QSqlDatabase    m_sqlDB;
 };

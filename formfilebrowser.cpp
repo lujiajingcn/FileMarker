@@ -101,6 +101,9 @@ FormFileBrowser::FormFileBrowser(QWidget *parent) :
     connect(ui->pageFilteredFiles, &FormPageFilterdFiles::sendBackRequested, this, [this]() {
         showFilesWidget();
     });
+    // 结果页的【重新扫描】：不用缓存，直接走磁盘
+    connect(ui->pageFilteredFiles, &FormPageFilterdFiles::sendRescanRequested,
+            this, &FormFileBrowser::onRescanFromDiskRequested);
     connect(this, &FormFileBrowser::sendGotoFile, ui->pageFiles, &FormPageFiles::recvGotoFile);
 
     connect(this, &FormFileBrowser::sendShowFilteredFiles, ui->pageFilteredFiles, &FormPageFilterdFiles::onShowFilteredFiles);
@@ -731,17 +734,59 @@ void FormFileBrowser::onActionAddLabelsTriggered()
  * 如果上次标记完以后移动或删除文件，则可能查找不准确。
  * 选中多个文件夹时，有可能有些文件夹在缓存数据库中没有信息，这些文件夹直接从磁盘查找
 */
+/**
+ * 把"缓存写入时间"翻译成一句人话：刚刚遍历 / 12 分钟前遍历 / 3 小时前遍历 / 2 天前遍历。
+ * 时间为空（老库没有记录）时返回空串，界面上就只显示"结果来自缓存"。
+ */
+QString FormFileBrowser::humanReadableCacheAge(const QDateTime &cacheTime)
+{
+    if (!cacheTime.isValid())
+        return QString();
+    const qint64 nSeconds = cacheTime.secsTo(QDateTime::currentDateTime());
+    if (nSeconds < 0)
+        return QString();   // 时钟回拨等异常情况，不做提示
+    if (nSeconds < 60)
+        return tr("刚刚遍历");
+    if (nSeconds < 3600)
+        return tr("%1 分钟前遍历").arg(nSeconds / 60);
+    if (nSeconds < 86400)
+        return tr("%1 小时前遍历").arg(nSeconds / 3600);
+    return tr("%1 天前遍历").arg(nSeconds / 86400);
+}
+
+/** 结果页的【重新扫描】：忽略缓存，用同样的目录和标签从磁盘重查一遍。 */
+void FormFileBrowser::onRescanFromDiskRequested()
+{
+    if (m_qLLastSearchDirs.isEmpty() || m_qLLabelGroups.isEmpty()) {
+        QMessageBox::information(this, tr("重新扫描"),
+                                 tr("上一次的搜索条件已经失效，请重新选择标签再搜索。"));
+        return;
+    }
+    m_qLRescanDirs = m_qLLastSearchDirs;
+    m_bForceDiskScan = true;
+    onActionSearchFilesbyLabelsTriggered();
+}
+
 void FormFileBrowser::onActionSearchFilesbyLabelsTriggered()
 {
     m_qLFilePathsFromCache.clear();   // 清除上一次查找遗留的缓存命中结果
 
-    QStringList qLSelDirs = getSelDirs();
-    if(qLSelDirs.count() == 0){
-        QString sCurDir = ui->pageFiles->getCurDir();
-        qLSelDirs.append(sCurDir);
+    // 结果页点【重新扫描】时：沿用上一次搜索的目录和标签，并强制走磁盘
+    const bool bForceDisk = m_bForceDiskScan;
+    m_bForceDiskScan = false;
+
+    QStringList qLSelDirs = m_qLRescanDirs;
+    m_qLRescanDirs.clear();
+    if (qLSelDirs.isEmpty()) {
+        qLSelDirs = getSelDirs();
+        if(qLSelDirs.count() == 0){
+            QString sCurDir = ui->pageFiles->getCurDir();
+            qLSelDirs.append(sCurDir);
+        }
     }
     // 记录搜索条件（后面缓存未命中的目录会被替换，但界面提示应显示用户原始选择）
     const QStringList qLSearchDirs = qLSelDirs;
+    m_qLLastSearchDirs = qLSearchDirs;   // 供结果页【重新扫描】复用
 
     if(m_qLSelLabels.count() == 0){
         QMessageBox::information(this, "提示", "请先在右侧【标签库（分类）】里选择要查找的标签（可多选）。");
@@ -789,13 +834,19 @@ void FormFileBrowser::onActionSearchFilesbyLabelsTriggered()
 
     SearchConfig sc = ConfigOperation::readSearchConfig(g_sAppDir + "/" + SEARCH_CONFIG_FILE);
 
-    if(sc.bFromCache){
+    if(sc.bFromCache && !bForceDisk){
         QStringList qLFilePaths, qLNotHitedDirs;
         m_sqlOperation->searchFilesByLabels(qLSelDirs, m_qLLabelGroups, sc.logic, qLFilePaths, qLNotHitedDirs);
         qInfo() << "[搜索] 缓存命中文件=" << qLFilePaths.size() << " 未命中目录数=" << qLNotHitedDirs.size()
                 << " 分组数=" << m_qLLabelGroups.size() << " logic=" << int(sc.logic);
         if(qLNotHitedDirs.count() == 0) { // 查找的文件夹全部在缓存数据库中存在，则显示查找结果后结束。
-            m_sSearchSource = tr("（结果来自缓存）");
+            // 缓存可能过期：把"这份缓存是什么时候写的"一并告诉用户，结果页还能一键重扫
+            const QDateTime cacheTime = m_sqlOperation != nullptr
+                                            ? m_sqlOperation->oldestCacheTime(qLSelDirs)
+                                            : QDateTime();
+            const QString sAge = humanReadableCacheAge(cacheTime);
+            m_sSearchSource = sAge.isEmpty() ? tr("（结果来自缓存）")
+                                             : tr("（结果来自缓存，%1）").arg(sAge);
             showFilteredFile(qLFilePaths);
             return;
         } else { // 查找的文件夹有部分未在缓存数据库中，不在的文件夹从磁盘查找

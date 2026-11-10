@@ -6,6 +6,7 @@
 #ifndef FILEBROWSER_H
 #define FILEBROWSER_H
 
+#include <QDateTime>
 #include <QWidget>
 
 class QToolButton;
@@ -112,6 +113,9 @@ private slots:
     /** 根据标签名查找文件 */
     void onActionSearchFilesbyLabelsTriggered();
 
+    /** 结果页【重新扫描】：忽略缓存，用同样的条件从磁盘重查 */
+    void onRescanFromDiskRequested();
+
     /** 遍历选中的文件夹，查找这些文件夹中有ads信息的文件，将这些文件和ads信息写入数据库，作为下次查找的缓存信息 */
     void onActionTraverseSelDirsTriggered();
 
@@ -188,6 +192,12 @@ private:
     int                 m_nThread;              // 用来记录当前运行的线程：根据标签查找文件、遍历文件夹、AI自动生成标签。
 
     QStringList         m_qLFilePathsFromCache; // 部分目录命中缓存时的缓存命中结果，最后与磁盘查找结果合并
+
+    // 结果页的【重新扫描】：记录上次搜索条件，并支持强制走磁盘
+    static QString humanReadableCacheAge(const QDateTime &cacheTime);
+    QStringList         m_qLLastSearchDirs;     // 上一次搜索用的目录，重扫时复用
+    QStringList         m_qLRescanDirs;         // 非空表示这次搜索是重扫，用这些目录
+    bool                m_bForceDiskScan = false;
 };
 
 #endif // FILEBROWSER_H
