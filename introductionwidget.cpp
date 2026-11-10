@@ -332,6 +332,45 @@ void IntroductionWidget::drawPointerArrow(QPainter &painter, const QRect &anchor
 
 namespace {
 
+/**
+ * 条状控件里真正有内容的区域。
+ *
+ * 工具条/菜单栏本身是整条铺满窗口的，但它们的内容（按钮、菜单项）只占左边一小段；
+ * 聚光灯如果直接按控件矩形画，右边一大片空白也会被点亮，看着像是照亮了半屏。
+ * 这里把每个按钮/菜单项的矩形并起来，作为真正的"目标区域"。
+ */
+QRect barContentRect(QWidget *bar, QWidget *coordinateParent)
+{
+    if (bar == nullptr || coordinateParent == nullptr)
+        return QRect();
+
+    QRect content;
+    if (auto *pToolBar = qobject_cast<QToolBar *>(bar)) {
+        const QList<QAction *> qLActions = pToolBar->actions();
+        for (QAction *pAction : qLActions) {
+            QWidget *pWidget = pToolBar->widgetForAction(pAction);
+            if (pWidget == nullptr || !pWidget->isVisible())
+                continue;
+            const QRect r(pWidget->mapTo(coordinateParent, QPoint(0, 0)), pWidget->size());
+            content = content.isNull() ? r : content.united(r);
+        }
+    } else if (auto *pMenuBar = qobject_cast<QMenuBar *>(bar)) {
+        const QList<QAction *> qLActions = pMenuBar->actions();
+        for (QAction *pAction : qLActions) {
+            if (!pAction->isVisible())
+                continue;
+            const QRect r = pMenuBar->actionGeometry(pAction);
+            if (r.isNull())
+                continue;
+            const QRect mapped(r.topLeft() + pMenuBar->mapTo(coordinateParent, QPoint(0, 0)),
+                               r.size());
+            content = content.isNull() ? mapped : content.united(mapped);
+        }
+    }
+
+    return content.isNull() ? QRect() : content;
+}
+
 /** 目标是不是"条状"控件：工具栏 / 菜单栏 / 状态栏，或者特别矮的控件 */
 bool isBarLikeTarget(const QPointer<QWidget> &anchor)
 {
@@ -354,15 +393,15 @@ void IntroductionWidget::paintEvent(QPaintEvent *)
     if (m_stepPointerAnchor) {
         const QPoint anchorPos = m_stepPointerAnchor->mapTo(parentWidget(), QPoint{0, 0});
         const QRect anchorRect(anchorPos, m_stepPointerAnchor->size());
-        // 条状目标（工具栏/菜单栏/状态栏）只照亮它自己那一行：
-        // 用 18px 外扩会顺带把下面的地址栏/工具条也照亮，和"只框住这一处"的预期不符。
-        const bool bBarTarget = isBarLikeTarget(m_stepPointerAnchor);
-        const QRect spotlightRect = bBarTarget
-                                        ? anchorRect.adjusted(-4, -2, 4, 2)
-                                        : anchorRect.adjusted(-SPOTLIGHTMARGIN,
-                                                              -SPOTLIGHTMARGIN,
-                                                              SPOTLIGHTMARGIN,
-                                                              SPOTLIGHTMARGIN);
+        // 工具栏/菜单栏这类控件是"整条"长条，但真正有内容的只有左边一小段。
+        // 直接按控件矩形照亮会把右边大片空白也点亮，所以这类目标改用"内容区域"。
+        const QRect targetRect = isBarLikeTarget(m_stepPointerAnchor)
+                                     ? barContentRect(m_stepPointerAnchor, parentWidget())
+                                     : anchorRect;
+        const QRect spotlightRect = targetRect.adjusted(-SPOTLIGHTMARGIN,
+                                                        -SPOTLIGHTMARGIN,
+                                                        SPOTLIGHTMARGIN,
+                                                        SPOTLIGHTMARGIN);
 
         // darken the background to create a spotlighted area
         if (spotlightRect.left() > 0) {
@@ -391,25 +430,17 @@ void IntroductionWidget::paintEvent(QPaintEvent *)
         }
 
         // smooth borders of the spotlighted area by gradients
-        if (bBarTarget) {
-            p.setOpacity(0.55);
-            p.setPen(QPen(QColor(65, 205, 82), 1));
-            p.setBrush(Qt::NoBrush);
-            p.drawRect(spotlightRect.adjusted(0, 0, -1, -1));
-            p.setOpacity(0.87);
-        } else {
-            drawCornerImage(m_borderImage,
-                             &p,
-                             spotlightRect,
-                             SPOTLIGHTMARGIN,
-                             SPOTLIGHTMARGIN,
-                             SPOTLIGHTMARGIN,
-                             SPOTLIGHTMARGIN);
-        }
+        drawCornerImage(m_borderImage,
+                         &p,
+                         spotlightRect,
+                         SPOTLIGHTMARGIN,
+                         SPOTLIGHTMARGIN,
+                         SPOTLIGHTMARGIN,
+                         SPOTLIGHTMARGIN);
 
         // 目标旁边画一小段箭头，指向被高亮的控件（参考 Qt Creator 的 UI tour）：
         // 箭头贴着控件外侧、长度固定，不跨越整屏空白。
-        drawPointerArrow(p, anchorRect);
+        drawPointerArrow(p, targetRect);
     } else {
         p.fillRect(rect(), backgroundColor);
     }
