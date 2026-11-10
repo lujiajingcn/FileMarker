@@ -23,6 +23,7 @@
 #include <QElapsedTimer>
 
 #include "adsoperation.h"
+#include "tagchipdelegate.h"
 #include "thumbnailiconprovider.h"
 #include "editablefiledelegate.h"
 #include "tageditdialog.h"
@@ -320,7 +321,11 @@ void FormPageFiles::initDetailFileList()
         m_tvFiles->setItemDelegateForColumn(nCol, new NoEditDelegate(m_tvFiles));
     // 标签列也不再就地编辑：双击标签单元格改为弹出"增删式"标签对话框
     // （在 onDoubleClicked 里处理），与缩略图的双击语义统一。
-    m_tvFiles->setItemDelegateForColumn(4, new NoEditDelegate(m_tvFiles));
+    // 标签列改成 chip 样式：每个标签一个带 ✕ 的小药丸，点 ✕ 单独删该标签
+    m_tagChipDelegate = new TagChipDelegate(m_tvFiles);
+    m_tvFiles->setItemDelegateForColumn(4, m_tagChipDelegate);
+    connect(m_tagChipDelegate, &TagChipDelegate::removeTagRequested,
+            this, &FormPageFiles::onRemoveTagFromRow);
     m_tvFiles->setEditTriggers(QAbstractItemView::NoEditTriggers);
 
     m_tvFiles->setRootIndex(m_modelFiles->index(""));
@@ -1146,6 +1151,38 @@ void FormPageFiles::onEditTag(const QModelIndex &index)
     }
 
     emit sendLabels(sFilePath, qLLabels.join(","));
+}
+
+/**
+ * 点了标签 chip 上的 ✕：把该标签从文件上删掉。
+ * 走和"编辑标签"同一套流程：先记撤销现场，再写盘，失败时提示并刷新。
+ */
+void FormPageFiles::onRemoveTagFromRow(const QModelIndex &index, const QString &sTag)
+{
+    const QString sFilePath = m_modelFiles->filePath(index);
+    if (sFilePath.isEmpty() || m_modelFiles->isDir(index) || sTag.isEmpty())
+        return;
+
+    const QStringList qLTags = ADSOperation::listADSTagsInOrder(sFilePath);
+    if (!qLTags.contains(sTag))
+        return;
+
+    emit sendBeforeTagsChanged(QStringList() << sFilePath);
+    const bool bOk = ADSOperation::removeTag(sFilePath, sTag);
+    emit sendTagsChanged(QStringList() << sFilePath);
+    onBtnRefreshClicked();
+
+    if (!bOk) {
+        QMessageBox::warning(this, tr("删除标签失败"),
+                             tr("未能从文件上删除标签「%1」：%2\n"
+                                "请检查文件是否被占用、只读。")
+                                 .arg(sTag, sFilePath));
+        return;
+    }
+
+    // 让右侧面板和结果页同步：发最新标签串（空串表示已无标签）
+    const QStringList qLRemain = ADSOperation::listADSTagsInOrder(sFilePath);
+    emit sendLabels(sFilePath, qLRemain.join(","));
 }
 
 void FormPageFiles::recvDblClick(const QModelIndex &index)

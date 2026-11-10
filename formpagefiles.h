@@ -27,6 +27,7 @@ class EditableDelegate;
 class ThumbnailIconProvider;
 class QTimer;
 class QMenu;
+class TagChipDelegate;
 
 namespace Ui {
 class FormPageFiles;
@@ -142,6 +143,9 @@ private:
     // 双击标签区域 / 双击标签列时弹出"增删式"标签对话框（A3）。
     void onEditTag(const QModelIndex &index);
 
+    // 点了标签 chip 上的 ✕：把该标签从文件上移除（可撤销）
+    void onRemoveTagFromRow(const QModelIndex &index, const QString &sTag);
+
     // 重命名入口：两个视图都不再就地改名，统一走右键【重命名…】。
     void renameFile(const QModelIndex &index);
 
@@ -209,6 +213,7 @@ private:
 
     // 方案A：页面顶部的命令条（承载 AI/添加/清空/查找/遍历/查找条件）
     QToolBar               *m_commandBar = nullptr;
+    TagChipDelegate        *m_tagChipDelegate = nullptr;  // 标签列的 chip 代理（带 ✕ 删除）
     QAction                *m_pSearchAction = nullptr;  // 命令条上要做成分裂按钮的"搜索"动作
     QMenu                  *m_pSearchMenu = nullptr;    // 它的下拉菜单（由 FormFileBrowser 提供）
 
