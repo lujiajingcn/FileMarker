@@ -150,9 +150,9 @@ void FormLabels::onRecvLabels(QString sLabels)
 {
     // 支持中英文逗号/分号分隔，splitLabels 已做 trim、去空、去重
     QStringList qLNewLabels;
-    foreach (const QString &sLabel, Utility::splitLabels(sLabels))
+    for (const QString &sLabel : Utility::splitLabels(sLabels))
     {
-        if(!labelExistsCaseInsensitive(m_setLabels, sLabel) && !qLNewLabels.contains(sLabel))
+        if (!labelExistsCaseInsensitive(m_setLabels, sLabel) && !qLNewLabels.contains(sLabel))
             qLNewLabels << sLabel;
     }
 
@@ -170,7 +170,7 @@ void FormLabels::promptAddNewLabels(const QStringList &qLInputLabels)
 
     // 排队期间标签可能已经被前一个弹窗加入，显示前再过滤一次
     QStringList qLNewLabels;
-    foreach (const QString &sLabel, qLInputLabels) {
+    for (const QString &sLabel : qLInputLabels) {
         if (!labelExistsCaseInsensitive(m_setLabels, sLabel)
                 && !qLNewLabels.contains(sLabel)) {
             qLNewLabels << sLabel;
@@ -222,8 +222,7 @@ void FormLabels::promptAddNewLabels(const QStringList &qLInputLabels)
         return;
 
     // 弹窗期间标签库可能已经变化，再检查一次
-    foreach (const QString &sLabel, qLNewLabels)
-    {
+    for (const QString &sLabel : qLNewLabels) {
         if (labelExistsCaseInsensitive(m_setLabels, sLabel))
             continue;
         QStandardItem *newItem = createLabelItem(sLabel);
@@ -238,16 +237,16 @@ void FormLabels::onRecvLabelsGeneratedByAI(QString sLabels)
     bool bAlreadyHaveItem = false;
     QStandardItem *itemLabelsGeneratedByAI = nullptr;
     int nRowCount = m_modelAllLabels->rowCount();
-    for(int i = 0; i < nRowCount; i++)
+    for (int i = 0; i < nRowCount; i++)
     {
         QString sLabelName = m_modelAllLabels->item(i)->text();
-        if(QString::compare(sLabelName, LABEL_NAME_AI) == 0)
+        if (QString::compare(sLabelName, LABEL_NAME_AI) == 0)
         {
             itemLabelsGeneratedByAI = m_modelAllLabels->item(i);
             bAlreadyHaveItem = true;
         }
     }
-    if(!bAlreadyHaveItem)
+    if (!bAlreadyHaveItem)
     {
         itemLabelsGeneratedByAI = createLabelItem(LABEL_NAME_AI);
         itemLabelsGeneratedByAI->setEditable(false);
@@ -257,7 +256,7 @@ void FormLabels::onRecvLabelsGeneratedByAI(QString sLabels)
 
     // 支持中英文逗号/分号分隔，splitLabels 已做 trim、去空、去重；
     // AI 返回的名字还要按磁盘规则净化，否则标签库与磁盘会不一致。
-    foreach (const QString &sLabel, Utility::splitLabels(sLabels))
+    for (const QString &sLabel : Utility::splitLabels(sLabels))
     {
         const QString sSanitized = ADSOperation::sanitizeTagName(sLabel);
         if (sSanitized.isEmpty())

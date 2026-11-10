@@ -123,13 +123,13 @@ void FormFileBrowser::onRecvLabelsGeneratedByAI(QString sLabels)
 void FormFileBrowser::onActionAddLabelsTriggered()
 {
     QStringList qLFilePaths = getSelFilePath();
-    if(qLFilePaths.count() == 0)
+    if (qLFilePaths.count() == 0)
     {
         QMessageBox::information(this, "提示", "未选中文件或文件夹！");
         return;
     }
 
-    if(m_qLSelLabels.count() == 0)
+    if (m_qLSelLabels.count() == 0)
     {
         QMessageBox::information(this, "提示", "请先在右侧【标签库（分类）】里选择要添加的标签。");
         return;
@@ -150,8 +150,7 @@ void FormFileBrowser::onActionAddLabelsTriggered()
 
     bool bAllOk = true;
     QStringList qLFailedFiles;          // 把失败的文件名带回给用户
-    foreach(const QString &sFilePath, qLFilePaths)
-    {
+    for (const QString &sFilePath : qLFilePaths) {
         // 追加而不是覆盖：保留文件已有标签的顺序，新标签按选中顺序追加到末尾
         if (!ADSOperation::appendTags(sFilePath, m_qLSelLabels)) {
             bAllOk = false;
@@ -233,7 +232,7 @@ void FormFileBrowser::onRecvLabels(QString sFilePath, QString sLabels)
 {
     // 内联编辑/弹框编辑标签时，只作用于被编辑的那一个文件，
     // 不再误覆盖当前选中的其它文件（批量打标签请用工具栏“添加标签”按钮）。
-    if(sFilePath.isEmpty())
+    if (sFilePath.isEmpty())
     {
         QMessageBox::information(this, "提示", "未选中文件！");
         return;
@@ -244,7 +243,7 @@ void FormFileBrowser::onRecvLabels(QString sFilePath, QString sLabels)
     const QStringList qLExisting = ADSOperation::listADSTagsInOrder(sFilePath);
     QStringList qLLabels;
     QStringList qLChanged;
-    foreach (const QString &sLabel, Utility::splitLabelsPreservingExisting(sLabels, qLExisting)) {
+    for (const QString &sLabel : Utility::splitLabelsPreservingExisting(sLabels, qLExisting)) {
         // 旧标签原样保留，不重新净化（否则 "a，b" 会变成 "a_b"）
         if (qLExisting.contains(sLabel)) {
             if (!qLLabels.contains(sLabel))
@@ -292,7 +291,7 @@ void FormFileBrowser::onRecvLabels(QString sFilePath, QString sLabels)
 
     // 只把规范化后的非空标签转发给【标签管理】面板
     const QString sNormalizedLabels = qLLabels.join(",");
-    if(!sNormalizedLabels.isEmpty())
+    if (!sNormalizedLabels.isEmpty())
         emit sendLabels(sNormalizedLabels);
 }
 

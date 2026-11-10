@@ -76,7 +76,7 @@ void TagEditDialog::addFromInput()
 
     QStringList qLBad;
     int nAdded = 0;
-    foreach (const QString &sPart, Utility::splitLabels(sRaw)) {
+    for (const QString &sPart : Utility::splitLabels(sRaw)) {
         const QString sSanitized = ADSOperation::sanitizeTagName(sPart);
         if (sSanitized.isEmpty()) {
             qLBad << sPart;

@@ -164,7 +164,7 @@ static QStringList readOwnedTagNames(const QString &filePath, bool &bMarkerFound
 
     bMarkerFound = true;
     QStringList cleaned;
-    foreach (const QString &sName, names) {
+    for (const QString &sName : names) {
         if (!Utility::isADSNameValid(sName))
             continue;
         if (QString::compare(sName, FM_TAG_MARKER, Qt::CaseInsensitive) == 0)
@@ -338,8 +338,7 @@ bool ADSOperation::deleteADSFiles(const QString &filePath)
 
     bool bOk = true;
     const QStringList adsFileNames = listADSFileName(filePath);
-    foreach(const QString &adsName, adsFileNames)
-    {
+    for (const QString &adsName : adsFileNames) {
         const QString adsFilePath = filePath + ":" + adsName;
         if (!DeleteFileW(win32APIPath(adsFilePath).c_str())) {
             qWarning() << "删除 ADS 失败:" << adsFilePath << "GetLastError:" << GetLastError();
@@ -367,7 +366,7 @@ QStringList ADSOperation::listADSFileName(const QString &filePath)
     bool bMarkerFound = false;
     const QStringList ownedNames = readOwnedTagNames(filePath, bMarkerFound);
     if (bMarkerFound) {
-        foreach (const QString &sName, ownedNames) {
+        for (const QString &sName : ownedNames) {
             if (!Utility::isADSNameValid(sName))
                 continue;
             // 清单里的名字可能已被其它工具手动删除，确认流还在
@@ -388,7 +387,7 @@ QStringList ADSOperation::listADSFileName(const QString &filePath)
         streamName = streamName.mid(1); // Remove the leading ":"
         // FindFirstStreamW 返回形如 "::tag:$DATA"，去掉前导冒号后是 "tag:$DATA"，
         // 必须再剥掉 ":$DATA" 才是标签名，否则标签列会显示成 "tag:$DATA"。
-        if(!Utility::isADSNameValid(streamName))
+        if (!Utility::isADSNameValid(streamName))
             continue;
 
         const QString sTagName = Utility::adsNameWithoutType(streamName);
@@ -415,8 +414,7 @@ QStringList ADSOperation::listADSTagsInOrder(const QString &filePath)
 
     QVector<QPair<int, QString>> orderedTags;
     QStringList tagsWithoutOrder;
-    foreach (const QString &sName, names)
-    {
+    for (const QString &sName : names) {
         int nOrder = -1;
         QString sContent;
         // 只读顺序号需要的前 16 字节，避免读到第三方大流
@@ -464,7 +462,7 @@ bool ADSOperation::replaceTags(const QString &filePath, const QStringList &tags)
     QStringList newTags;
     QMap<QString, QString> mapSanitizedToRaw;
     bool bCollision = false;
-    foreach (const QString &sTag, tags) {
+    for (const QString &sTag : tags) {
         const bool bExistingTag = oldTags.contains(sTag);
         const QString sActual = bExistingTag ? sTag : sanitizeTagName(sTag);
         if (sActual.isEmpty())
@@ -485,7 +483,7 @@ bool ADSOperation::replaceTags(const QString &filePath, const QStringList &tags)
 
     // 备份旧标签及其顺序内容，写入失败时回滚
     QMap<QString, QString> mapOldContents;
-    foreach (const QString &sOld, oldTags) {
+    for (const QString &sOld : oldTags) {
         QString sContent;
         if (!readStreamHeader(filePath, sOld, sContent, 16))
             sContent.clear();
@@ -529,13 +527,12 @@ bool ADSOperation::appendTags(const QString &filePath, const QStringList &tags)
 
     const QStringList existing = listADSTagsInOrder(filePath);
     QSet<QString> setExistingLower;
-    foreach (const QString &sName, existing)
-        setExistingLower.insert(sName.toLower());
+    for (const QString &sName : existing)setExistingLower.insert(sName.toLower());
 
     QStringList toAdd;
     QMap<QString, QString> mapSanitizedToRaw;
     bool bCollision = false;
-    foreach (const QString &sTag, tags) {
+    for (const QString &sTag : tags) {
         const QString sTrimmed = sTag.trimmed();
         if (sTrimmed.isEmpty())
             continue;
@@ -571,7 +568,7 @@ bool ADSOperation::appendTags(const QString &filePath, const QStringList &tags)
     // 这里先给旧标签补上顺序号（只改内容，不删除任何流），再把新标签接在最后。
     QStringList legacyTags;
     int nMaxOrder = -1;
-    foreach (const QString &sName, existing) {
+    for (const QString &sName : existing) {
         QString sContent;
         int nOrder = -1;
         if (readStreamHeader(filePath, sName, sContent, 16) && !sContent.isEmpty()) {
@@ -586,7 +583,7 @@ bool ADSOperation::appendTags(const QString &filePath, const QStringList &tags)
             legacyTags << sName;
     }
     bool bOk = true;
-    foreach (const QString &sLegacy, legacyTags) {
+    for (const QString &sLegacy : legacyTags) {
         // 写入失败则不要占用这个序号（旧标签本身仍在，只是继续排在末尾）
         if (!writeADSFileInternal(filePath, sLegacy, QString::number(++nMaxOrder), true)) {
             --nMaxOrder;
@@ -596,7 +593,7 @@ bool ADSOperation::appendTags(const QString &filePath, const QStringList &tags)
 
     QStringList finalNames = existing;
     int nOrder = nMaxOrder + 1;
-    foreach (const QString &sTag, toAdd) {
+    for (const QString &sTag : toAdd) {
         if (!writeADSFileInternal(filePath, sTag, QString::number(nOrder))) {
             qWarning() << "追加标签失败（已有标签未受影响）:" << filePath << sTag;
             bOk = false;
@@ -631,7 +628,7 @@ bool ADSOperation::renameTag(const QString &filePath, const QString &sOldTag, co
     const QStringList existing = listADSTagsInOrder(filePath);
     QStringList qLNew;
     bool bFound = false;
-    foreach (const QString &sTag, existing) {
+    for (const QString &sTag : existing) {
         if (sTag.compare(sOldTag, Qt::CaseInsensitive) == 0) {
             bFound = true;
             if (!qLNew.contains(sNew))
@@ -658,7 +655,7 @@ bool ADSOperation::removeTag(const QString &filePath, const QString &sTag)
     const QStringList existing = listADSTagsInOrder(filePath);
     QStringList qLNew;
     bool bFound = false;
-    foreach (const QString &sTagOfFile, existing) {
+    for (const QString &sTagOfFile : existing) {
         if (sTagOfFile.compare(sTag, Qt::CaseInsensitive) == 0) {
             bFound = true;
             continue;

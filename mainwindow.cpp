@@ -158,7 +158,11 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(actionCheckAI, &QAction::triggered, this, &MainWindow::checkAIEnvironment);
 
     // 把文件命令（AI/添加/清空/查找/遍历/查找条件）交给文件浏览页，由它在命令条上展示
-    ui->wFileBrowser->setActions(ui->actionAddLabelbyAI, ui->actionAddLabels, ui->actionDelLabels, ui->actionSearchFilesbyLabels, ui->actionTraverseSelDirs);
+    ui->wFileBrowser->setActions(ui->actionAddLabelbyAI,
+                                 ui->actionAddLabels,
+                                 ui->actionDelLabels,
+                                 ui->actionSearchFilesbyLabels,
+                                 ui->actionTraverseSelDirs);
 
     // 【标签库】中选中的标签，同步给文件浏览页（用于添加标签/查找）
     connect(ui->dwcLabels, &FormLabels::sendSelLabels, ui->wFileBrowser, &FormFileBrowser::onRecvSelLabels);

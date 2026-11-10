@@ -425,12 +425,12 @@ QStringList FormPageFiles::getSelDirs()
     {
         QString sFilePath = m_modelFiles->filePath(*cit);
         QFileInfo fileInfo(sFilePath);
-        if(fileInfo.isDir())
+        if (fileInfo.isDir())
         {
             qLSelDirs << sFilePath;
         }
     }
-    if(qLSelDirs.isEmpty())
+    if (qLSelDirs.isEmpty())
     {
         qLSelDirs << m_sCurDir;
     }

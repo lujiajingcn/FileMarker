@@ -73,7 +73,7 @@ void FormFileBrowser::onActionSearchFilesbyLabelsTriggered()
     m_qLRescanDirs.clear();
     if (qLSelDirs.isEmpty()) {
         qLSelDirs = getSelDirs();
-        if(qLSelDirs.count() == 0){
+        if (qLSelDirs.count() == 0) {
             QString sCurDir = ui->pageFiles->getCurDir();
             qLSelDirs.append(sCurDir);
         }
@@ -82,7 +82,7 @@ void FormFileBrowser::onActionSearchFilesbyLabelsTriggered()
     const QStringList qLSearchDirs = qLSelDirs;
     m_qLLastSearchDirs = qLSearchDirs;   // 供结果页【重新扫描】复用
 
-    if(m_qLSelLabels.count() == 0){
+    if (m_qLSelLabels.count() == 0) {
         QMessageBox::information(this, "提示", "请先在右侧【标签库（分类）】里选择要查找的标签（可多选）。");
         return;
     }
@@ -99,7 +99,7 @@ void FormFileBrowser::onActionSearchFilesbyLabelsTriggered()
 
     // 结果页回显条件时把"含子标签"写出来，让用户明确层级是参与匹配的。
     QStringList qLConditionTexts;
-    foreach (const QSet<QString> &setGroup, m_qLLabelGroups) {
+    for (const QSet<QString> &setGroup : m_qLLabelGroups) {
         QStringList qLNames = QStringList(setGroup.values());
         qLNames.sort();
         // 组里"直接选中的那个标签"作为显示名，其余当子标签列出来
@@ -128,12 +128,12 @@ void FormFileBrowser::onActionSearchFilesbyLabelsTriggered()
 
     SearchConfig sc = ConfigOperation::readSearchConfig(g_sAppDir + "/" + SEARCH_CONFIG_FILE);
 
-    if(sc.bFromCache && !bForceDisk){
+    if (sc.bFromCache && !bForceDisk) {
         QStringList qLFilePaths, qLNotHitedDirs;
         m_sqlOperation->searchFilesByLabels(qLSelDirs, m_qLLabelGroups, sc.logic, qLFilePaths, qLNotHitedDirs);
         qInfo() << "[搜索] 缓存命中文件=" << qLFilePaths.size() << " 未命中目录数=" << qLNotHitedDirs.size()
                 << " 分组数=" << m_qLLabelGroups.size() << " logic=" << int(sc.logic);
-        if(qLNotHitedDirs.count() == 0) { // 查找的文件夹全部在缓存数据库中存在，则显示查找结果后结束。
+        if (qLNotHitedDirs.count() == 0) { // 查找的文件夹全部在缓存数据库中存在，则显示查找结果后结束。
             // 缓存可能过期：把"这份缓存是什么时候写的"一并告诉用户，结果页还能一键重扫
             const QDateTime cacheTime = m_sqlOperation != nullptr
                                             ? m_sqlOperation->oldestCacheTime(qLSelDirs)
@@ -183,7 +183,7 @@ void FormFileBrowser::onActionTraverseSelDirsTriggered()
     setActionState(TRAVERSER_START);
 
     QStringList selDirs = getSelDirs();
-    if(selDirs.count() == 0){
+    if (selDirs.count() == 0) {
         QString curDir = ui->pageFiles->getCurDir();
         selDirs.append(curDir);
     }

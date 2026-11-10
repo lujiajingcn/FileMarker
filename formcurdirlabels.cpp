@@ -26,7 +26,7 @@ void FormCurDirLabels::onRecvDirAndLabels(QMap<QString, QSet<QString>> mapDirAnd
     for (QMap<QString, QSet<QString>>::const_iterator cItr = mapDirAndLabels.begin(); cItr != mapDirAndLabels.end(); cItr++) {
         QString dir = cItr.key();
         QStandardItem *item = getItem(dir);
-        if(nullptr != item)
+        if (nullptr != item)
             m_modelLabels->removeRow(item->row());
 
         QStandardItem *itemDir = new QStandardItem(dir);
@@ -35,8 +35,7 @@ void FormCurDirLabels::onRecvDirAndLabels(QMap<QString, QSet<QString>> mapDirAnd
         QSet<QString> setLabels = cItr.value();
         QStringList qLSortedLabels = setLabels.values();
         qLSortedLabels.sort(Qt::CaseInsensitive);
-        foreach (const QString &sLabel, qLSortedLabels)
-            itemDir->appendRow(new QStandardItem(sLabel));
+        for (const QString &sLabel : qLSortedLabels)itemDir->appendRow(new QStandardItem(sLabel));
     }
 
     // 展开目录节点，用户一眼就能看到当前目录有哪些标签（之前需要手动展开）
@@ -58,8 +57,7 @@ void FormCurDirLabels::onTreeViewClicked(const QModelIndex &index)
     QSet<QString> stLabels;
     QItemSelectionModel *selectionModel = ui->treeView->selectionModel();
     QModelIndexList selectedIndexes = selectionModel->selectedRows(0);
-    foreach (const QModelIndex &idx, selectedIndexes)
-    {
+    for (const QModelIndex &idx : selectedIndexes) {
         QStandardItem *item = m_modelLabels->itemFromIndex(idx);
         if (item != nullptr)
             stLabels.insert(item->text());
@@ -72,9 +70,9 @@ void FormCurDirLabels::onTreeViewClicked(const QModelIndex &index)
 QStandardItem *FormCurDirLabels::getItem(QString text)
 {
     int rowCount = m_modelLabels->rowCount();
-    for(int i = 0; i < rowCount; i++){
+    for (int i = 0; i < rowCount; i++){
         QString itemText = m_modelLabels->item(i)->text();
-        if(QString::compare(text, itemText) == 0)
+        if (QString::compare(text, itemText) == 0)
             return m_modelLabels->item(i);
     }
     return nullptr;

@@ -478,7 +478,7 @@ void IntroductionWidget::step()
 
 void IntroductionWidget::setStep(uint index)
 {
-    if(index >= m_items.size())
+    if (index >= m_items.size())
     {
         return;
     }
@@ -520,7 +520,7 @@ void IntroductionWidget::updateButtonStates()
 
 void IntroductionWidget::resizeToParent()
 {
-    if(parentWidget() == nullptr)
+    if (parentWidget() == nullptr)
     {
         return;
     }

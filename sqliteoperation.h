@@ -37,7 +37,11 @@ public:
      * 每个组 = 用户选中的一个标签 + 它的所有子标签；组内 OR、组间按 nLabelLogic 组合。
      * 这样"搜索父标签能搜到打了子标签的文件"，而 AND 仍然是"每个条件都要命中"。
      */
-    void searchFilesByLabels(QStringList qLSelDirs, const QList<QSet<QString>> &qLLabelGroups, int nLabelLogic, QStringList &qLFilePaths, QStringList &qLNotHitedDirs);
+    void searchFilesByLabels(QStringList qLSelDirs,
+                             const QList<QSet<QString>> &qLLabelGroups,
+                             int nLabelLogic,
+                             QStringList &qLFilePaths,
+                             QStringList &qLNotHitedDirs);
 
     /** 标签变化后让该目录的搜索缓存失效，下次搜索重新遍历，避免按旧标签命中/漏掉新标签 */
     void invalidateDirCache(const QString &sDir);

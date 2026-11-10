@@ -136,14 +136,14 @@ void FormLabels::initLabels()
 {
     XmlOperation xmlOperation;
     QString sXmlFile = g_sAppDir + "/" + LABEL_FILE;
-    QList<LabelInfo> lstLabelInfo = xmlOperation.readLabelFromXmlFile(sXmlFile.toStdString().c_str());
-    for(QList<LabelInfo>::const_iterator cItr = lstLabelInfo.begin(); cItr != lstLabelInfo.end(); cItr++)
+    QList<LabelInfo> lstLabelInfo = xmlOperation.readLabelFromXmlFile(qPrintable(sXmlFile));
+    for (QList<LabelInfo>::const_iterator cItr = lstLabelInfo.begin(); cItr != lstLabelInfo.end(); cItr++)
     {
         QString sName = (*cItr).sName;
         // 保留从文件读到的 UUID（为空则新生成），避免保存时 UUID 被清空。
         QString sUuid = (*cItr).sUuid.isEmpty() ? Utility::createUuid() : (*cItr).sUuid;
         QStandardItem *item = createLabelItem(sName, sUuid);
-        if((*cItr).lstChild.count() > 0)
+        if ((*cItr).lstChild.count() > 0)
         {
             traverseWriteLabel(item, (*cItr).lstChild);
         }
@@ -166,8 +166,7 @@ QStringList FormLabels::getSelLabels()
               [this](const QModelIndex &a, const QModelIndex &b) {
                   return m_tvAllLabels->visualRect(a).top() < m_tvAllLabels->visualRect(b).top();
               });
-    foreach (const QModelIndex &index, selectedIndexes)
-    {
+    for (const QModelIndex &index : selectedIndexes) {
         QStandardItem *item = m_modelAllLabels->itemFromIndex(index);
         if (item == nullptr)
             continue;
@@ -182,7 +181,7 @@ QStringList FormLabels::getSelLabels()
 void FormLabels::addItem(QStandardItem *parentItem)
 {
     QStandardItem *newItem = createLabelItem(nextNewLabelName());
-    if(nullptr == parentItem)
+    if (nullptr == parentItem)
     {
         m_modelAllLabels->appendRow(newItem);
     }
@@ -222,7 +221,7 @@ QList<QSet<QString>> FormLabels::getSelLabelGroups() const
                 collect(pItem->child(i), setNames);
         };
 
-    foreach (const QModelIndex &index, selectedIndexes) {
+    for (const QModelIndex &index : selectedIndexes) {
         QStandardItem *pItem = m_modelAllLabels->itemFromIndex(index);
         if (pItem == nullptr)
             continue;
@@ -283,7 +282,7 @@ bool FormLabels::saveLabelToXmlFile()
         lstLabelInfo.push_back(labelInfo);
     }
     const QString sXmlFile = g_sAppDir + "/" + LABEL_FILE;
-    if (xOperation.saveXml(sXmlFile.toStdString().c_str(), lstLabelInfo))
+    if (xOperation.saveXml(qPrintable(sXmlFile), lstLabelInfo))
         return true;
 
     // 保存失败：目录只读、磁盘满、文件被占用等。以前这里直接忽略返回值，
@@ -297,7 +296,7 @@ bool FormLabels::saveLabelToXmlFile()
         sBackupFile = sBackupDir + QStringLiteral("/labels-recovered-")
                       + QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd-HHmmss"))
                       + QStringLiteral(".xml");
-        if (!xOperation.saveXml(sBackupFile.toStdString().c_str(), lstLabelInfo))
+        if (!xOperation.saveXml(qPrintable(sBackupFile), lstLabelInfo))
             sBackupFile.clear();
         else
             qCritical() << "标签库已备份到:" << sBackupFile;
@@ -326,7 +325,7 @@ void FormLabels::traverseWriteLabel(QStandardItem *item, const QList<LabelInfo> 
         // 写子节点时同样保留 UUID（为空则新生成）。
         QString sUuid = (*cItr).sUuid.isEmpty() ? Utility::createUuid() : (*cItr).sUuid;
         QStandardItem *itemChild = createLabelItem((*cItr).sName, sUuid);
-        if((*cItr).lstChild.count() > 0)
+        if ((*cItr).lstChild.count() > 0)
         {
             traverseWriteLabel(itemChild, (*cItr).lstChild);
         }
@@ -339,7 +338,7 @@ void FormLabels::traverseReadLabel(QStandardItem *item, QList<LabelInfo> &lstLab
     if (item == nullptr)
         return;
     int nRowCount = item->rowCount();
-    for(int i = 0; i < nRowCount; i++)
+    for (int i = 0; i < nRowCount; i++)
     {
         QStandardItem *itemChild = item->child(i);
         if (itemChild == nullptr)   // 跳过 null 子项
@@ -359,7 +358,7 @@ void FormLabels::updateAllLabelList(QVector<QString> vtAllLabels)
     m_modelAllLabels->removeRows(0, m_modelAllLabels->rowCount());
     m_setLabels.clear();
     m_committedText.clear();
-    for(QVector<QString>::iterator it = vtAllLabels.begin(); it != vtAllLabels.end(); it++)
+    for (QVector<QString>::iterator it = vtAllLabels.begin(); it != vtAllLabels.end(); it++)
     {
         QStandardItem *item = createLabelItem(*it);
         m_modelAllLabels->appendRow(item);

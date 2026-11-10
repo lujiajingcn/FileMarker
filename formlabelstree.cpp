@@ -26,14 +26,14 @@
 void FormLabels::onActionAddTriggered()
 {
     QModelIndex curIdx = m_tvAllLabels->currentIndex();
-    if(!curIdx.isValid())
+    if (!curIdx.isValid())
     {
         addItem();
     }
     else
     {
         QStandardItem *parentItem = m_modelAllLabels->itemFromIndex(curIdx)->parent();
-        if(parentItem == nullptr)
+        if (parentItem == nullptr)
         {
             addItem();
         }
@@ -47,7 +47,7 @@ void FormLabels::onActionAddTriggered()
 void FormLabels::onActionAddChildTriggered()
 {
     QModelIndex curIdx = m_tvAllLabels->currentIndex();
-    if(!curIdx.isValid())
+    if (!curIdx.isValid())
     {
         QMessageBox::information(this, "提示", "未选中父节点！");
         return;
@@ -59,7 +59,7 @@ void FormLabels::onActionAddChildTriggered()
 void FormLabels::onActionDeleteTriggered()
 {
     QModelIndex curIdx = m_tvAllLabels->currentIndex();
-    if(!curIdx.isValid())
+    if (!curIdx.isValid())
     {
         return;
     }
@@ -109,7 +109,7 @@ void FormLabels::onActionDeleteTriggered()
         }
     }
 
-    if(parentItem == nullptr)
+    if (parentItem == nullptr)
     {
         m_modelAllLabels->removeRow(nCurRow);
     }
@@ -390,7 +390,7 @@ int FormLabels::syncTagToFiles(bool bRename, const QString &sOldTag, const QStri
 
     const QStringList qLFiles = m_sqlOperation->filesUsingLabel(sOldTag);
     int nOk = 0;
-    foreach (const QString &sFilePath, qLFiles) {
+    for (const QString &sFilePath : qLFiles) {
         const bool bOk = bRename ? ADSOperation::renameTag(sFilePath, sOldTag, sNewTag)
                                  : ADSOperation::removeTag(sFilePath, sOldTag);
         if (bOk) {

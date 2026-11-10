@@ -117,7 +117,7 @@ bool Utility::isContains(const QStringList &list1, const QStringList &list2)
 // 并且用 "tag" 查找文件时永远匹配不到。
 QString Utility::adsNameWithoutType(QString sADSName)
 {
-    if(sADSName.endsWith(ADS_TAIL))
+    if (sADSName.endsWith(ADS_TAIL))
     {
         sADSName.chop(strlen(ADS_TAIL));
     }
@@ -221,17 +221,17 @@ QStringList Utility::splitLabelsPreservingExisting(const QString &sLabels,
 bool Utility::isADSNameValid(QString sADSName)
 {
     sADSName = adsNameWithoutType(sADSName);
-    if(sADSName.isEmpty())
+    if (sADSName.isEmpty())
     {
         return false;
     }
     // Windows 流名大小写不敏感，系统标记可能是 zone.identifier 等变体，必须忽略大小写。
-    if(QString::compare(sADSName, FILTER_TAG, Qt::CaseInsensitive) == 0)
+    if (QString::compare(sADSName, FILTER_TAG, Qt::CaseInsensitive) == 0)
     {
         return false;
     }
     // 归属清单本身不是标签
-    if(QString::compare(sADSName, FM_TAG_MARKER, Qt::CaseInsensitive) == 0)
+    if (QString::compare(sADSName, FM_TAG_MARKER, Qt::CaseInsensitive) == 0)
     {
         return false;
     }

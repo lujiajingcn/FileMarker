@@ -34,7 +34,7 @@ void SqliteOperation::openDB()
     m_sqlDB = QSqlDatabase::addDatabase("QSQLITE");
     // 使用绝对路径，避免依赖进程当前工作目录（CWD 改变时数据库会打开失败）。
     m_sqlDB.setDatabaseName(g_sAppDir + "/FileMarker.db");
-    if(!m_sqlDB.open())
+    if (!m_sqlDB.open())
     {
         // 不要用 qFatal 直接终止程序，改为记录错误并继续，
         // 让上层有机会提示用户而不是无声崩溃。
@@ -47,12 +47,12 @@ void SqliteOperation::createTable()
     QSqlQuery query(m_sqlDB);
     QString sSql = R"(
                       CREATE TABLE IF NOT EXISTS  filewithlabels (
-                      id        INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                      dir       CHAR (260) NOT NULL,
-                      filepath  CHAR (260) NOT NULL,
-                      labels    TEXT (1024) NOT NULL)
+                      id        INTEGER PRIMARY KEY AUTOINCREMENT NOT nullptr,
+                      dir       CHAR (260) NOT nullptr,
+                      filepath  CHAR (260) NOT nullptr,
+                      labels    TEXT (1024) NOT nullptr)
                       )";
-    if(!query.exec(sSql))
+    if (!query.exec(sSql))
     {
         qCritical("create table filewithlabels fails: %s", qPrintable(query.lastError().text()));
     }
@@ -60,10 +60,10 @@ void SqliteOperation::createTable()
     QSqlQuery query1(m_sqlDB);
     QString sSql1 = R"(
                       CREATE TABLE IF NOT EXISTS  dirs (
-                      id    INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                      dir   CHAR (260) UNIQUE NOT NULL)
+                      id    INTEGER PRIMARY KEY AUTOINCREMENT NOT nullptr,
+                      dir   CHAR (260) UNIQUE NOT nullptr)
                       )";
-    if(!query1.exec(sSql1))
+    if (!query1.exec(sSql1))
     {
         qCritical("create table dirs fails: %s", qPrintable(query1.lastError().text()));
     }
@@ -84,7 +84,7 @@ void SqliteOperation::createTable()
     }
     if (!bHasUpdatedAt) {
         QSqlQuery alterQuery(m_sqlDB);
-        if (!alterQuery.exec(QStringLiteral("ALTER TABLE %1 ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
+        if (!alterQuery.exec(QStringLiteral("ALTER TABLE %1 ADD COLUMN updatedAt INTEGER NOT nullptr DEFAULT 0")
                                  .arg(TABLE_NAME_DIR))) {
             qWarning() << "为 dirs 表添加 updatedAt 列失败:" << alterQuery.lastError().text();
         }
@@ -232,7 +232,7 @@ void SqliteOperation::insertRecord(QMap<QString, FILE_TAGS> dirAndFileTags, cons
     // 之后按缓存搜索会命中"有目录、没数据"的空壳，永远查不到文件。
     if (!m_sqlDB.transaction()) {
         QString sErrorMsg = QString("Transaction failed to start:%1").arg(m_sqlDB.lastError().text());
-        qCritical("%s", sErrorMsg.toStdString().c_str());
+        qCritical("%s", qPrintable(sErrorMsg));
         return;
     }
 
@@ -254,9 +254,9 @@ void SqliteOperation::insertRecord(QMap<QString, FILE_TAGS> dirAndFileTags, cons
     for (int i = 0; i < qLAllDirs.count(); i++) {
         query.bindValue(":dir", qLAllDirs.at(i));
         query.bindValue(":ts", nNow);
-        if(!query.exec()) {
+        if (!query.exec()) {
             QString sErrorMsg = QString("向表dirs中插入数据失败：%1").arg(query.lastError().text());
-            qCritical("%s", sErrorMsg.toStdString().c_str());
+            qCritical("%s", qPrintable(sErrorMsg));
             m_sqlDB.rollback();
             return;
         }
@@ -276,24 +276,28 @@ void SqliteOperation::insertRecord(QMap<QString, FILE_TAGS> dirAndFileTags, cons
         QSqlQuery insQuery(m_sqlDB);
         insQuery.prepare(QString("INSERT INTO %1 (filepath, labels, dir) VALUES (:filepath, :labels, :dir)").arg(TABLE_NAME_FILEPATH_TAG));
 
-        for(QMap<QString, FILE_TAGS>::const_iterator cItr = dirAndFileTags.begin(); cItr != dirAndFileTags.end(); cItr++) {
+        for (QMap<QString, FILE_TAGS>::const_iterator cItr = dirAndFileTags.begin(); cItr != dirAndFileTags.end(); cItr++) {
             QString selDir = cItr.key();
 
             delQuery.bindValue(":dir", selDir);
-            if(!delQuery.exec()) {
-                QString sErrorMsg = QString("删除表%1中dir为%2的记录失败：%3").arg(TABLE_NAME_FILEPATH_TAG).arg(selDir).arg(delQuery.lastError().text());
-                qCritical("%s", sErrorMsg.toStdString().c_str());
+            if (!delQuery.exec()) {
+                QString sErrorMsg = QString("删除表%1中dir为%2的记录失败：%3")
+                                        .arg(TABLE_NAME_FILEPATH_TAG)
+                                        .arg(selDir)
+                                        .arg(delQuery.lastError().text());
+                qCritical("%s", qPrintable(sErrorMsg));
                 m_sqlDB.rollback();
                 return;
             }
 
-            for(QMap<QString, QStringList>::const_iterator cItrChild = cItr.value().begin(); cItrChild != cItr.value().end(); cItrChild++) {
+            for (QMap<QString, QStringList>::const_iterator cItrChild = cItr.value().cbegin();
+                 cItrChild != cItr.value().cend(); ++cItrChild) {
                 insQuery.bindValue(":filepath", cItrChild.key());
                 insQuery.bindValue(":labels", cItrChild.value().join(","));
                 insQuery.bindValue(":dir", selDir);
                 if (!insQuery.exec()) {
                     QString sErrorMsg = QString("向表%1中插入数据失败：%2").arg(TABLE_NAME_FILEPATH_TAG).arg(insQuery.lastError().text());
-                    qCritical("%s", sErrorMsg.toStdString().c_str());
+                    qCritical("%s", qPrintable(sErrorMsg));
                     m_sqlDB.rollback();
                     return;
                 }
@@ -302,25 +306,29 @@ void SqliteOperation::insertRecord(QMap<QString, FILE_TAGS> dirAndFileTags, cons
 
         if (!m_sqlDB.commit()) {
             QString sErrorMsg = QString("Transaction commit failed:%1").arg(insQuery.lastError().text());
-            qCritical("%s", sErrorMsg.toStdString().c_str());
+            qCritical("%s", qPrintable(sErrorMsg));
             m_sqlDB.rollback();
         }
     }
 }
 
 
-void SqliteOperation::searchFilesByLabels(QStringList qLSelDirs, const QList<QSet<QString>> &qLLabelGroups, int nLabelLogic, QStringList &qLFilePaths, QStringList &qLNotHitedDirs)
+void SqliteOperation::searchFilesByLabels(QStringList qLSelDirs,
+                                          const QList<QSet<QString>> &qLLabelGroups,
+                                          int nLabelLogic,
+                                          QStringList &qLFilePaths,
+                                          QStringList &qLNotHitedDirs)
 {
     QStringList qLSearchedDirs; // 已经缓存过的文件夹，从数据库中查找获得
     QSqlQuery query(m_sqlDB);
     query.exec(QString("SELECT dir FROM dirs"));
-    while(query.next())
+    while (query.next())
     {
         qLSearchedDirs << query.value("dir").toString();
     }
     query.finish();
 
-    if(qLSearchedDirs.count() == 0)
+    if (qLSearchedDirs.count() == 0)
     {
         qLNotHitedDirs = qLSelDirs;
         return;
@@ -347,11 +355,11 @@ void SqliteOperation::searchFilesByLabels(QStringList qLSelDirs, const QList<QSe
     // 使用预编译语句 + bindValue，避免路径中包含单引号等字符导致 SQL 语法错误。
     QSqlQuery hitQuery(m_sqlDB);
     hitQuery.prepare(QString("SELECT filepath,labels FROM filewithlabels WHERE dir=:dir"));
-    for(QSet<QString>::const_iterator cItr = stHitedDirs.begin(); cItr != stHitedDirs.end(); cItr++)
+    for (QSet<QString>::const_iterator cItr = stHitedDirs.begin(); cItr != stHitedDirs.end(); cItr++)
     {
         hitQuery.bindValue(":dir", *cItr);
         hitQuery.exec();
-        while(hitQuery.next())
+        while (hitQuery.next())
         {
             QString sFilePath = hitQuery.value("filepath").toString();
             QString sLabels = hitQuery.value("labels").toString();

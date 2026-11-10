@@ -72,8 +72,7 @@ void FormPageFiles::onDeleteLabels()
 
     bool bAllOk = true;
     QStringList qLFailedFiles;          // 把失败的文件名带回给用户
-    foreach(const QString &sSelFilePath, qLSelFilePaths)
-    {
+    for (const QString &sSelFilePath : qLSelFilePaths) {
         if (!ADSOperation::deleteADSFiles(sSelFilePath)) {
             bAllOk = false;
             qLFailedFiles << QFileInfo(sSelFilePath).fileName();

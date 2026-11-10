@@ -17,7 +17,7 @@ SearchConfig ConfigOperation::readSearchConfig(QString sConfigFilePath)
     SearchConfig sc;
 
     QSettings settings(sConfigFilePath, QSettings::Format::IniFormat);
-    if(settings.status() != QSettings::NoError)
+    if (settings.status() != QSettings::NoError)
     {
         qWarning().noquote() << QString("打开配置文件失败: %1").arg(settings.status());
         return sc;
@@ -46,7 +46,7 @@ SearchConfig ConfigOperation::readSearchConfig(QString sConfigFilePath)
 void ConfigOperation::writeSearchConfig(QString sConfigFilePath, SearchConfig sc)
 {
     QSettings settings(sConfigFilePath, QSettings::Format::IniFormat);
-    if(settings.status() != QSettings::NoError)
+    if (settings.status() != QSettings::NoError)
     {
         qWarning().noquote()<<QString("写入配置文件失败:%1").arg(settings.status());
         return;

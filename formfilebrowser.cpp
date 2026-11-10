@@ -362,7 +362,7 @@ void FormFileBrowser::showFilesWidget()
 void FormFileBrowser::showFilteredFile(QStringList qLFilteredFiles)
 {
     // 将命中缓存的部分与磁盘查找得到的部分合并，避免部分目录命中缓存时被整体丢弃。
-    if(!m_qLFilePathsFromCache.isEmpty())
+    if (!m_qLFilePathsFromCache.isEmpty())
     {
         qLFilteredFiles = m_qLFilePathsFromCache + qLFilteredFiles;
         m_qLFilePathsFromCache.clear();
@@ -384,7 +384,7 @@ void FormFileBrowser::onGotoFilePath(QString sFilePath)
 
 void FormFileBrowser::onTvNavigationClicked(const QModelIndex &index)
 {
-    if(ui->stackedWidget->currentWidget() == ui->pageProgressInfo)
+    if (ui->stackedWidget->currentWidget() == ui->pageProgressInfo)
     {
         emit sendStop();
         return;

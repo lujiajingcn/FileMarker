@@ -85,7 +85,7 @@ void ThreadAddTagByAI::run()
     // 不在此处复位则 m_bIsStop 仍为 true，AI 线程会立即跳过所有目录并结束。
     TraverseDirectory::resetStop();
 
-    foreach (QString selDir , m_dirs) {
+    for (QString selDir : m_dirs) {
         // 已请求停止时，不再继续遍历其余目录。
         if (TraverseDirectory::isStopped())
             break;
@@ -101,7 +101,7 @@ void ThreadAddTagByAI::run()
 
 bool ThreadAddTagByAI::addTag(const QFileInfo& info)
 {
-    if(info.isDir())
+    if (info.isDir())
         return true;
 
     QString filePath = info.filePath();
@@ -202,7 +202,7 @@ bool ThreadAddTagByAI::addTag(const QFileInfo& info)
             // 模型可能把多个标签写在一个数组元素里（中文 comma/分号等），
             // 按统一规则再拆一次，避免把 "a，b" 整体写成一个标签。
             const QStringList tagsInItem = Utility::splitLabels(v.toString());
-            foreach (const QString &sTag, tagsInItem) {
+            for (const QString &sTag : tagsInItem) {
                 // 按磁盘流名规则先净化，避免库/磁盘出现 "C++:语言" vs "C++_语言"
                 const QString sSanitized = ADSOperation::sanitizeTagName(sTag);
                 if (!sSanitized.isEmpty() && !listTags.contains(sSanitized))

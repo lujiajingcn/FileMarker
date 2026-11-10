@@ -200,19 +200,19 @@ void FormPageFiles::onLookInComboReturnPressed()
 
 void FormPageFiles::updateToolButtons()
 {
-    if(m_skBackward.count() == 0)
+    if (m_skBackward.count() == 0)
         ui->backButton->setEnabled(false);
     else
         ui->backButton->setEnabled(true);
 
-    if(m_skForward.count() == 0)
+    if (m_skForward.count() == 0)
         ui->forwardButton->setEnabled(false);
     else
         ui->forwardButton->setEnabled(true);
 
     QModelIndex rootIndex = m_tvFiles->rootIndex();
     QString sFilePath = m_modelFiles->filePath(rootIndex);
-    if(sFilePath.isEmpty())
+    if (sFilePath.isEmpty())
         ui->toParentButton->setEnabled(false);
     else
         ui->toParentButton->setEnabled(true);
@@ -331,12 +331,12 @@ void FormPageFiles::onDoubleClicked(const QModelIndex &index)
 
     QFileInfo fileInfo = m_modelFiles->fileInfo(index);
     QString path = index.data(QFileSystemModel::FilePathRole).toString();
-    if(fileInfo.isDir())
+    if (fileInfo.isDir())
     {
         bothSetRootIndex(m_modelFiles->index(path));
         curDirChanged(path);
     }
-    else if(fileInfo.isFile())
+    else if (fileInfo.isFile())
     {
         QUrl url = QUrl::fromLocalFile(path);
         QDesktopServices::openUrl(url);
