@@ -222,7 +222,6 @@ void IntroductionWidget::drawPointerArrow(QPainter &painter, const QRect &anchor
 {
     const int arrowLength = 42;   // 箭头总长
     const int gap = 14;           // 箭尖与控件外沿的距离（留出箭头头部的空间）
-    const int clampMargin = 16;   // 箭头沿边落点时，离控件拐角的最小距离
 
     const QRect textRect = m_textWidget->geometry();
     const QPoint textCenter = textRect.center();
@@ -235,12 +234,12 @@ void IntroductionWidget::drawPointerArrow(QPainter &painter, const QRect &anchor
     const int dx = anchorCenter.x() - textCenter.x();
     const int dy = anchorCenter.y() - textCenter.y();
 
+    // 箭头落在高亮区的"正中"：水平箭头取目标的竖直中线，
+    // 竖直箭头取目标的水平中线，这样箭头正对着被照亮的区域。
     QPoint tip;        // 箭尖
     QPointF unit;      // 从箭尖指向正文块的方向（箭头指向的反方向）
     if (qAbs(dx) >= qAbs(dy)) {
-        const int y = qBound(anchorRect.top() + clampMargin,
-                             textCenter.y(),
-                             anchorRect.bottom() - clampMargin);
+        const int y = anchorCenter.y();
         if (dx > 0) {
             tip = QPoint(anchorRect.left() - gap, y);
             unit = QPointF(-1.0, 0.0);
@@ -249,9 +248,7 @@ void IntroductionWidget::drawPointerArrow(QPainter &painter, const QRect &anchor
             unit = QPointF(1.0, 0.0);
         }
     } else {
-        const int x = qBound(anchorRect.left() + clampMargin,
-                             textCenter.x(),
-                             anchorRect.right() - clampMargin);
+        const int x = anchorCenter.x();
         if (dy > 0) {
             tip = QPoint(x, anchorRect.top() - gap);
             unit = QPointF(0.0, -1.0);
