@@ -296,20 +296,18 @@ void FormFileBrowser::setWindowStyleSheet()
     ui->stackedWidget->setCurrentWidget(ui->pageFiles);
 }
 
-void FormFileBrowser::setActions(QAction *aAddLabelByAI, QAction *aAddLabel, QAction *aDelLabel, QAction *aSearch, QAction *aTraverse, QAction *aSearchConfig)
+void FormFileBrowser::setActions(QAction *aAddLabelByAI, QAction *aAddLabel, QAction *aDelLabel, QAction *aSearch, QAction *aTraverse)
 {
     m_aAddLabelByAI = aAddLabelByAI;
     m_aAddLabel = aAddLabel;
     m_aDelLabel = aDelLabel;
     m_aSearch = aSearch;
     m_aTraverse = aTraverse;
-    m_aSearchConfig = aSearchConfig;
 
     connect(m_aAddLabelByAI, &QAction::triggered, this, &FormFileBrowser::onActionAddLabelByAITriggered);
     connect(m_aAddLabel, &QAction::triggered, this, &FormFileBrowser::onActionAddLabelsTriggered);
     connect(m_aSearch, &QAction::triggered, this, &FormFileBrowser::onActionSearchFilesbyLabelsTriggered);
     connect(m_aTraverse, &QAction::triggered, this, &FormFileBrowser::onActionTraverseSelDirsTriggered);
-    connect(m_aSearchConfig, &QAction::triggered, this, &FormFileBrowser::onActionSearchConfigTriggered);
 
     ui->pageFiles->setAction(aDelLabel);
 
@@ -322,8 +320,7 @@ void FormFileBrowser::setActions(QAction *aAddLabelByAI, QAction *aAddLabel, QAc
     ui->pageFiles->setCommandActions(QList<QAction *>()
                                      << aAddLabelByAI << nullptr
                                      << aAddLabel << aDelLabel << nullptr
-                                     << aSearch << aTraverse << nullptr
-                                     << aSearchConfig);
+                                     << aSearch << aTraverse);
 }
 
 QStringList FormFileBrowser::getSelFilePath()

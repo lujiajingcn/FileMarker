@@ -49,7 +49,7 @@ public:
     // 设置样式，大部分样式已经在filebrowser.ui中设置完成，在此进行少量样式设置
     void setWindowStyleSheet();
 
-    void setActions(QAction *aAddLabelByAI, QAction *aAddLabel, QAction *aDelLabel, QAction *aSearch, QAction *aTraverse, QAction *aSearchConfig);
+    void setActions(QAction *aAddLabelByAI, QAction *aAddLabel, QAction *aDelLabel, QAction *aSearch, QAction *aTraverse);
 
     QStringList getSelFilePath();
 
@@ -152,7 +152,6 @@ private:
     QAction             *m_aDelLabel;
     QAction             *m_aSearch;
     QAction             *m_aTraverse;
-    QAction             *m_aSearchConfig;
 
     // 搜索按钮右侧的小箭头菜单：直接切换"标签关系 / 数据来源"，不用每次弹对话框
     QMenu               *m_searchMenu = nullptr;

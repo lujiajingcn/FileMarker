@@ -174,18 +174,6 @@
     <string>作者信息</string>
    </property>
   </action>
-  <action name="actionSearchConfig">
-   <property name="icon">
-    <iconset resource="resources.qrc">
-     <normaloff>:/Resources/cog.png</normaloff>:/Resources/cog.png</iconset>
-   </property>
-   <property name="text">
-    <string>设置查找条件</string>
-   </property>
-   <property name="toolTip">
-    <string>设置查找条件：多个标签之间用「与」还是「或」，以及从缓存数据库还是直接从磁盘查找</string>
-   </property>
-  </action>
   <action name="actionAddLabelbyAI">
    <property name="icon">
     <iconset resource="resources.qrc">
