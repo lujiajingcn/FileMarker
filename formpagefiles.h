@@ -27,6 +27,7 @@ class EditableDelegate;
 class ThumbnailIconProvider;
 class QTimer;
 class QMenu;
+class QToolButton;
 class TagChipDelegate;
 
 namespace Ui {
@@ -96,6 +97,9 @@ public:
 
     /** 给"搜索"命令指定一个下拉菜单：命令条上会把它做成"主点击搜索 + 小箭头出菜单"的分裂按钮 */
     void setSearchButtonMenu(QAction *pSearchAction, QMenu *pMenu);
+
+    /** 弹出搜索按钮右侧的条件菜单（F3 / Ctrl+Shift+F） */
+    void popupSearchMenu();
 
 protected:
     // 双击文件夹则进入该文件夹，双击文件则打开该文件。
@@ -215,8 +219,13 @@ private:
     QToolBar               *m_commandBar = nullptr;
     TagChipDelegate        *m_tagChipDelegate = nullptr;  // 标签列的 chip 代理（带 ✕ 删除）
     QAction                *m_actionRename = nullptr;    // F2 重命名（作用于当前视图的选中项）
+    QAction                *m_actionSelectAll = nullptr; // Ctrl+A 全选当前目录的文件
+    QAction                *m_actionOpen = nullptr;      // Enter 打开/进入选中项
+    QAction                *m_actionClearTags = nullptr; // Delete 清空选中文件的标签
+    QAction                *m_actionSearchMenu = nullptr; // F3 / Ctrl+Shift+F 弹出查找条件菜单
     QAction                *m_pSearchAction = nullptr;  // 命令条上要做成分裂按钮的"搜索"动作
     QMenu                  *m_pSearchMenu = nullptr;    // 它的下拉菜单（由 FormFileBrowser 提供）
+    QToolButton            *m_pSearchButton = nullptr;  // 命令条上那个分裂按钮本身（用于定位菜单）
 
 private:
     Ui::FormPageFiles *ui;

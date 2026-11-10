@@ -213,6 +213,59 @@ FormPageFiles::FormPageFiles(QWidget *parent) :
     });
     addAction(m_actionRename);
 
+    // 下面几个动作只挂到两个文件视图上（WidgetWithChildrenShortcut），
+    // 这样地址栏的输入框、右侧标签库的 Ctrl+A 都不会被抢走。
+    auto addToFileViews = [this](QAction *pAction) {
+        if (m_tvFiles != nullptr)
+            m_tvFiles->addAction(pAction);
+        if (m_lstFiles != nullptr)
+            m_lstFiles->addAction(pAction);
+    };
+
+    // Ctrl+A：全选当前目录里的文件。焦点在地址栏时仍然让输入框自己全选文本。
+    m_actionSelectAll = new QAction(tr("全选"), this);
+    m_actionSelectAll->setShortcut(QKeySequence(QKeySequence::SelectAll));
+    m_actionSelectAll->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+    connect(m_actionSelectAll, &QAction::triggered, this, [this]() {
+        if (auto *pEdit = qobject_cast<QLineEdit *>(QApplication::focusWidget())) {
+            pEdit->selectAll();
+            return;
+        }
+        if (m_lstFiles != nullptr && m_lstFiles->isVisible())
+            m_lstFiles->selectAll();
+        else if (m_tvFiles != nullptr)
+            m_tvFiles->selectAll();
+    });
+    addAction(m_actionSelectAll);
+
+    // Enter：打开文件 / 进入目录（和双击一致）
+    m_actionOpen = new QAction(tr("打开"), this);
+    m_actionOpen->setShortcuts(QList<QKeySequence>() << QKeySequence(Qt::Key_Return)
+                                                     << QKeySequence(Qt::Key_Enter));
+    m_actionOpen->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+    connect(m_actionOpen, &QAction::triggered, this, [this]() {
+        const QModelIndex index = currentIndexInActiveView();
+        if (index.isValid())
+            onDoubleClicked(index);
+    });
+    addToFileViews(m_actionOpen);
+
+    // Delete：清空选中文件的全部标签（等同命令条的"清空文件标签"，会先确认）
+    m_actionClearTags = new QAction(tr("清空选中文件的标签"), this);
+    m_actionClearTags->setShortcut(QKeySequence(Qt::Key_Delete));
+    m_actionClearTags->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+    connect(m_actionClearTags, &QAction::triggered, this, &FormPageFiles::onDeleteLabels);
+    addToFileViews(m_actionClearTags);
+
+    // F3 / Ctrl+Shift+F：弹出搜索按钮右侧的"标签关系 / 数据来源"菜单
+    m_actionSearchMenu = new QAction(tr("查找条件…"), this);
+    m_actionSearchMenu->setShortcuts(QList<QKeySequence>() << QKeySequence(Qt::Key_F3)
+                                                           << QKeySequence(Qt::CTRL + Qt::SHIFT
+                                                                           + Qt::Key_F));
+    m_actionSearchMenu->setShortcutContext(Qt::WindowShortcut);
+    connect(m_actionSearchMenu, &QAction::triggered, this, &FormPageFiles::popupSearchMenu);
+    addAction(m_actionSearchMenu);
+
     // 地址栏下拉：展示最近 10 次打开过的目录（持久化，重启后仍在）。
     // 不用 QComboBox 的自动插入（InsertAtBottom），历史由 rememberPath() 统一维护。
     ui->lookInCombo->setInsertPolicy(QComboBox::NoInsert);
@@ -992,6 +1045,20 @@ void FormPageFiles::setSearchButtonMenu(QAction *pSearchAction, QMenu *pMenu)
     m_pSearchMenu = pMenu;
 }
 
+/** F3 / Ctrl+Shift+F：把"查找条件"菜单弹在搜索按钮下方（键盘也能改条件）。 */
+void FormPageFiles::popupSearchMenu()
+{
+    if (m_pSearchMenu == nullptr)
+        return;
+    QPoint pos;
+    if (m_pSearchButton != nullptr && m_pSearchButton->isVisible()) {
+        pos = m_pSearchButton->mapToGlobal(QPoint(0, m_pSearchButton->height()));
+    } else {
+        pos = QCursor::pos();
+    }
+    m_pSearchMenu->popup(pos);
+}
+
 void FormPageFiles::setCommandActions(const QList<QAction *> &actions)
 {
     if (m_commandBar == nullptr) {
@@ -1020,6 +1087,7 @@ void FormPageFiles::setCommandActions(const QList<QAction *> &actions)
         // "搜索"做成分裂按钮：点主区域直接按上次条件搜索，点右侧小箭头出条件菜单
         if (pAction == m_pSearchAction && m_pSearchMenu != nullptr) {
             auto *pSearchBtn = new QToolButton(m_commandBar);
+            m_pSearchButton = pSearchBtn;   // F3 弹菜单时用来定位
             pSearchBtn->setDefaultAction(pAction);
             pSearchBtn->setMenu(m_pSearchMenu);
             pSearchBtn->setPopupMode(QToolButton::MenuButtonPopup);
