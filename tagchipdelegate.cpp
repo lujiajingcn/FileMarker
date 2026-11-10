@@ -1,5 +1,7 @@
 #include "tagchipdelegate.h"
 
+#include "utility.h"
+
 #include <QApplication>
 #include <QFontMetrics>
 #include <QMouseEvent>
@@ -29,31 +31,6 @@ TagChipDelegate::TagChipDelegate(QObject *parent)
 {
 }
 
-QStringList TagChipDelegate::splitLabels(const QString &sLabels)
-{
-    QStringList qLResult;
-    const QString sTrimmed = sLabels.trimmed();
-    if (sTrimmed.isEmpty())
-        return qLResult;
-
-    QString sCurrent;
-    for (const QChar ch : sTrimmed) {
-        if (ch == QLatin1Char(',') || ch == QChar(0xFF0C) /* ， */
-            || ch == QChar(0x3001) /* 、 */ || ch == QLatin1Char(';')
-            || ch == QChar(0xFF1B) /* ； */) {
-            const QString sTag = sCurrent.trimmed();
-            if (!sTag.isEmpty())
-                qLResult << sTag;
-            sCurrent.clear();
-            continue;
-        }
-        sCurrent.append(ch);
-    }
-    const QString sLast = sCurrent.trimmed();
-    if (!sLast.isEmpty())
-        qLResult << sLast;
-    return qLResult;
-}
 
 QVector<TagChipDelegate::Chip> TagChipDelegate::layoutChips(const QStyleOptionViewItem &option,
                                                             const QStringList &qLTags)
@@ -99,7 +76,7 @@ void TagChipDelegate::paint(QPainter *painter, const QStyleOptionViewItem &optio
     QStyle *pStyle = opt.widget != nullptr ? opt.widget->style() : QApplication::style();
     pStyle->drawControl(QStyle::CE_ItemViewItem, &opt, painter, opt.widget);
 
-    const QStringList qLTags = splitLabels(sLabels);
+    const QStringList qLTags = Utility::splitLabels(sLabels);
     // 目录那一行模型给的是占位符"—"，不能当成一个标签画成 chip
     const bool bHasTags = !qLTags.isEmpty() && sLabels.trimmed() != QStringLiteral("—");
     if (!bHasTags) {
@@ -150,7 +127,7 @@ bool TagChipDelegate::editorEvent(QEvent *event, QAbstractItemModel *model,
     if (event->type() == QEvent::MouseButtonRelease) {
         auto *pMouseEvent = static_cast<QMouseEvent *>(event);
         if (pMouseEvent->button() == Qt::LeftButton) {
-            const QStringList qLTags = splitLabels(index.data(Qt::DisplayRole).toString());
+            const QStringList qLTags = Utility::splitLabels(index.data(Qt::DisplayRole).toString());
             for (const Chip &chip : layoutChips(option, qLTags)) {
                 if (chip.rcClose.contains(pMouseEvent->pos())) {
                     emit removeTagRequested(index, chip.sTag);

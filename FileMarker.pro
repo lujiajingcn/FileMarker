@@ -11,6 +11,13 @@ QT += network
 
 TARGET = FileMarker
 TEMPLATE = app
+# ---- 版本信息（Windows 下会写进 exe 属性页）----
+VERSION = 1.0.0
+QMAKE_TARGET_PRODUCT = "FileMarker"
+QMAKE_TARGET_DESCRIPTION = "FileMarker - NTFS tag manager"
+QMAKE_TARGET_COMPANY = "FileMarker"
+QMAKE_TARGET_COPYRIGHT = "Copyright (C) 2026 FileMarker"
+
 RC_ICONS = attachment.ico
 
 # The following define makes your compiler emit warnings if you use
@@ -34,8 +41,13 @@ SOURCES += \
         editablefiledelegate.cpp \
         formcurdirlabels.cpp \
         formfilebrowser.cpp \
+        formfilebrowserexport.cpp \
+        formfilebrowsersearch.cpp \
+        formfilebrowsertagops.cpp \
         formfilenavigation.cpp \
         formlabels.cpp \
+        formlabelsmisc.cpp \
+        formlabelstree.cpp \
         formpagefiles.cpp \
         formpagefilesmenu.cpp \
         formpagefilesnav.cpp \

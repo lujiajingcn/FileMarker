@@ -4,6 +4,7 @@
 #include <QFileInfo>
 
 #include "tagchipdelegate.h"
+#include "utility.h"
 #include "thumbnailiconprovider.h"
 
 namespace {
@@ -124,7 +125,7 @@ QStringList tagListFor(const QModelIndex &index)
         index.sibling(index.row(), 4).data(Qt::DisplayRole).toString().trimmed();
     if (sText.isEmpty() || sText == QStringLiteral("\u2014"))
         return QStringList();
-    return TagChipDelegate::splitLabels(sText);
+    return Utility::splitLabels(sText);
 }
 
 QStringList nameLinesFor(const QFontMetrics &fm, const QString &text, int width, int maxLines)

@@ -31,9 +31,12 @@ SOURCES += \
     tst_adsoperation.cpp \
     tst_xmloperation.cpp \
     tst_searchmatch.cpp \
+    tst_utility.cpp \
+    tst_tagexport.cpp \
     ../adsoperation.cpp \
     ../xmloperation.cpp \
     ../searchmatch.cpp \
+    ../tagexport.cpp \
     ../utility.cpp \
     ../common.cpp
 
@@ -41,4 +44,6 @@ HEADERS += \
     tst_adsoperation.h \
     tst_xmloperation.h \
     tst_searchmatch.h \
+    tst_utility.h \
+    tst_tagexport.h \
     ../adsoperation.h

@@ -34,8 +34,6 @@ public:
         return nullptr;
     }
 
-    /** 把 "a,b,c" 拆成标签列表（兼容全角逗号/顿号/分号）；缩略图视图也用它 */
-    static QStringList splitLabels(const QString &sLabels);
 
 signals:
     /** 用户点了某个标签上的 ✕ */
