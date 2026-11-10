@@ -62,31 +62,31 @@ FormPageFiles::FormPageFiles(QWidget *parent) :
 
     m_delegate = nullptr;
     m_iconProvider = nullptr;
-    m_nIconSize = ICON_SIZE;
-    m_nSortColumn = 0;
+    m_iconSize = ICON_SIZE;
+    m_sortColumn = 0;
     m_sortOrder = Qt::AscendingOrder;
-    m_pScanTimer = nullptr;
-    m_nScanRow = 0;
-    m_nScanTotal = 0;
+    m_scanTimer = nullptr;
+    m_scanRow = 0;
+    m_scanTotal = 0;
 
     m_modelFiles = new MyQFileSystemModel(this);
     // 设置根路径（例如当前目录）
     m_modelFiles->setRootPath("");
 
     // 当前目录标签的分片扫描定时器：每片最多 15ms，避免一次枚举上千个文件卡住界面
-    m_pScanTimer = new QTimer(this);
-    m_pScanTimer->setInterval(0);
-    connect(m_pScanTimer, &QTimer::timeout, this, &FormPageFiles::continueDirLabelScan);
+    m_scanTimer = new QTimer(this);
+    m_scanTimer->setInterval(0);
+    connect(m_scanTimer, &QTimer::timeout, this, &FormPageFiles::continueDirLabelScan);
 
     // 目录内容异步加载完成后再扫一次标签（导航时立刻扫描时 rowCount 可能还是 0）
     connect(m_modelFiles, &QFileSystemModel::directoryLoaded, this, [this](const QString &sPath) {
-        if (FmPageUtil::isSameDirPath(sPath, m_sCurDir))
-            scanDirLabels(m_sCurDir);
+        if (FmPageUtil::isSameDirPath(sPath, m_curDir))
+            scanDirLabels(m_curDir);
     });
     // 扫描过程中排序/目录内容变化会改变行顺序，已扫描的行号会错位；只有正在扫描时才重启。
     auto restartScanIfActive = [this]() {
-        if (m_pScanTimer != nullptr && m_pScanTimer->isActive() && !m_sCurDir.isEmpty())
-            scanDirLabels(m_sCurDir, true);
+        if (m_scanTimer != nullptr && m_scanTimer->isActive() && !m_curDir.isEmpty())
+            scanDirLabels(m_curDir, true);
     };
     connect(m_modelFiles, &QAbstractItemModel::layoutChanged, this, [restartScanIfActive]() {
         restartScanIfActive();
@@ -110,12 +110,12 @@ FormPageFiles::FormPageFiles(QWidget *parent) :
         const QByteArray headerState = settings.value(QStringLiteral("view/headerState")).toByteArray();
         const int nSettingsVersion = settings.value(QStringLiteral("settings/version"), 0).toInt();
         if (nSettingsVersion >= 2 && !headerState.isEmpty()
-                && m_tvFiles != nullptr && m_tvFiles->header() != nullptr) {
-            m_tvFiles->header()->restoreState(headerState);
-            m_bHeaderRestored = true;
+                && m_filesTree != nullptr && m_filesTree->header() != nullptr) {
+            m_filesTree->header()->restoreState(headerState);
+            m_headerRestored = true;
             // 旧版本保存的状态可能把列模式/表头可点击性也恢复成旧值，这里重申当前策略：
             // 所有列都可拖动调宽（与 Windows 资源管理器一致），最后一列不再自动撑满。
-            QHeaderView *header = m_tvFiles->header();
+            QHeaderView *header = m_filesTree->header();
             header->setSectionsClickable(true);
             for (int i = 0; i < header->count(); ++i)
                 header->setSectionResizeMode(i, QHeaderView::Interactive);
@@ -160,10 +160,10 @@ FormPageFiles::FormPageFiles(QWidget *parent) :
     // 下面几个动作只挂到两个文件视图上（WidgetWithChildrenShortcut），
     // 这样地址栏的输入框、右侧标签库的 Ctrl+A 都不会被抢走。
     auto addToFileViews = [this](QAction *pAction) {
-        if (m_tvFiles != nullptr)
-            m_tvFiles->addAction(pAction);
-        if (m_lstFiles != nullptr)
-            m_lstFiles->addAction(pAction);
+        if (m_filesTree != nullptr)
+            m_filesTree->addAction(pAction);
+        if (m_filesList != nullptr)
+            m_filesList->addAction(pAction);
     };
 
     // Ctrl+A：全选当前目录里的文件。焦点在地址栏时仍然让输入框自己全选文本。
@@ -175,10 +175,10 @@ FormPageFiles::FormPageFiles(QWidget *parent) :
             pEdit->selectAll();
             return;
         }
-        if (m_lstFiles != nullptr && m_lstFiles->isVisible())
-            m_lstFiles->selectAll();
-        else if (m_tvFiles != nullptr)
-            m_tvFiles->selectAll();
+        if (m_filesList != nullptr && m_filesList->isVisible())
+            m_filesList->selectAll();
+        else if (m_filesTree != nullptr)
+            m_filesTree->selectAll();
     });
     addAction(m_actionSelectAll);
 
@@ -215,7 +215,7 @@ FormPageFiles::FormPageFiles(QWidget *parent) :
     ui->lookInCombo->setInsertPolicy(QComboBox::NoInsert);
     ui->lookInCombo->setMaxVisibleItems(10);
     loadRecentDirs();
-    ui->lookInCombo->setEditText(m_sCurDir);
+    ui->lookInCombo->setEditText(m_curDir);
 
     // 地址栏是可编辑的（.ui 中 editable=true）：回车或选择历史项时按路径导航。
     connect(ui->lookInCombo->lineEdit(), &QLineEdit::returnPressed,
@@ -235,13 +235,13 @@ FormPageFiles::~FormPageFiles()
 #if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
     settings.setIniCodec("UTF-8");
 #endif
-    if (m_tvFiles != nullptr && m_tvFiles->header() != nullptr)
-        settings.setValue(QStringLiteral("view/headerState"), m_tvFiles->header()->saveState());
+    if (m_filesTree != nullptr && m_filesTree->header() != nullptr)
+        settings.setValue(QStringLiteral("view/headerState"), m_filesTree->header()->saveState());
     settings.setValue(QStringLiteral("settings/version"), 2);
-    settings.setValue(QStringLiteral("view/sortColumn"), m_nSortColumn);
+    settings.setValue(QStringLiteral("view/sortColumn"), m_sortColumn);
     settings.setValue(QStringLiteral("view/sortOrder"), static_cast<int>(m_sortOrder));
-    if (!m_sCurDir.isEmpty())
-        settings.setValue(QStringLiteral("view/lastDir"), m_sCurDir);
+    if (!m_curDir.isEmpty())
+        settings.setValue(QStringLiteral("view/lastDir"), m_curDir);
 
     delete m_iconProvider;   // 非 QObject，需要手动释放
     delete ui;
@@ -250,37 +250,37 @@ FormPageFiles::~FormPageFiles()
 
 void FormPageFiles::initDetailFileList()
 {
-    m_tvFiles = ui->tvFiles;
+    m_filesTree = ui->tvFiles;
      // 设置可以选中多行
-    m_tvFiles->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    m_filesTree->setSelectionMode(QAbstractItemView::ExtendedSelection);
     // 接受从【标签库】拖过来的标签（见 eventFilter / applyDroppedLabels）
-    m_tvFiles->setAcceptDrops(true);
-    m_tvFiles->viewport()->setAcceptDrops(true);
-    m_tvFiles->viewport()->installEventFilter(this);
-    m_tvFiles->setModel(m_modelFiles);
+    m_filesTree->setAcceptDrops(true);
+    m_filesTree->viewport()->setAcceptDrops(true);
+    m_filesTree->viewport()->installEventFilter(this);
+    m_filesTree->setModel(m_modelFiles);
     // 第 0~3 列装"拒绝编辑"代理，禁止 F2/双击把文件名改到磁盘上。
     for (int nCol = 0; nCol <= 3; ++nCol)
-        m_tvFiles->setItemDelegateForColumn(nCol, new NoEditDelegate(m_tvFiles));
+        m_filesTree->setItemDelegateForColumn(nCol, new NoEditDelegate(m_filesTree));
     // 标签列也不再就地编辑：双击标签单元格改为弹出"增删式"标签对话框
     // （在 onDoubleClicked 里处理），与缩略图的双击语义统一。
     // 标签列改成 chip 样式：每个标签一个带 ✕ 的小药丸，点 ✕ 单独删该标签
-    m_tagChipDelegate = new TagChipDelegate(m_tvFiles);
-    m_tvFiles->setItemDelegateForColumn(4, m_tagChipDelegate);
+    m_tagChipDelegate = new TagChipDelegate(m_filesTree);
+    m_filesTree->setItemDelegateForColumn(4, m_tagChipDelegate);
     connect(m_tagChipDelegate, &TagChipDelegate::removeTagRequested,
             this, &FormPageFiles::onRemoveTagFromRow);
-    m_tvFiles->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    m_filesTree->setEditTriggers(QAbstractItemView::NoEditTriggers);
 
-    m_tvFiles->setRootIndex(m_modelFiles->index(""));
+    m_filesTree->setRootIndex(m_modelFiles->index(""));
     // 排序统一由 applySort 控制：表头可点击排序，但“标签”列（第 5 列）不参与，
     // 否则 QFileSystemModel 会按名称兜底排序，与表头指示不一致。
-    m_tvFiles->setSortingEnabled(false);
+    m_filesTree->setSortingEnabled(false);
     // setSortingEnabled(false) 不会把表头设为可点击；Qt 的 sectionClicked 只在
     // sectionsClickable 为 true 时发出，必须显式打开，否则表头点击排序失效。
-    m_tvFiles->header()->setSectionsClickable(true);
-    m_tvFiles->header()->setSortIndicatorShown(true);
-    m_tvFiles->header()->setSortIndicator(m_nSortColumn, m_sortOrder);
-    m_modelFiles->sort(m_nSortColumn, m_sortOrder);
-    connect(m_tvFiles->header(), &QHeaderView::sectionClicked, this, [this](int section) {
+    m_filesTree->header()->setSectionsClickable(true);
+    m_filesTree->header()->setSortIndicatorShown(true);
+    m_filesTree->header()->setSortIndicator(m_sortColumn, m_sortOrder);
+    m_modelFiles->sort(m_sortColumn, m_sortOrder);
+    connect(m_filesTree->header(), &QHeaderView::sectionClicked, this, [this](int section) {
         // 标签列不支持排序：给一句提示，而不是"点了完全没反应"
         if (section == 4) {
             emit sendHintMessage(tr("标签列暂不支持排序；双击标签列可以编辑该文件的标签。"));
@@ -288,20 +288,20 @@ void FormPageFiles::initDetailFileList()
         }
         if (section < 0 || section > 3)
             return;
-        const Qt::SortOrder order = (section == m_nSortColumn && m_sortOrder == Qt::AscendingOrder)
+        const Qt::SortOrder order = (section == m_sortColumn && m_sortOrder == Qt::AscendingOrder)
                                         ? Qt::DescendingOrder
                                         : Qt::AscendingOrder;
         applySort(section, order);
     });
 
     // 设置不能展开节点，以使得QTreeView表现的像QListView一样。
-    m_tvFiles->setItemsExpandable(false);
+    m_filesTree->setItemsExpandable(false);
 
     // 设置表头
     // 拷贝自Qt源码的Src\qtbase\src\widgets\dialogs\qfiledialg.cpp
     // 根据实际数据稍作修改，增加了列的宽度
-    QHeaderView *treeHeader = m_tvFiles->header();
-    QFontMetrics fm(m_tvFiles->font());
+    QHeaderView *treeHeader = m_filesTree->header();
+    QFontMetrics fm(m_filesTree->font());
     treeHeader->setMinimumSectionSize(60);
     // 所有列都允许拖动调整宽度（和 Windows 资源管理器一致），最后一列不再自动撑满，
     // 拖动结果由 view/headerState 持久化。
@@ -316,61 +316,61 @@ void FormPageFiles::initDetailFileList()
     // 名称列默认吃掉剩余宽度；只设一次初始值，之后完全交给用户拖动。
     // 放到事件循环里做，构造时 viewport 还没有真实宽度。
     QTimer::singleShot(0, this, [this]() {
-        if (m_bHeaderRestored || m_tvFiles == nullptr || m_tvFiles->header() == nullptr)
+        if (m_headerRestored || m_filesTree == nullptr || m_filesTree->header() == nullptr)
             return;
-        QHeaderView *h = m_tvFiles->header();
+        QHeaderView *h = m_filesTree->header();
         int nUsed = 0;
         for (int i = 1; i < h->count(); ++i)
             nUsed += h->sectionSize(i);
-        const int nNameWidth = m_tvFiles->viewport()->width() - nUsed;
+        const int nNameWidth = m_filesTree->viewport()->width() - nUsed;
         if (nNameWidth > 160)
             h->resizeSection(0, nNameWidth);
     });
 
-    m_sCurDir = FmPageUtil::myComputerName();
+    m_curDir = FmPageUtil::myComputerName();
 }
 
 void FormPageFiles::initThumbnailFileList()
 {
-    m_lstFiles = ui->listView;
+    m_filesList = ui->listView;
     // 同样接受从【标签库】拖过来的标签
-    m_lstFiles->setAcceptDrops(true);
-    m_lstFiles->viewport()->setAcceptDrops(true);
+    m_filesList->setAcceptDrops(true);
+    m_filesList->viewport()->setAcceptDrops(true);
     // eventFilter 在下面（悬停高亮那里）已经装过，这里不重复装
 
     // 缩略图生成器：由 delegate 在 GUI 线程按需调用。
     // 不设置为 model 的 iconProvider：QFileSystemModel 是在后台线程取图标的，
     // 而 QPixmap / Shell COM 只能在 GUI 线程安全使用。
-    m_iconProvider = new ThumbnailIconProvider(m_nIconSize);
+    m_iconProvider = new ThumbnailIconProvider(m_iconSize);
 
     m_modelFiles->setReadOnly(false);
 
     // 创建列表视图
-    m_lstFiles->setModel(m_modelFiles);
+    m_filesList->setModel(m_modelFiles);
 
     // QTreeView和QListView共享同一个选择模型
-    QItemSelectionModel *selectionModel = m_tvFiles->selectionModel();
-    m_lstFiles->setSelectionModel(selectionModel);
+    QItemSelectionModel *selectionModel = m_filesTree->selectionModel();
+    m_filesList->setSelectionModel(selectionModel);
 
     // 设置视图属性以显示缩略图
-    m_lstFiles->setViewMode(QListView::IconMode);    // 图标模式
-    m_lstFiles->setIconSize(QSize(m_nIconSize, m_nIconSize));    // 设置图标大小
-    m_lstFiles->setGridSize(QSize(m_nIconSize + THUMB_GRID_MARGIN,
-                                  m_nIconSize + THUMB_GRID_MARGIN)); // 设置网格大小，为图标和两行文字留出空间
-    m_lstFiles->setResizeMode(QListView::Adjust);    // 自动调整布局
-    m_lstFiles->setMovement(QListView::Static);      // 禁止拖动
-    m_lstFiles->setSelectionMode(QAbstractItemView::ExtendedSelection);
-    m_lstFiles->setContextMenuPolicy(Qt::CustomContextMenu);
-    m_lstFiles->setMouseTracking(true);              // 悬停高亮需要鼠标移动事件
+    m_filesList->setViewMode(QListView::IconMode);    // 图标模式
+    m_filesList->setIconSize(QSize(m_iconSize, m_iconSize));    // 设置图标大小
+    m_filesList->setGridSize(QSize(m_iconSize + THUMB_GRID_MARGIN,
+                                  m_iconSize + THUMB_GRID_MARGIN)); // 设置网格大小，为图标和两行文字留出空间
+    m_filesList->setResizeMode(QListView::Adjust);    // 自动调整布局
+    m_filesList->setMovement(QListView::Static);      // 禁止拖动
+    m_filesList->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    m_filesList->setContextMenuPolicy(Qt::CustomContextMenu);
+    m_filesList->setMouseTracking(true);              // 悬停高亮需要鼠标移动事件
 
     // 缩略图不再用"双击文件名/F2 就地重命名"：双击统一为"打开/进入"，
     // 标签编辑走双击标签区（弹对话框），重命名走右键菜单。
-    m_lstFiles->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    m_filesList->setEditTriggers(QAbstractItemView::NoEditTriggers);
 
     m_delegate = new EditableDelegate(this);
-    m_delegate->setIconSize(m_nIconSize);
+    m_delegate->setIconSize(m_iconSize);
     m_delegate->setThumbnailProvider(m_iconProvider);
-    m_lstFiles->setItemDelegate(m_delegate);
+    m_filesList->setItemDelegate(m_delegate);
 
     connect(m_delegate, &EditableDelegate::sendDblClick, this, &FormPageFiles::recvDblClick);
     connect(m_delegate, &EditableDelegate::sendEditTag, this, &FormPageFiles::onEditTag);
@@ -378,16 +378,16 @@ void FormPageFiles::initThumbnailFileList()
     connect(m_delegate, &EditableDelegate::sendRemoveTag, this, &FormPageFiles::onRemoveTagFromRow);
 
     // 悬停高亮：进入某项时高亮，鼠标离开视图时清除
-    connect(m_lstFiles, &QAbstractItemView::entered, this, &FormPageFiles::onThumbnailHoverChanged);
-    connect(m_lstFiles, &QAbstractItemView::viewportEntered, this, [this]() {
+    connect(m_filesList, &QAbstractItemView::entered, this, &FormPageFiles::onThumbnailHoverChanged);
+    connect(m_filesList, &QAbstractItemView::viewportEntered, this, [this]() {
         if (m_delegate)
             m_delegate->setHoveredIndex(QModelIndex());
-        m_lstFiles->viewport()->update();
+        m_filesList->viewport()->update();
     });
-    m_lstFiles->viewport()->installEventFilter(this);
+    m_filesList->viewport()->installEventFilter(this);
 
     // 设置根索引为当前目录
-    m_lstFiles->setRootIndex(m_modelFiles->index(""));
+    m_filesList->setRootIndex(m_modelFiles->index(""));
 }
 
 
@@ -408,7 +408,7 @@ QStringList FormPageFiles::getSelFilePath()
     // 若直接收集会导致每个文件被重复返回 5 次（打标签/删标签时重复操作）。
     // 这里只取第 0 列（每选中的行一个索引），自动去重。
     QStringList selFilePath;
-    QModelIndexList selected = m_tvFiles->selectionModel()->selectedRows(0);
+    QModelIndexList selected = m_filesTree->selectionModel()->selectedRows(0);
     for (QModelIndexList::const_iterator cit = selected.begin(); cit != selected.end(); ++cit)
     {
         selFilePath << m_modelFiles->filePath(*cit);
@@ -419,7 +419,7 @@ QStringList FormPageFiles::getSelFilePath()
 QStringList FormPageFiles::getSelDirs()
 {
     QStringList qLSelDirs;
-    QModelIndexList selected = m_tvFiles->selectionModel()->selectedRows();
+    QModelIndexList selected = m_filesTree->selectionModel()->selectedRows();
     QString sSelect;
     for (QModelIndexList::const_iterator cit = selected.begin(); cit != selected.end(); ++cit)
     {
@@ -432,7 +432,7 @@ QStringList FormPageFiles::getSelDirs()
     }
     if (qLSelDirs.isEmpty())
     {
-        qLSelDirs << m_sCurDir;
+        qLSelDirs << m_curDir;
     }
     return qLSelDirs;
 }
@@ -447,33 +447,33 @@ void FormPageFiles::refreshAfterTagChange(const QStringList &qLFilePaths)
     for (const QString &sFilePath : qLFilePaths)
         m_modelFiles->clearTagCacheForFile(sFilePath);
 
-    if (m_tvFiles != nullptr)
-        m_tvFiles->viewport()->update();
-    if (m_lstFiles != nullptr)
-        m_lstFiles->viewport()->update();
+    if (m_filesTree != nullptr)
+        m_filesTree->viewport()->update();
+    if (m_filesList != nullptr)
+        m_filesList->viewport()->update();
 
     // 【当前目录标签】面板还是要重算（它展示整个目录的标签集合）
-    emit sendDirLabels(m_sCurDir, QSet<QString>());
-    QTimer::singleShot(100, this, [this]() { scanDirLabels(m_sCurDir, true); });
+    emit sendDirLabels(m_curDir, QSet<QString>());
+    QTimer::singleShot(100, this, [this]() { scanDirLabels(m_curDir, true); });
 }
 
 void FormPageFiles::onBtnRefreshClicked()
 {
-    QModelIndex curIndex = m_modelFiles->index(m_sCurDir);
+    QModelIndex curIndex = m_modelFiles->index(m_curDir);
     if (curIndex.isValid())
     {
         // 清空标签缓存，强制重新枚举 ADS（QFileSystemModel 本身通过文件监视器自动感知文件增删，
         // 这里只需保证标签列刷新；Qt5 的 QFileSystemModel 没有 refresh() 接口）。
         m_modelFiles->clearTagCache();
-        m_tvFiles->setRootIndex(curIndex);
-        m_lstFiles->setRootIndex(curIndex);
+        m_filesTree->setRootIndex(curIndex);
+        m_filesList->setRootIndex(curIndex);
     }
-    m_tvFiles->viewport()->update();
-    m_lstFiles->viewport()->update();
+    m_filesTree->viewport()->update();
+    m_filesList->viewport()->update();
 
     // 标签可能刚被编辑过：同步刷新【当前目录标签】面板（强制重扫）
-    emit sendDirLabels(m_sCurDir, QSet<QString>());
-    QTimer::singleShot(100, this, [this]() { scanDirLabels(m_sCurDir, true); });
+    emit sendDirLabels(m_curDir, QSet<QString>());
+    QTimer::singleShot(100, this, [this]() { scanDirLabels(m_curDir, true); });
 }
 
 
@@ -488,15 +488,15 @@ void FormPageFiles::onBtnRefreshClicked()
 
 bool FormPageFiles::eventFilter(QObject *watched, QEvent *event)
 {
-    if (m_lstFiles != nullptr && watched == m_lstFiles->viewport() && event->type() == QEvent::Leave) {
+    if (m_filesList != nullptr && watched == m_filesList->viewport() && event->type() == QEvent::Leave) {
         if (m_delegate)
             m_delegate->setHoveredIndex(QModelIndex());
-        m_lstFiles->viewport()->update();
+        m_filesList->viewport()->update();
     }
 
     // 从【标签库】把标签拖到文件列表 = 给文件打标签
-    const bool bIsFileView = (m_tvFiles != nullptr && watched == m_tvFiles->viewport())
-                             || (m_lstFiles != nullptr && watched == m_lstFiles->viewport());
+    const bool bIsFileView = (m_filesTree != nullptr && watched == m_filesTree->viewport())
+                             || (m_filesList != nullptr && watched == m_filesList->viewport());
     if (bIsFileView && (event->type() == QEvent::DragEnter || event->type() == QEvent::DragMove)) {
         auto *pDragEvent = static_cast<QDragMoveEvent *>(event);
         if (pDragEvent->mimeData() != nullptr
@@ -519,10 +519,10 @@ bool FormPageFiles::eventFilter(QObject *watched, QEvent *event)
             }
 
             QAbstractItemView *pView = nullptr;
-            if (m_lstFiles != nullptr && watched == m_lstFiles->viewport())
-                pView = m_lstFiles;
+            if (m_filesList != nullptr && watched == m_filesList->viewport())
+                pView = m_filesList;
             else
-                pView = m_tvFiles;
+                pView = m_filesTree;
             const QModelIndex dropIndex = pView != nullptr ? pView->indexAt(pDropEvent->pos()) : QModelIndex();
             pDropEvent->setDropAction(Qt::CopyAction);
             pDropEvent->accept();
@@ -588,8 +588,8 @@ void FormPageFiles::applyDroppedLabels(const QStringList &qLLabels, const QModel
 
 QModelIndex FormPageFiles::currentIndexInActiveView() const
 {
-    if (m_lstFiles != nullptr && m_lstFiles->isVisible())
-        return m_lstFiles->currentIndex();
-    return m_tvFiles->currentIndex();
+    if (m_filesList != nullptr && m_filesList->isVisible())
+        return m_filesList->currentIndex();
+    return m_filesTree->currentIndex();
 }
 

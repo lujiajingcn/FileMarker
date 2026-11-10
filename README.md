@@ -151,6 +151,8 @@ package.ps1                 一键打包
 
 - **提交前**跑一遍单元测试与全量重建，确保 0 错误 0 警告。
 - 注释用中文、写"为什么"而不是"做了什么"；不要留 `【C12】`/`P2-21` 这类评审编号。
+- 命名：成员变量一律用描述性名字（`m_curDir`、`m_labelGroups`、`m_scanTimer`），
+  **不再使用类型前缀**（历史上的 `m_sXxx` / `m_nXxx` / `m_bXxx` / `m_qLXxx` / `m_pXxx` 已统一改掉）。
 - 标签相关的写盘只走 `ADSOperation`，不要在别处直接拼 `path:stream`。
 - 搜索匹配只走 `SearchMatch::matchesFileLabels()`，缓存和磁盘两条路径共用，避免规则漂移。
 

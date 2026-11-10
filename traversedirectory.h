@@ -32,7 +32,7 @@ public:
 
 private:
     // 使用原子变量，避免多线程并发读写导致未定义行为。
-    static std::atomic<bool>    m_bIsStop;
+    static std::atomic<bool>    m_isStop;
 };
 
 #endif // TRAVERSEDIRECTORY_H

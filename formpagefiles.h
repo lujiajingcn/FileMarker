@@ -200,29 +200,29 @@ private:
 
 private:
 
-    QTreeView               *m_tvFiles;             // 详情显示文件列表，由于QListView不能显示表头，故用QTreeView实现列表功能。
-    QListView               *m_lstFiles;            // 缩略图显示文件列表
+    QTreeView               *m_filesTree;             // 详情显示文件列表，由于QListView不能显示表头，故用QTreeView实现列表功能。
+    QListView               *m_filesList;            // 缩略图显示文件列表
     MyQFileSystemModel      *m_modelFiles;
     EditableDelegate        *m_delegate;            // 缩略图模式的自绘代理
     ThumbnailIconProvider   *m_iconProvider;        // 缩略图生成器
     QAction                 *m_actionDeleteLabels;
     QStack<QString>         m_skBackward;           // 访问过的路径，用于后退功能
     QStack<QString>         m_skForward;            // 访问过的路径，用于前进功能
-    QString                 m_sCurDir;             // 当前正在访问的路径
-    QStringList             m_qLRecentDirs;        // 地址栏下拉历史（最多 10 条，最近的在前）
-    int                     m_nIconSize;            // 当前缩略图边长（逻辑像素）
-    int                     m_nSortColumn;          // 当前排序列
+    QString                 m_curDir;             // 当前正在访问的路径
+    QStringList             m_recentDirs;        // 地址栏下拉历史（最多 10 条，最近的在前）
+    int                     m_iconSize;            // 当前缩略图边长（逻辑像素）
+    int                     m_sortColumn;          // 当前排序列
     Qt::SortOrder           m_sortOrder;            // 当前排序方向
-    bool                    m_bHeaderRestored = false;  // 是否已恢复过上次的列宽（恢复后不再套用默认列宽）
+    bool                    m_headerRestored = false;  // 是否已恢复过上次的列宽（恢复后不再套用默认列宽）
 
     // 【当前目录标签】分片扫描状态
-    QTimer                 *m_pScanTimer;
-    QString                 m_sScanDir;
+    QTimer                 *m_scanTimer;
+    QString                 m_scanDir;
     QModelIndex             m_scanRootIndex;
-    int                     m_nScanRow;
-    int                     m_nScanTotal;
+    int                     m_scanRow;
+    int                     m_scanTotal;
     QSet<QString>           m_setScanLabels;
-    QString                 m_sScanCompletedDir;    // 已完整扫描过的目录（避免 directoryLoaded 重复扫）
+    QString                 m_scanCompletedDir;    // 已完整扫描过的目录（避免 directoryLoaded 重复扫）
 
     // 方案A：页面顶部的命令条（承载 AI/添加/清空/查找/遍历/查找条件）
     QToolBar               *m_commandBar = nullptr;
@@ -232,9 +232,9 @@ private:
     QAction                *m_actionOpen = nullptr;      // Enter 打开/进入选中项
     QAction                *m_actionClearTags = nullptr; // Delete 清空选中文件的标签
     QAction                *m_actionSearchMenu = nullptr; // F3 / Ctrl+Shift+F 弹出查找条件菜单
-    QAction                *m_pSearchAction = nullptr;  // 命令条上要做成分裂按钮的"搜索"动作
-    QMenu                  *m_pSearchMenu = nullptr;    // 它的下拉菜单（由 FormFileBrowser 提供）
-    QToolButton            *m_pSearchButton = nullptr;  // 命令条上那个分裂按钮本身（用于定位菜单）
+    QAction                *m_searchAction = nullptr;  // 命令条上要做成分裂按钮的"搜索"动作
+    QMenu                  *m_searchMenu = nullptr;    // 它的下拉菜单（由 FormFileBrowser 提供）
+    QToolButton            *m_searchButton = nullptr;  // 命令条上那个分裂按钮本身（用于定位菜单）
 
 private:
     Ui::FormPageFiles *ui;

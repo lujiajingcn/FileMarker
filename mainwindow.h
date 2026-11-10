@@ -39,7 +39,7 @@ private:
     void checkAIEnvironment();
 
     QFile                   m_logFile;
-    QTimer                 *m_pGeometryTimer;
+    QTimer                 *m_geometryTimer;
 
     Ui::MainWindow *ui;
 };

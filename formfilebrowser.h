@@ -153,52 +153,52 @@ private:
 
     QWidget             *m_navPanel = nullptr;      // 包住目录树的容器（含顶部收起按钮）
     QToolButton         *m_btnToggleNav = nullptr;  // 收起/展开按钮
-    bool                 m_bNavPanelVisible = true;
-    int                  m_nNavExpandedWidth = 200; // 展开时的宽度，收起再展开时按它恢复
+    bool                 m_navPanelVisible = true;
+    int                  m_navExpandedWidth = 200; // 展开时的宽度，收起再展开时按它恢复
 
-    QAction             *m_aAddLabelByAI;
-    QAction             *m_aAddLabel;
-    QAction             *m_aDelLabel;
-    QAction             *m_aSearch;
-    QAction             *m_aTraverse;
+    QAction             *m_aiTagAction;
+    QAction             *m_addLabelAction;
+    QAction             *m_clearTagsAction;
+    QAction             *m_searchAction;
+    QAction             *m_traverseAction;
 
     // 搜索按钮右侧的小箭头菜单：直接切换"标签关系 / 数据来源"，不用每次弹对话框
     QMenu               *m_searchMenu = nullptr;
-    QAction             *m_aLogicAnd = nullptr;
-    QAction             *m_aLogicOr = nullptr;
-    QAction             *m_aSourceCache = nullptr;
-    QAction             *m_aSourceDisk = nullptr;
+    QAction             *m_logicAndAction = nullptr;
+    QAction             *m_logicOrAction = nullptr;
+    QAction             *m_sourceCache = nullptr;
+    QAction             *m_sourceDisk = nullptr;
     void                 initSearchButtonMenu();
     void                 refreshSearchButtonMenu();
     void                 applySearchLogic(labelLogic logic);
     void                 applySearchSource(bool bFromCache);
 
-    QStringList         m_qLSelLabels;          // 选中的标签，可能是【标签管理类】中选中的，也可能是【当前目录文件的标签类】选中的
-    // 与 m_qLSelLabels 一一对应的"分组"（组 = 标签 + 它的全部子标签），搜索用这个匹配
-    QList<QSet<QString>> m_qLLabelGroups;
+    QStringList         m_selectedLabels;          // 选中的标签，可能是【标签管理类】中选中的，也可能是【当前目录文件的标签类】选中的
+    // 与 m_selectedLabels 一一对应的"分组"（组 = 标签 + 它的全部子标签），搜索用这个匹配
+    QList<QSet<QString>> m_labelGroups;
 
     // "撤销上一次标签操作"的现场：文件 → 改动前的标签列表
     QMap<QString, QStringList> m_mapUndoOldTags;
-    QString                    m_sUndoDesc;
+    QString                    m_undoDesc;
 
     // 上一次搜索的结果来源（缓存 / 磁盘扫描），显示在结果页
-    QString                    m_sSearchSource;
+    QString                    m_searchSource;
 
     SqliteOperation     *m_sqlOperation;        // 操作sqlite数据库
     ThreadSearch        *m_threadSearch;        // 处理根据标签查找文件的线程
     ThreadTraverseDirs  *m_threadTraverseDirs;  // 遍历选中文件夹中全部文件的线程
     ThreadAddTagByAI    *m_threadAddLabelByAI;  // AI 自动生成标签的线程
 
-    int                 m_nThread;              // 用来记录当前运行的线程：根据标签查找文件、遍历文件夹、AI自动生成标签。
+    int                 m_thread;              // 用来记录当前运行的线程：根据标签查找文件、遍历文件夹、AI自动生成标签。
 
-    QStringList         m_qLFilePathsFromCache; // 部分目录命中缓存时的缓存命中结果，最后与磁盘查找结果合并
+    QStringList         m_cachedFilePaths; // 部分目录命中缓存时的缓存命中结果，最后与磁盘查找结果合并
 
     // 结果页的【重新扫描】：记录上次搜索条件，并支持强制走磁盘
     static QString humanReadableCacheAge(const QDateTime &cacheTime);
-    QStringList         m_qLLastSearchDirs;     // 上一次搜索用的目录，重扫时复用
-    QStringList         m_qLRescanDirs;         // 非空表示这次搜索是重扫，用这些目录
-    bool                m_bForceDiskScan = false;
-    bool                m_bLongOperationRunning = false;  // 导入/导出进行中：防止重入
+    QStringList         m_lastSearchDirs;     // 上一次搜索用的目录，重扫时复用
+    QStringList         m_rescanDirs;         // 非空表示这次搜索是重扫，用这些目录
+    bool                m_forceDiskScan = false;
+    bool                m_longOperationRunning = false;  // 导入/导出进行中：防止重入
 };
 
 #endif // FILEBROWSER_H

@@ -33,7 +33,7 @@ private:
 private:
     Ui::FormFileNavigation *ui;
 
-    QTreeView               *m_tvNavigation;        // 左侧导航栏
+    QTreeView               *m_navigationTree;        // 左侧导航栏
     QFileSystemModel        *m_modelNavigation;
 
 };

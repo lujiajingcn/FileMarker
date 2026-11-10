@@ -32,7 +32,7 @@ private:
     QList<QSet<QString>> m_labelGroups;
     labelLogic  m_tagLogic{labelLogic::AND};  // 初始化默认值，避免 setPara 未被调用时产生未定义行为
     QStringList m_filePaths;
-    int         m_nScanned = 0;   // 诊断用：本次扫描了多少个文件
+    int         m_scanned = 0;   // 诊断用：本次扫描了多少个文件
 };
 
 #endif // THREADSEARCH_H

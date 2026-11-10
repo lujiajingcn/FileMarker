@@ -39,23 +39,23 @@ bool labelExistsCaseInsensitive(const QSet<QString> &set, const QString &sLabel)
 
 bool FormLabels::eventFilter(QObject *watched, QEvent *event)
 {
-    if (watched == m_tvAllLabels->viewport()) {
+    if (watched == m_labelsTree->viewport()) {
         if (event->type() == QEvent::MouseButtonPress) {
             auto *pMouseEvent = static_cast<QMouseEvent *>(event);
             if (pMouseEvent->button() == Qt::LeftButton) {
                 m_ptDragStart = pMouseEvent->pos();
-                m_bMayStartDrag = true;
+                m_mayStartDrag = true;
             }
-        } else if (event->type() == QEvent::MouseMove && m_bMayStartDrag) {
+        } else if (event->type() == QEvent::MouseMove && m_mayStartDrag) {
             auto *pMouseEvent = static_cast<QMouseEvent *>(event);
             if ((pMouseEvent->buttons() & Qt::LeftButton)
                 && (pMouseEvent->pos() - m_ptDragStart).manhattanLength()
                        >= QApplication::startDragDistance()) {
-                m_bMayStartDrag = false;
+                m_mayStartDrag = false;
                 startLabelDrag();
             }
         } else if (event->type() == QEvent::MouseButtonRelease) {
-            m_bMayStartDrag = false;
+            m_mayStartDrag = false;
         }
     }
     return QWidget::eventFilter(watched, event);
@@ -66,7 +66,7 @@ void FormLabels::startLabelDrag()
 {
     QStringList qLLabels = getSelLabels();
     if (qLLabels.isEmpty()) {
-        const QModelIndex index = m_tvAllLabels->currentIndex();
+        const QModelIndex index = m_labelsTree->currentIndex();
         if (index.isValid())
             qLLabels << index.data(Qt::DisplayRole).toString();
     }
@@ -78,7 +78,7 @@ void FormLabels::startLabelDrag()
     pMime->setData(QString::fromLatin1(MIME_FILEMARKER_LABEL), qLLabels.join("\n").toUtf8());
     pMime->setText(qLLabels.join(","));
 
-    auto *pDrag = new QDrag(m_tvAllLabels);
+    auto *pDrag = new QDrag(m_labelsTree);
     pDrag->setMimeData(pMime);
     pDrag->exec(Qt::CopyAction);
 }
@@ -93,9 +93,9 @@ void FormLabels::addContextMenuAction(QAction *action)
 void FormLabels::onTreeContextMenuRequested(const QPoint &pos)
 {
     // 右键点在哪一行就选中哪一行，避免"菜单操作的是另一行"
-    const QModelIndex index = m_tvAllLabels->indexAt(pos);
+    const QModelIndex index = m_labelsTree->indexAt(pos);
     if (index.isValid())
-        m_tvAllLabels->setCurrentIndex(index);
+        m_labelsTree->setCurrentIndex(index);
 
     QMenu menu(this);
     menu.addAction(ui->actionAdd);
@@ -125,7 +125,7 @@ void FormLabels::onTreeContextMenuRequested(const QPoint &pos)
         settings.setValue(QStringLiteral("labels/autoAddFromFiles"), 0);
     });
 
-    menu.exec(m_tvAllLabels->viewport()->mapToGlobal(pos));
+    menu.exec(m_labelsTree->viewport()->mapToGlobal(pos));
 }
 
 void FormLabels::setToolButtonDefaultAction()
@@ -165,7 +165,7 @@ void FormLabels::onRecvLabels(QString sLabels)
 
 void FormLabels::promptAddNewLabels(const QStringList &qLInputLabels)
 {
-    if (m_bPromptShowing)
+    if (m_promptShowing)
         return;
 
     // 排队期间标签可能已经被前一个弹窗加入，显示前再过滤一次
@@ -183,7 +183,7 @@ void FormLabels::promptAddNewLabels(const QStringList &qLInputLabels)
         bool &b;
         explicit PromptGuard(bool &value) : b(value) { b = true; }
         ~PromptGuard() { b = false; }
-    } guard(m_bPromptShowing);
+    } guard(m_promptShowing);
 
     QSettings settings(Utility::settingsFilePath(), QSettings::IniFormat);
 #if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)

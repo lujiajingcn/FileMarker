@@ -49,24 +49,24 @@ void ThreadAddTagByAI::stopThread()
 bool ThreadAddTagByAI::recordFailure(const QString &sFilePath, const QString &sReason,
                                      const QString &sDetail)
 {
-    ++m_nFailed;
+    ++m_failed;
     const QString sLine = QString("%1      失败：%2%3")
                               .arg(sFilePath, sReason,
                                    sDetail.isEmpty() ? QString() : QStringLiteral("（") + sDetail + QStringLiteral("）"));
-    if (m_sFirstError.isEmpty())
-        m_sFirstError = sReason + (sDetail.isEmpty() ? QString() : QStringLiteral("：") + sDetail);
+    if (m_firstError.isEmpty())
+        m_firstError = sReason + (sDetail.isEmpty() ? QString() : QStringLiteral("：") + sDetail);
     emit sendProcessInfo(sLine);
     qWarning().noquote() << "AI 打标失败:" << sLine;
     // 还没成功过就已连续失败 3 个（典型：Python 依赖缺失/解释器不可用），
     // 再挨个试剩下的文件没有意义 —— 让 traverseDirectory 停下来。
-    return !(m_nSucceeded == 0 && m_nFailed >= 3);
+    return !(m_succeeded == 0 && m_failed >= 3);
 }
 
 void ThreadAddTagByAI::run()
 {
-    m_nSucceeded = 0;
-    m_nFailed = 0;
-    m_sFirstError.clear();
+    m_succeeded = 0;
+    m_failed = 0;
+    m_firstError.clear();
 
     auto func = [this](const QFileInfo& info) -> bool {
         return this->addTag(info);
@@ -75,14 +75,14 @@ void ThreadAddTagByAI::run()
     // 先确认脚本存在：以前脚本缺失时每个文件都静默失败，界面毫无提示。
     const QString sScript = g_sAppDir + "/extract_and_tag.py";
     if (!QFileInfo::exists(sScript)) {
-        m_sFirstError = tr("找不到 AI 脚本：%1（请把 extract_and_tag.py 与程序放在同一目录）").arg(sScript);
-        emit sendProcessInfo(m_sFirstError);
-        emit sendFinish(m_nSucceeded, m_nFailed, m_sFirstError);
+        m_firstError = tr("找不到 AI 脚本：%1（请把 extract_and_tag.py 与程序放在同一目录）").arg(sScript);
+        emit sendProcessInfo(m_firstError);
+        emit sendFinish(m_succeeded, m_failed, m_firstError);
         return;
     }
 
-    // 静态 m_bIsStop 标志被所有遍历线程共享。若用户此前停止过搜索/遍历操作，
-    // 不在此处复位则 m_bIsStop 仍为 true，AI 线程会立即跳过所有目录并结束。
+    // 静态 m_isStop 标志被所有遍历线程共享。若用户此前停止过搜索/遍历操作，
+    // 不在此处复位则 m_isStop 仍为 true，AI 线程会立即跳过所有目录并结束。
     TraverseDirectory::resetStop();
 
     for (QString selDir : m_dirs) {
@@ -92,11 +92,11 @@ void ThreadAddTagByAI::run()
         TraverseDirectory::traverseDirectory(selDir, func, true);
         // 连续失败且一个都没成功（典型：Python 没装、依赖缺失、解释器不可用），
         // 就不要再把成百上千个文件挨个试一遍，直接结束并把错误交给界面。
-        if (m_nSucceeded == 0 && m_nFailed >= 3)
+        if (m_succeeded == 0 && m_failed >= 3)
             break;
     }
 
-    emit sendFinish(m_nSucceeded, m_nFailed, m_sFirstError);
+    emit sendFinish(m_succeeded, m_failed, m_firstError);
 }
 
 bool ThreadAddTagByAI::addTag(const QFileInfo& info)
@@ -220,7 +220,7 @@ bool ThreadAddTagByAI::addTag(const QFileInfo& info)
             emit sendTags(tags);
     }
 
-    ++m_nSucceeded;
+    ++m_succeeded;
     // 之前解析出 summary 却直接丢弃，这里通过信号上报，不再浪费模型输出。
     if (obj.contains("summary")) {
         QString sSummary = obj.value("summary").toString();

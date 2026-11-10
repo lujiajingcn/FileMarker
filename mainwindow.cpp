@@ -20,7 +20,7 @@
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
-    m_pGeometryTimer(nullptr),
+    m_geometryTimer(nullptr),
     ui(new Ui::MainWindow)
 {
     g_sAppDir = QCoreApplication::applicationDirPath();
@@ -32,10 +32,10 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->setupUi(this);
 
     // 窗口移动/缩放后防抖保存，避免崩溃或强杀时丢失窗口状态
-    m_pGeometryTimer = new QTimer(this);
-    m_pGeometryTimer->setSingleShot(true);
-    m_pGeometryTimer->setInterval(500);
-    connect(m_pGeometryTimer, &QTimer::timeout, this, &MainWindow::saveWindowGeometry);
+    m_geometryTimer = new QTimer(this);
+    m_geometryTimer->setSingleShot(true);
+    m_geometryTimer->setInterval(500);
+    connect(m_geometryTimer, &QTimer::timeout, this, &MainWindow::saveWindowGeometry);
 
     // 保证默认窗口下详情列表的“标签”列也能完整显示（列宽策略见 FormPageFiles）。
     setMinimumSize(1000, 650);
@@ -227,15 +227,15 @@ void MainWindow::saveWindowGeometry()
 void MainWindow::moveEvent(QMoveEvent *event)
 {
     QMainWindow::moveEvent(event);
-    if (m_pGeometryTimer != nullptr)
-        m_pGeometryTimer->start();
+    if (m_geometryTimer != nullptr)
+        m_geometryTimer->start();
 }
 
 void MainWindow::resizeEvent(QResizeEvent *event)
 {
     QMainWindow::resizeEvent(event);
-    if (m_pGeometryTimer != nullptr)
-        m_pGeometryTimer->start();
+    if (m_geometryTimer != nullptr)
+        m_geometryTimer->start();
 }
 
 void MainWindow::initLogMessageHanlder()

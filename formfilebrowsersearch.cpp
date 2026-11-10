@@ -51,26 +51,26 @@ QString FormFileBrowser::humanReadableCacheAge(const QDateTime &cacheTime)
 /** 结果页的【重新扫描】：忽略缓存，用同样的目录和标签从磁盘重查一遍。 */
 void FormFileBrowser::onRescanFromDiskRequested()
 {
-    if (m_qLLastSearchDirs.isEmpty() || m_qLLabelGroups.isEmpty()) {
+    if (m_lastSearchDirs.isEmpty() || m_labelGroups.isEmpty()) {
         QMessageBox::information(this, tr("重新扫描"),
                                  tr("上一次的搜索条件已经失效，请重新选择标签再搜索。"));
         return;
     }
-    m_qLRescanDirs = m_qLLastSearchDirs;
-    m_bForceDiskScan = true;
+    m_rescanDirs = m_lastSearchDirs;
+    m_forceDiskScan = true;
     onActionSearchFilesbyLabelsTriggered();
 }
 
 void FormFileBrowser::onActionSearchFilesbyLabelsTriggered()
 {
-    m_qLFilePathsFromCache.clear();   // 清除上一次查找遗留的缓存命中结果
+    m_cachedFilePaths.clear();   // 清除上一次查找遗留的缓存命中结果
 
     // 结果页点【重新扫描】时：沿用上一次搜索的目录和标签，并强制走磁盘
-    const bool bForceDisk = m_bForceDiskScan;
-    m_bForceDiskScan = false;
+    const bool bForceDisk = m_forceDiskScan;
+    m_forceDiskScan = false;
 
-    QStringList qLSelDirs = m_qLRescanDirs;
-    m_qLRescanDirs.clear();
+    QStringList qLSelDirs = m_rescanDirs;
+    m_rescanDirs.clear();
     if (qLSelDirs.isEmpty()) {
         qLSelDirs = getSelDirs();
         if (qLSelDirs.count() == 0) {
@@ -80,32 +80,32 @@ void FormFileBrowser::onActionSearchFilesbyLabelsTriggered()
     }
     // 记录搜索条件（后面缓存未命中的目录会被替换，但界面提示应显示用户原始选择）
     const QStringList qLSearchDirs = qLSelDirs;
-    m_qLLastSearchDirs = qLSearchDirs;   // 供结果页【重新扫描】复用
+    m_lastSearchDirs = qLSearchDirs;   // 供结果页【重新扫描】复用
 
-    if (m_qLSelLabels.count() == 0) {
+    if (m_selectedLabels.count() == 0) {
         QMessageBox::information(this, "提示", "请先在右侧【标签库（分类）】里选择要查找的标签（可多选）。");
         return;
     }
 
     // 搜索条件是"分组"——每组 = 选中的标签 + 它的全部子标签。
     // 因此"搜索父标签"能搜到只打了子标签的文件；多个条件之间仍按设置里的 AND/OR 组合。
-    if (m_qLLabelGroups.isEmpty()) {
-        for (const QString &sLabel : m_qLSelLabels) {
+    if (m_labelGroups.isEmpty()) {
+        for (const QString &sLabel : m_selectedLabels) {
             QSet<QString> setGroup;
             setGroup.insert(sLabel);
-            m_qLLabelGroups << setGroup;
+            m_labelGroups << setGroup;
         }
     }
 
     // 结果页回显条件时把"含子标签"写出来，让用户明确层级是参与匹配的。
     QStringList qLConditionTexts;
-    for (const QSet<QString> &setGroup : m_qLLabelGroups) {
+    for (const QSet<QString> &setGroup : m_labelGroups) {
         QStringList qLNames = QStringList(setGroup.values());
         qLNames.sort();
         // 组里"直接选中的那个标签"作为显示名，其余当子标签列出来
         QString sRoot;
         for (const QString &sName : qLNames) {
-            if (m_qLSelLabels.contains(sName)) {
+            if (m_selectedLabels.contains(sName)) {
                 sRoot = sName;
                 break;
             }
@@ -123,34 +123,34 @@ void FormFileBrowser::onActionSearchFilesbyLabelsTriggered()
         tr("标签：%1；目录：%2").arg(qLConditionTexts.join("、"), qLSearchDirs.join("；")));
 
     // 诊断日志：如果以后再次出现搜索界面卡住，可从日志判断搜索范围与是否走了缓存。
-    qInfo() << "开始搜索: dirs=" << qLSelDirs << "labels=" << m_qLSelLabels
+    qInfo() << "开始搜索: dirs=" << qLSelDirs << "labels=" << m_selectedLabels
             << "useCache=" << ConfigOperation::readSearchConfig(g_sAppDir + "/" + SEARCH_CONFIG_FILE).bFromCache;
 
     SearchConfig sc = ConfigOperation::readSearchConfig(g_sAppDir + "/" + SEARCH_CONFIG_FILE);
 
     if (sc.bFromCache && !bForceDisk) {
         QStringList qLFilePaths, qLNotHitedDirs;
-        m_sqlOperation->searchFilesByLabels(qLSelDirs, m_qLLabelGroups, sc.logic, qLFilePaths, qLNotHitedDirs);
+        m_sqlOperation->searchFilesByLabels(qLSelDirs, m_labelGroups, sc.logic, qLFilePaths, qLNotHitedDirs);
         qInfo() << "[搜索] 缓存命中文件=" << qLFilePaths.size() << " 未命中目录数=" << qLNotHitedDirs.size()
-                << " 分组数=" << m_qLLabelGroups.size() << " logic=" << int(sc.logic);
+                << " 分组数=" << m_labelGroups.size() << " logic=" << int(sc.logic);
         if (qLNotHitedDirs.count() == 0) { // 查找的文件夹全部在缓存数据库中存在，则显示查找结果后结束。
             // 缓存可能过期：把"这份缓存是什么时候写的"一并告诉用户，结果页还能一键重扫
             const QDateTime cacheTime = m_sqlOperation != nullptr
                                             ? m_sqlOperation->oldestCacheTime(qLSelDirs)
                                             : QDateTime();
             const QString sAge = humanReadableCacheAge(cacheTime);
-            m_sSearchSource = sAge.isEmpty() ? tr("（结果来自缓存）")
+            m_searchSource = sAge.isEmpty() ? tr("（结果来自缓存）")
                                              : tr("（结果来自缓存，%1）").arg(sAge);
             showFilteredFile(qLFilePaths);
             return;
         } else { // 查找的文件夹有部分未在缓存数据库中，不在的文件夹从磁盘查找
             // 命中缓存的部分先保留，最后与磁盘查找结果合并，避免被整体丢弃。
-            m_qLFilePathsFromCache = qLFilePaths;
+            m_cachedFilePaths = qLFilePaths;
             qLSelDirs = qLNotHitedDirs;
-            m_sSearchSource = tr("（结果来自缓存 + 磁盘扫描）");
+            m_searchSource = tr("（结果来自缓存 + 磁盘扫描）");
         }
     } else {
-        m_sSearchSource = tr("（结果来自磁盘扫描）");
+        m_searchSource = tr("（结果来自磁盘扫描）");
     }
 
     qInfo() << "[搜索] 启动磁盘扫描 dirs=" << qLSelDirs;
@@ -166,7 +166,7 @@ void FormFileBrowser::onActionSearchFilesbyLabelsTriggered()
 
     showProcessPage(RUNNINGTHREAD::SEARCHFILE);// 从磁盘查找比较耗时，切换到处理进度页面
     m_threadSearch = new ThreadSearch(this);
-    m_threadSearch->setPara(qLSelDirs, m_qLLabelGroups, sc.logic);
+    m_threadSearch->setPara(qLSelDirs, m_labelGroups, sc.logic);
     connect(m_threadSearch, &ThreadSearch::sigResult, this, &FormFileBrowser::showFilteredFile);
     connect(m_threadSearch, &ThreadSearch::sendProcessInfo, ui->pageProgressInfo, &FormPageProgressInfo::onRecvProgress);
     // 注意：ThreadSearch 构造函数里已连接 finished->deleteLater，这里只需在线程结束后把指针置空，避免悬空指针。
@@ -260,26 +260,26 @@ void FormFileBrowser::initSearchButtonMenu()
     QMenu *pLogicMenu = m_searchMenu->addMenu(tr("标签关系"));
     auto *pLogicGroup = new QActionGroup(this);
     pLogicGroup->setExclusive(true);
-    m_aLogicAnd = pLogicMenu->addAction(tr("与：同时满足所有标签"));
-    m_aLogicOr = pLogicMenu->addAction(tr("或：满足任意一个标签"));
-    for (QAction *pAction : {m_aLogicAnd, m_aLogicOr}) {
+    m_logicAndAction = pLogicMenu->addAction(tr("与：同时满足所有标签"));
+    m_logicOrAction = pLogicMenu->addAction(tr("或：满足任意一个标签"));
+    for (QAction *pAction : {m_logicAndAction, m_logicOrAction}) {
         pAction->setCheckable(true);
         pLogicGroup->addAction(pAction);
     }
-    connect(m_aLogicAnd, &QAction::triggered, this, [this]() { applySearchLogic(labelLogic::AND); });
-    connect(m_aLogicOr, &QAction::triggered, this, [this]() { applySearchLogic(labelLogic::OR); });
+    connect(m_logicAndAction, &QAction::triggered, this, [this]() { applySearchLogic(labelLogic::AND); });
+    connect(m_logicOrAction, &QAction::triggered, this, [this]() { applySearchLogic(labelLogic::OR); });
 
     QMenu *pSourceMenu = m_searchMenu->addMenu(tr("数据来源"));
     auto *pSourceGroup = new QActionGroup(this);
     pSourceGroup->setExclusive(true);
-    m_aSourceCache = pSourceMenu->addAction(tr("优先从缓存数据库（快，可能过期）"));
-    m_aSourceDisk = pSourceMenu->addAction(tr("直接从磁盘（慢，最新）"));
-    for (QAction *pAction : {m_aSourceCache, m_aSourceDisk}) {
+    m_sourceCache = pSourceMenu->addAction(tr("优先从缓存数据库（快，可能过期）"));
+    m_sourceDisk = pSourceMenu->addAction(tr("直接从磁盘（慢，最新）"));
+    for (QAction *pAction : {m_sourceCache, m_sourceDisk}) {
         pAction->setCheckable(true);
         pSourceGroup->addAction(pAction);
     }
-    connect(m_aSourceCache, &QAction::triggered, this, [this]() { applySearchSource(true); });
-    connect(m_aSourceDisk, &QAction::triggered, this, [this]() { applySearchSource(false); });
+    connect(m_sourceCache, &QAction::triggered, this, [this]() { applySearchSource(true); });
+    connect(m_sourceDisk, &QAction::triggered, this, [this]() { applySearchSource(false); });
 
     connect(m_searchMenu, &QMenu::aboutToShow, this, &FormFileBrowser::refreshSearchButtonMenu);
 }
@@ -288,13 +288,13 @@ void FormFileBrowser::initSearchButtonMenu()
 void FormFileBrowser::refreshSearchButtonMenu()
 {
     const SearchConfig sc = ConfigOperation::readSearchConfig(g_sAppDir + "/" + SEARCH_CONFIG_FILE);
-    if (m_aLogicAnd != nullptr && m_aLogicOr != nullptr) {
-        m_aLogicAnd->setChecked(sc.logic == labelLogic::AND);
-        m_aLogicOr->setChecked(sc.logic == labelLogic::OR);
+    if (m_logicAndAction != nullptr && m_logicOrAction != nullptr) {
+        m_logicAndAction->setChecked(sc.logic == labelLogic::AND);
+        m_logicOrAction->setChecked(sc.logic == labelLogic::OR);
     }
-    if (m_aSourceCache != nullptr && m_aSourceDisk != nullptr) {
-        m_aSourceCache->setChecked(sc.bFromCache);
-        m_aSourceDisk->setChecked(!sc.bFromCache);
+    if (m_sourceCache != nullptr && m_sourceDisk != nullptr) {
+        m_sourceCache->setChecked(sc.bFromCache);
+        m_sourceDisk->setChecked(!sc.bFromCache);
     }
 }
 
@@ -318,7 +318,7 @@ void FormFileBrowser::applySearchSource(bool bFromCache)
 
 void FormFileBrowser::onRecvStopSearch()
 {
-    switch (m_nThread)
+    switch (m_thread)
     {
     case SEARCHFILE:
         if (m_threadSearch) m_threadSearch->stopThread();

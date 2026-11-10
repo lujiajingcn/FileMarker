@@ -31,7 +31,7 @@ void ThreadSearch::run()
     TraverseDirectory::resetStop();   // 每个搜索任务开头复位一次停止标志（多目录搜索也能正确响应停止）
     for (QString selDir : m_selDirs)TraverseDirectory::traverseDirectory(selDir, func, true);
 
-    qInfo() << "磁盘查找结束: scanned=" << m_nScanned << "matched=" << m_filePaths.size()
+    qInfo() << "磁盘查找结束: scanned=" << m_scanned << "matched=" << m_filePaths.size()
             << "logic=" << int(m_tagLogic) << "groups=" << m_labelGroups;
     emit sigResult(m_filePaths);
 }
@@ -39,7 +39,7 @@ void ThreadSearch::run()
 bool ThreadSearch::searchFile(const QFileInfo& fileInfo)
 {
     QString sFilePath = fileInfo.absoluteFilePath();
-    ++m_nScanned;
+    ++m_scanned;
     if (ADSOperation::isHostFile(sFilePath, m_labelGroups, m_tagLogic))
         m_filePaths << sFilePath;
 

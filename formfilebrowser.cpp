@@ -88,7 +88,7 @@ FormFileBrowser::FormFileBrowser(QWidget *parent) :
     m_threadSearch = nullptr;
     m_threadTraverseDirs = nullptr;
     m_threadAddLabelByAI = nullptr;
-    m_nThread = -1;  // 初始化为非法值，防止 onRecvStopSearch 提前触发时 switch 走入意外分支
+    m_thread = -1;  // 初始化为非法值，防止 onRecvStopSearch 提前触发时 switch 走入意外分支
 
     // 点击左侧【文件导航】中节点，将该节点下的文件夹及文件显示在右侧【文件列表】
     connect(ui->wFileNavigation, &FormFileNavigation::sendNavigationClicked, this, &FormFileBrowser::onTvNavigationClicked);
@@ -219,20 +219,20 @@ void FormFileBrowser::initNavPanelToggle()
     pLayout->addWidget(ui->wFileNavigation, 1);
 
     // 记住目录树原本的宽度，收起/展开时按它恢复
-    m_nNavExpandedWidth = qBound(kNavExpandedMinWidth, ui->wFileNavigation->sizeHint().width(), 320);
+    m_navExpandedWidth = qBound(kNavExpandedMinWidth, ui->wFileNavigation->sizeHint().width(), 320);
 
     connect(m_btnToggleNav, &QToolButton::clicked, this, [this]() {
-        setNavPanelVisible(!m_bNavPanelVisible);
+        setNavPanelVisible(!m_navPanelVisible);
     });
 
     // 首帧布局完成后再设置一次宽度：此时 splitter 才有真实宽度，否则会被压缩成一条缝
     QTimer::singleShot(0, this, [this]() {
-        if (!m_bNavPanelVisible || m_navPanel == nullptr)
+        if (!m_navPanelVisible || m_navPanel == nullptr)
             return;
         const int nTotal = ui->splitter->width();
         if (nTotal < 300)
             return;
-        const int nNav = qBound(kNavExpandedMinWidth, m_nNavExpandedWidth, qMax(kNavExpandedMinWidth, nTotal / 2));
+        const int nNav = qBound(kNavExpandedMinWidth, m_navExpandedWidth, qMax(kNavExpandedMinWidth, nTotal / 2));
         ui->splitter->setSizes(QList<int>() << nNav << (nTotal - nNav));
     });
 
@@ -251,10 +251,10 @@ void FormFileBrowser::setNavPanelVisible(bool bVisible, bool bSave)
         return;
 
     // 收起前记住当前宽度，展开时按它恢复
-    if (!bVisible && m_bNavPanelVisible && m_navPanel->width() > 60)
-        m_nNavExpandedWidth = m_navPanel->width();
+    if (!bVisible && m_navPanelVisible && m_navPanel->width() > 60)
+        m_navExpandedWidth = m_navPanel->width();
 
-    m_bNavPanelVisible = bVisible;
+    m_navPanelVisible = bVisible;
     ui->wFileNavigation->setVisible(bVisible);
 
     if (bVisible) {
@@ -266,7 +266,7 @@ void FormFileBrowser::setNavPanelVisible(bool bVisible, bool bSave)
         if (bSave) {
             const int nTotal = ui->splitter->width();
             if (nTotal > 200) {
-                const int nNav = qBound(kNavExpandedMinWidth, m_nNavExpandedWidth,
+                const int nNav = qBound(kNavExpandedMinWidth, m_navExpandedWidth,
                                         qMax(kNavExpandedMinWidth, nTotal / 2));
                 ui->splitter->setSizes(QList<int>() << nNav << (nTotal - nNav));
             }
@@ -307,16 +307,16 @@ void FormFileBrowser::setWindowStyleSheet()
 
 void FormFileBrowser::setActions(QAction *aAddLabelByAI, QAction *aAddLabel, QAction *aDelLabel, QAction *aSearch, QAction *aTraverse)
 {
-    m_aAddLabelByAI = aAddLabelByAI;
-    m_aAddLabel = aAddLabel;
-    m_aDelLabel = aDelLabel;
-    m_aSearch = aSearch;
-    m_aTraverse = aTraverse;
+    m_aiTagAction = aAddLabelByAI;
+    m_addLabelAction = aAddLabel;
+    m_clearTagsAction = aDelLabel;
+    m_searchAction = aSearch;
+    m_traverseAction = aTraverse;
 
-    connect(m_aAddLabelByAI, &QAction::triggered, this, &FormFileBrowser::onActionAddLabelByAITriggered);
-    connect(m_aAddLabel, &QAction::triggered, this, &FormFileBrowser::onActionAddLabelsTriggered);
-    connect(m_aSearch, &QAction::triggered, this, &FormFileBrowser::onActionSearchFilesbyLabelsTriggered);
-    connect(m_aTraverse, &QAction::triggered, this, &FormFileBrowser::onActionTraverseSelDirsTriggered);
+    connect(m_aiTagAction, &QAction::triggered, this, &FormFileBrowser::onActionAddLabelByAITriggered);
+    connect(m_addLabelAction, &QAction::triggered, this, &FormFileBrowser::onActionAddLabelsTriggered);
+    connect(m_searchAction, &QAction::triggered, this, &FormFileBrowser::onActionSearchFilesbyLabelsTriggered);
+    connect(m_traverseAction, &QAction::triggered, this, &FormFileBrowser::onActionTraverseSelDirsTriggered);
 
     ui->pageFiles->setAction(aDelLabel);
 
@@ -351,7 +351,7 @@ void FormFileBrowser::restoreLastDir()
 void FormFileBrowser::showProcessPage(RUNNINGTHREAD rt)
 {
     ui->stackedWidget->setCurrentWidget(ui->pageProgressInfo);
-    m_nThread = rt;
+    m_thread = rt;
 }
 
 void FormFileBrowser::showFilesWidget()
@@ -362,14 +362,14 @@ void FormFileBrowser::showFilesWidget()
 void FormFileBrowser::showFilteredFile(QStringList qLFilteredFiles)
 {
     // 将命中缓存的部分与磁盘查找得到的部分合并，避免部分目录命中缓存时被整体丢弃。
-    if (!m_qLFilePathsFromCache.isEmpty())
+    if (!m_cachedFilePaths.isEmpty())
     {
-        qLFilteredFiles = m_qLFilePathsFromCache + qLFilteredFiles;
-        m_qLFilePathsFromCache.clear();
+        qLFilteredFiles = m_cachedFilePaths + qLFilteredFiles;
+        m_cachedFilePaths.clear();
     }
     setActionState(SEARCH_FINISH);
     ui->stackedWidget->setCurrentWidget(ui->pageFilteredFiles);
-    ui->pageFilteredFiles->setSearchSource(m_sSearchSource);   // 结果来源
+    ui->pageFilteredFiles->setSearchSource(m_searchSource);   // 结果来源
     emit sendShowFilteredFiles(qLFilteredFiles);
     ui->pageProgressInfo->clear();
 

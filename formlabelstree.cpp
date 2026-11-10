@@ -25,7 +25,7 @@
 
 void FormLabels::onActionAddTriggered()
 {
-    QModelIndex curIdx = m_tvAllLabels->currentIndex();
+    QModelIndex curIdx = m_labelsTree->currentIndex();
     if (!curIdx.isValid())
     {
         addItem();
@@ -46,7 +46,7 @@ void FormLabels::onActionAddTriggered()
 
 void FormLabels::onActionAddChildTriggered()
 {
-    QModelIndex curIdx = m_tvAllLabels->currentIndex();
+    QModelIndex curIdx = m_labelsTree->currentIndex();
     if (!curIdx.isValid())
     {
         QMessageBox::information(this, "提示", "未选中父节点！");
@@ -58,7 +58,7 @@ void FormLabels::onActionAddChildTriggered()
 
 void FormLabels::onActionDeleteTriggered()
 {
-    QModelIndex curIdx = m_tvAllLabels->currentIndex();
+    QModelIndex curIdx = m_labelsTree->currentIndex();
     if (!curIdx.isValid())
     {
         return;
@@ -116,7 +116,7 @@ void FormLabels::onActionDeleteTriggered()
     else
     {
         parentItem->removeRow(nCurRow);
-        m_tvAllLabels->setCurrentIndex(parentItem->index());
+        m_labelsTree->setCurrentIndex(parentItem->index());
     }
     // 删除可能包含整棵子树，删除“之后”按当前模型重新同步去重集合，
     // 必须在 removeRow 之后调用，否则 m_setLabels 会残留被删标签名，
@@ -132,7 +132,7 @@ void FormLabels::onActionDeleteTriggered()
 // 另外每次结构性变更后 resyncSets()，避免 QPersistentModelIndex 失效导致改名时清空名字。
 void FormLabels::onActionMoveUpTriggered()
 {
-    const QModelIndex curIdx = m_tvAllLabels->currentIndex();
+    const QModelIndex curIdx = m_labelsTree->currentIndex();
     if (!curIdx.isValid() || curIdx.row() <= 0)
         return;
 
@@ -163,14 +163,14 @@ void FormLabels::onActionMoveUpTriggered()
 
     QStandardItem *movedItem = rowCur.value(0);
     if (movedItem != nullptr)
-        m_tvAllLabels->setCurrentIndex(movedItem->index());
+        m_labelsTree->setCurrentIndex(movedItem->index());
     resyncSets();
     saveLabelToXmlFile();   // #11 移动后立即持久化
 }
 
 void FormLabels::onActionMoveDownTriggered()
 {
-    const QModelIndex curIdx = m_tvAllLabels->currentIndex();
+    const QModelIndex curIdx = m_labelsTree->currentIndex();
     if (!curIdx.isValid())
         return;
 
@@ -204,14 +204,14 @@ void FormLabels::onActionMoveDownTriggered()
 
     QStandardItem *movedItem = rowCur.value(0);
     if (movedItem != nullptr)
-        m_tvAllLabels->setCurrentIndex(movedItem->index());
+        m_labelsTree->setCurrentIndex(movedItem->index());
     resyncSets();
     saveLabelToXmlFile();   // #11 移动后立即持久化
 }
 
 void FormLabels::onActionMoveLeftTriggered()
 {
-    const QModelIndex curIdx = m_tvAllLabels->currentIndex();
+    const QModelIndex curIdx = m_labelsTree->currentIndex();
     if (!curIdx.isValid())
         return;
 
@@ -236,7 +236,7 @@ void FormLabels::onActionMoveLeftTriggered()
 
     QStandardItem *movedItem = rowCur.value(0);
     if (movedItem != nullptr)
-        m_tvAllLabels->setCurrentIndex(movedItem->index());
+        m_labelsTree->setCurrentIndex(movedItem->index());
     resyncSets();
     saveLabelToXmlFile();   // #11 移动后立即持久化
 }
@@ -244,7 +244,7 @@ void FormLabels::onActionMoveLeftTriggered()
 // 作为其上方的节点的子节点
 void FormLabels::onActionMoveRightTriggered()
 {
-    const QModelIndex curIdx = m_tvAllLabels->currentIndex();
+    const QModelIndex curIdx = m_labelsTree->currentIndex();
     if (!curIdx.isValid() || curIdx.row() <= 0)
         return;
 
@@ -268,7 +268,7 @@ void FormLabels::onActionMoveRightTriggered()
 
     QStandardItem *movedItem = rowCur.value(0);
     if (movedItem != nullptr)
-        m_tvAllLabels->setCurrentIndex(movedItem->index());
+        m_labelsTree->setCurrentIndex(movedItem->index());
     resyncSets();
     saveLabelToXmlFile();   // #11 移动后立即持久化
 }
@@ -320,10 +320,10 @@ void FormLabels::onItemChanged(QStandardItem *item)
 
     // 改名只改了标签库，文件上的旧标签不会自动跟着变。
     // 这里排队弹一次询问，让用户明确选择"只改库"还是"连文件一起改"（可以撤销）。
-    if (m_bNamingNewLabel) {
+    if (m_namingNewLabel) {
         // 新建标签时的"起名"：只是给新节点取名字，不需要问要不要同步到文件
-        m_bNamingNewLabel = false;
-    } else if (!old.isEmpty() && !m_bSuppressSyncPrompt && m_sqlOperation != nullptr) {
+        m_namingNewLabel = false;
+    } else if (!old.isEmpty() && !m_suppressSyncPrompt && m_sqlOperation != nullptr) {
         QTimer::singleShot(0, this, [this, old, sLabel]() { promptSyncRenameToFiles(old, sLabel); });
     }
 }
@@ -358,7 +358,7 @@ void FormLabels::promptSyncRenameToFiles(const QString &sOldTag, const QString &
 
     if (box.clickedButton() == pUndo) {
         // 程序化改回旧名：期间不要再弹同步询问。
-        m_bSuppressSyncPrompt = true;
+        m_suppressSyncPrompt = true;
         const QList<QStandardItem *> items = m_modelAllLabels->findItems(sNewTag, Qt::MatchExactly | Qt::MatchRecursive);
         for (QStandardItem *pItem : items) {
             if (pItem != nullptr && pItem->text() == sNewTag) {
@@ -366,7 +366,7 @@ void FormLabels::promptSyncRenameToFiles(const QString &sOldTag, const QString &
                 break;
             }
         }
-        m_bSuppressSyncPrompt = false;
+        m_suppressSyncPrompt = false;
         return;
     }
 

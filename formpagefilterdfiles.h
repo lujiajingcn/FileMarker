@@ -64,7 +64,7 @@ private:
 private:
     Ui::FormPageFilterdFiles *ui;
 
-    QTreeView               *m_tvFilteredFiles;
+    QTreeView               *m_filteredFilesTree;
     QStandardItemModel      *m_modelFilteredFiles;
     QAction                 *m_gotoFilePath;
     QAction                 *m_revealInExplorer;
@@ -72,11 +72,11 @@ private:
     QAction                 *m_copyFilePath;
 
     // 标签列分片填充状态
-    QTimer                  *m_pTagScanTimer;
-    QStringList              m_qLTagScanPaths;
-    QString                  m_sSearchSource;
-    int                      m_nTagScanRow;
-    QString                  m_sSearchCondition;
+    QTimer                  *m_tagScanTimer;
+    QStringList              m_tagScanPaths;
+    QString                  m_searchSource;
+    int                      m_tagScanRow;
+    QString                  m_searchCondition;
 };
 
 #endif // FORMPAGEFILTERDFILES_H

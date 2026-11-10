@@ -36,9 +36,9 @@ private:
     bool recordFailure(const QString &sFilePath, const QString &sReason, const QString &sDetail = QString());
 
     QStringList     m_dirs;
-    int             m_nSucceeded = 0;
-    int             m_nFailed = 0;
-    QString         m_sFirstError;
+    int             m_succeeded = 0;
+    int             m_failed = 0;
+    QString         m_firstError;
 };
 
 #endif // THREADADDLABELBYAI_H

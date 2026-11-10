@@ -38,10 +38,10 @@ void FormPageFiles::onCustomContextMenuRequested(const QPoint &pos)
     // 用右键发生位置定位，而不是 QCursor::pos()：键盘 Menu 键/触控/菜单期间鼠标移动时
     // 前者才是用户真正指向的项。
     QAbstractItemView *activeView = nullptr;
-    if (m_lstFiles != nullptr && m_lstFiles->isVisible())
-        activeView = m_lstFiles;
+    if (m_filesList != nullptr && m_filesList->isVisible())
+        activeView = m_filesList;
     else
-        activeView = m_tvFiles;
+        activeView = m_filesTree;
 
     QModelIndex clickedIndex;
     if (activeView != nullptr)
@@ -110,7 +110,7 @@ void FormPageFiles::onCustomContextMenuRequested(const QPoint &pos)
         for (const QPair<QString, int> &option : sizeOptions) {
             QAction *action = sizeMenu->addAction(option.first);
             action->setCheckable(true);
-            action->setChecked(option.second == m_nIconSize);
+            action->setChecked(option.second == m_iconSize);
             action->setData(option.second);
             sizeGroup->addAction(action);
             connect(action, &QAction::triggered, this, [this, action]() {
@@ -132,7 +132,7 @@ void FormPageFiles::onCustomContextMenuRequested(const QPoint &pos)
     for (const QPair<QString, int> &option : sortOptions) {
         QAction *action = sortMenu->addAction(option.first);
         action->setCheckable(true);
-        action->setChecked(option.second == m_nSortColumn);
+        action->setChecked(option.second == m_sortColumn);
         sortGroup->addAction(action);
         connect(action, &QAction::triggered, this, [this, option]() {
             applySort(option.second, m_sortOrder);
@@ -146,10 +146,10 @@ void FormPageFiles::onCustomContextMenuRequested(const QPoint &pos)
     actionAscending->setChecked(m_sortOrder == Qt::AscendingOrder);
     actionDescending->setChecked(m_sortOrder == Qt::DescendingOrder);
     connect(actionAscending, &QAction::triggered, this, [this]() {
-        applySort(m_nSortColumn, Qt::AscendingOrder);
+        applySort(m_sortColumn, Qt::AscendingOrder);
     });
     connect(actionDescending, &QAction::triggered, this, [this]() {
-        applySort(m_nSortColumn, Qt::DescendingOrder);
+        applySort(m_sortColumn, Qt::DescendingOrder);
     });
 
     menu.addSeparator();
@@ -201,21 +201,21 @@ void FormPageFiles::setSearchButtonMenu(QAction *pSearchAction, QMenu *pMenu)
 {
     // 只记录，真正建按钮在 setCommandActions() 里做。
     // 调用顺序：FormFileBrowser::setActions() 先调本函数、再调 setCommandActions()。
-    m_pSearchAction = pSearchAction;
-    m_pSearchMenu = pMenu;
+    m_searchAction = pSearchAction;
+    m_searchMenu = pMenu;
 }
 
 void FormPageFiles::popupSearchMenu()
 {
-    if (m_pSearchMenu == nullptr)
+    if (m_searchMenu == nullptr)
         return;
     QPoint pos;
-    if (m_pSearchButton != nullptr && m_pSearchButton->isVisible()) {
-        pos = m_pSearchButton->mapToGlobal(QPoint(0, m_pSearchButton->height()));
+    if (m_searchButton != nullptr && m_searchButton->isVisible()) {
+        pos = m_searchButton->mapToGlobal(QPoint(0, m_searchButton->height()));
     } else {
         pos = QCursor::pos();
     }
-    m_pSearchMenu->popup(pos);
+    m_searchMenu->popup(pos);
 }
 
 void FormPageFiles::setCommandActions(const QList<QAction *> &actions)
@@ -244,11 +244,11 @@ void FormPageFiles::setCommandActions(const QList<QAction *> &actions)
             bPendingSeparator = false;
         }
         // "搜索"做成分裂按钮：点主区域直接按上次条件搜索，点右侧小箭头出条件菜单
-        if (pAction == m_pSearchAction && m_pSearchMenu != nullptr) {
+        if (pAction == m_searchAction && m_searchMenu != nullptr) {
             auto *pSearchBtn = new QToolButton(m_commandBar);
-            m_pSearchButton = pSearchBtn;   // F3 弹菜单时用来定位
+            m_searchButton = pSearchBtn;   // F3 弹菜单时用来定位
             pSearchBtn->setDefaultAction(pAction);
-            pSearchBtn->setMenu(m_pSearchMenu);
+            pSearchBtn->setMenu(m_searchMenu);
             pSearchBtn->setPopupMode(QToolButton::MenuButtonPopup);
             pSearchBtn->setToolButtonStyle(Qt::ToolButtonIconOnly);
             pSearchBtn->setIconSize(QSize(18, 18));
@@ -278,21 +278,21 @@ void FormPageFiles::onListViewCustomContextMenuRequested(const QPoint &pos)
 // 切换缩略图尺寸：图标大小、格子大小、代理绘制尺寸、缩略图生成尺寸要一起改
 void FormPageFiles::setThumbnailSize(int iconSize)
 {
-    if (iconSize <= 0 || iconSize == m_nIconSize)
+    if (iconSize <= 0 || iconSize == m_iconSize)
         return;
 
-    m_nIconSize = iconSize;
+    m_iconSize = iconSize;
 
     if (m_delegate)
         m_delegate->setIconSize(iconSize);
     if (m_iconProvider)
         m_iconProvider->setIconSize(iconSize);
 
-    if (m_lstFiles) {
-        m_lstFiles->setIconSize(QSize(iconSize, iconSize));
-        m_lstFiles->setGridSize(QSize(iconSize + THUMB_GRID_MARGIN,
+    if (m_filesList) {
+        m_filesList->setIconSize(QSize(iconSize, iconSize));
+        m_filesList->setGridSize(QSize(iconSize + THUMB_GRID_MARGIN,
                                       iconSize + THUMB_GRID_MARGIN));
-        m_lstFiles->viewport()->update();
+        m_filesList->viewport()->update();
     }
 }
 
@@ -302,15 +302,15 @@ void FormPageFiles::onThumbnailHoverChanged(const QModelIndex &index)
         return;
 
     m_delegate->setHoveredIndex(index);
-    m_lstFiles->viewport()->update();
+    m_filesList->viewport()->update();
 }
 
 void FormPageFiles::applySort(int column, Qt::SortOrder order)
 {
-    m_nSortColumn = column;
+    m_sortColumn = column;
     m_sortOrder = order;
 
     m_modelFiles->sort(column, order);
     // 详细视图的表头同步显示排序指示；缩略图视图没有表头，靠右键菜单的勾选状态指示
-    m_tvFiles->header()->setSortIndicator(column, order);
+    m_filesTree->header()->setSortIndicator(column, order);
 }

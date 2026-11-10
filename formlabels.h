@@ -86,8 +86,8 @@ protected:
     /** 保存标签库；返回是否成功（失败时会提示或写备份） */
     bool saveLabelToXmlFile();
 
-    bool                     m_bShuttingDown = false;      // 析构期间不弹模态框
-    bool                     m_bSaveFailureWarned = false; // 失败提示只弹一次
+    bool                     m_shuttingDown = false;      // 析构期间不弹模态框
+    bool                     m_saveFailureWarned = false; // 失败提示只弹一次
 
     void addItem(QStandardItem *parentItem = nullptr);
 
@@ -132,22 +132,22 @@ private:
 private:
     Ui::FormLabels *ui;
 
-    QTreeView               *m_tvAllLabels;
+    QTreeView               *m_labelsTree;
 
     // 从标签库把标签拖到文件列表 = 给文件打标签
     void startLabelDrag();
     QPoint                   m_ptDragStart;      // 按下时的位置，用来判断是否拖起来
-    bool                     m_bMayStartDrag = false;
+    bool                     m_mayStartDrag = false;
     QStandardItemModel      *m_modelAllLabels;
 
     QSet<QString>           m_setLabels;
     // 每个节点最近一次“提交成功”的文本，按持久索引记录；用于重命名去重与回退原名。
     QMap<QPersistentModelIndex, QString> m_committedText;
-    bool m_bPromptShowing;
+    bool m_promptShowing;
     // 程序化改回名字时不要再次弹"是否同步到文件"
-    bool m_bSuppressSyncPrompt = false;
+    bool m_suppressSyncPrompt = false;
     // 新建标签后正在输入名字：这一次改名只是给新标签起名，不该弹"要不要同步到文件"
-    bool m_bNamingNewLabel = false;
+    bool m_namingNewLabel = false;
     // 右键菜单里追加的外部命令（如"清理未使用标签"）
     QList<QAction *>        m_extraContextActions;
     SqliteOperation        *m_sqlOperation = nullptr;

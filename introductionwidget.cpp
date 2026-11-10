@@ -545,18 +545,18 @@ void IntroductionWidget::calTextGeometry()
     const int textWidth = qBound(540, int(width() * 0.46), 700);
     const int innerWidth = qMax(200, textWidth - 44);   // 去掉左右内边距后的正文宽度
 
-    if (m_nMeasureWidth != innerWidth) {
+    if (m_measureWidth != innerWidth) {
         int nMaxHeight = 0;
         for (const Item &item : m_items)
             nMaxHeight = qMax(nMaxHeight, measurePageHeight(item, innerWidth));
         // 再留出页码、内边距和行距的位置
-        m_nTextBlockHeight = qBound(320, nMaxHeight + 96, int(height() * 0.72));
-        m_nMeasureWidth = innerWidth;
+        m_textBlockHeight = qBound(320, nMaxHeight + 96, int(height() * 0.72));
+        m_measureWidth = innerWidth;
     }
 
     const int left = (width() - textWidth) / 2;
-    const int top = qMax(margin, (height() - m_nTextBlockHeight) / 2);
-    m_textWidget->setGeometry(QRect(left, top, textWidth, m_nTextBlockHeight));
+    const int top = qMax(margin, (height() - m_textBlockHeight) / 2);
+    m_textWidget->setGeometry(QRect(left, top, textWidth, m_textBlockHeight));
 }
 
 /** 用 QTextDocument 量一页正文需要多高（与真实渲染一致，避免翻页时框体跳动） */

@@ -45,15 +45,15 @@ class FileTimeGuard
 public:
     explicit FileTimeGuard(const QString &filePath)
         : m_hFile(INVALID_HANDLE_VALUE)
-        , m_bTimeSaved(false)
-        , m_bCaptured(false)
+        , m_timeSaved(false)
+        , m_captured(false)
     {
         m_hFile = ::CreateFileW(win32APIPath(filePath).c_str(),
                                 FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES,
                                 FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
                                 nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
         if (m_hFile != INVALID_HANDLE_VALUE)
-            m_bTimeSaved = ::GetFileTime(m_hFile, &m_ftCreation, &m_ftAccess, &m_ftWrite) != FALSE;
+            m_timeSaved = ::GetFileTime(m_hFile, &m_ftCreation, &m_ftAccess, &m_ftWrite) != FALSE;
     }
 
     // 在所有写操作结束后调用：记录“本次操作造成的时间”。
@@ -66,7 +66,7 @@ public:
         if (::GetFileTime(m_hFile, &ftCreation, &ftAccess, &ftWrite)) {
             m_ftAfterCreation = ftCreation;
             m_ftAfterWrite = ftWrite;
-            m_bCaptured = true;
+            m_captured = true;
         }
     }
 
@@ -76,7 +76,7 @@ public:
             return;
 
         bool bExternalChange = false;
-        if (m_bCaptured) {
+        if (m_captured) {
             FILETIME ftCreation, ftAccess, ftWrite;
             if (::GetFileTime(m_hFile, &ftCreation, &ftAccess, &ftWrite)) {
                 if (ftWrite.dwLowDateTime != m_ftAfterWrite.dwLowDateTime
@@ -90,7 +90,7 @@ public:
 
         // 有外部修改时不恢复，避免把对方的时间戳覆盖掉。
         // 访问时间不恢复：读标签不应掩盖真实的文件访问。
-        if (m_bTimeSaved && !bExternalChange)
+        if (m_timeSaved && !bExternalChange)
             ::SetFileTime(m_hFile, &m_ftCreation, nullptr, &m_ftWrite);
         ::CloseHandle(m_hFile);
     }
@@ -102,8 +102,8 @@ private:
     FILETIME m_ftWrite;
     FILETIME m_ftAfterCreation;
     FILETIME m_ftAfterWrite;
-    bool m_bTimeSaved;
-    bool m_bCaptured;
+    bool m_timeSaved;
+    bool m_captured;
 };
 } // namespace
 

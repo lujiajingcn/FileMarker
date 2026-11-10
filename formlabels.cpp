@@ -32,14 +32,14 @@ FormLabels::FormLabels(QWidget *parent) :
 {
     ui->setupUi(this);
 
-    m_bPromptShowing = false;
-    m_tvAllLabels = ui->treeView;
+    m_promptShowing = false;
+    m_labelsTree = ui->treeView;
     m_modelAllLabels = new QStandardItemModel(this);
-    m_tvAllLabels->setModel(m_modelAllLabels);
+    m_labelsTree->setModel(m_modelAllLabels);
 
     // 方案A：标签库的命令收在本面板里 —— dock 工具条 + 右键菜单
-    m_tvAllLabels->setContextMenuPolicy(Qt::CustomContextMenu);
-    connect(m_tvAllLabels, &QTreeView::customContextMenuRequested,
+    m_labelsTree->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(m_labelsTree, &QTreeView::customContextMenuRequested,
             this, &FormLabels::onTreeContextMenuRequested);
 
     setToolButtonDefaultAction();
@@ -52,7 +52,7 @@ FormLabels::FormLabels(QWidget *parent) :
     connect(ui->actionMoveDown, &QAction::triggered, this, &FormLabels::onActionMoveDownTriggered);
     connect(ui->actionMoveLeft, &QAction::triggered, this, &FormLabels::onActionMoveLeftTriggered);
     connect(ui->actionMoveRight, &QAction::triggered, this, &FormLabels::onActionMoveRightTriggered);
-    connect(m_tvAllLabels, &QTreeView::clicked, this, &FormLabels::onTreeViewClicked);
+    connect(m_labelsTree, &QTreeView::clicked, this, &FormLabels::onTreeViewClicked);
 
     initLabels();
 
@@ -61,14 +61,14 @@ FormLabels::FormLabels(QWidget *parent) :
     // 把标签从标签库拖到文件列表 = 给文件打标签。
     // 这里自己起 QDrag（不用视图内建的 startDrag），是因为要给拖拽数据打上
     // 我们自己的 MIME 类型，文件列表那边才好识别"这是一次打标签的拖拽"。
-    m_tvAllLabels->viewport()->installEventFilter(this);
+    m_labelsTree->viewport()->installEventFilter(this);
 }
 
 
 FormLabels::~FormLabels()
 {
     // 退出时保存失败不能弹模态框（事件循环已结束），改为写备份文件并记日志
-    m_bShuttingDown = true;
+    m_shuttingDown = true;
     saveLabelToXmlFile();
     delete ui;
 }
@@ -155,7 +155,7 @@ void FormLabels::initLabels()
 QStringList FormLabels::getSelLabels()
 {
     QStringList qLLabels;
-    QItemSelectionModel *selectionModel = m_tvAllLabels->selectionModel();
+    QItemSelectionModel *selectionModel = m_labelsTree->selectionModel();
     // selectedIndexes() 会为同一选中行的每一列都返回一个索引，若不只取第 0 列，
     // 会导致同一标签被重复返回多次（搜索时会重复匹配）。
     // 这里按选中行的顺序逐个追加并去重，保证返回顺序与树上看到的顺序一致
@@ -164,7 +164,7 @@ QStringList FormLabels::getSelLabels()
     // Qt 不保证 selectedRows 的顺序；按界面可见位置排序，保证批量添加顺序稳定
     std::sort(selectedIndexes.begin(), selectedIndexes.end(),
               [this](const QModelIndex &a, const QModelIndex &b) {
-                  return m_tvAllLabels->visualRect(a).top() < m_tvAllLabels->visualRect(b).top();
+                  return m_labelsTree->visualRect(a).top() < m_labelsTree->visualRect(b).top();
               });
     for (const QModelIndex &index : selectedIndexes) {
         QStandardItem *item = m_modelAllLabels->itemFromIndex(index);
@@ -190,11 +190,11 @@ void FormLabels::addItem(QStandardItem *parentItem)
         parentItem->appendRow(newItem);
     }
     registerItem(newItem);
-    m_tvAllLabels->setCurrentIndex(newItem->index());
+    m_labelsTree->setCurrentIndex(newItem->index());
     // 新建的节点直接进入改名状态：默认名是"新标签"，让用户马上就改，
     // 而不是点完"新建标签"看到多了一行"新标签"还要再双击一次。
-    m_bNamingNewLabel = true;          // 这次改名只是给新标签起名，不要弹同步询问
-    m_tvAllLabels->edit(newItem->index());
+    m_namingNewLabel = true;          // 这次改名只是给新标签起名，不要弹同步询问
+    m_labelsTree->edit(newItem->index());
     saveLabelToXmlFile();   // #11 新增标签后立即持久化
 }
 
@@ -202,14 +202,14 @@ void FormLabels::addItem(QStandardItem *parentItem)
 QList<QSet<QString>> FormLabels::getSelLabelGroups() const
 {
     QList<QSet<QString>> qLGroups;
-    QItemSelectionModel *selectionModel = m_tvAllLabels->selectionModel();
+    QItemSelectionModel *selectionModel = m_labelsTree->selectionModel();
     if (selectionModel == nullptr)
         return qLGroups;
 
     QModelIndexList selectedIndexes = selectionModel->selectedRows(0);
     std::sort(selectedIndexes.begin(), selectedIndexes.end(),
               [this](const QModelIndex &a, const QModelIndex &b) {
-                  return m_tvAllLabels->visualRect(a).top() < m_tvAllLabels->visualRect(b).top();
+                  return m_labelsTree->visualRect(a).top() < m_labelsTree->visualRect(b).top();
               });
 
     std::function<void(QStandardItem *, QSet<QString> &)> collect =
@@ -302,13 +302,13 @@ bool FormLabels::saveLabelToXmlFile()
             qCritical() << "标签库已备份到:" << sBackupFile;
     }
 
-    if (m_bShuttingDown) {
+    if (m_shuttingDown) {
         // 退出阶段只是记日志，不再打扰用户
         return false;
     }
 
-    if (!m_bSaveFailureWarned) {
-        m_bSaveFailureWarned = true;
+    if (!m_saveFailureWarned) {
+        m_saveFailureWarned = true;
         QString sDetail = sBackupFile.isEmpty()
                               ? tr("请检查程序目录是否可写、磁盘是否已满。")
                               : tr("这次的编辑已临时另存到：\n%1").arg(sBackupFile);

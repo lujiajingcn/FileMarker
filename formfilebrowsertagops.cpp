@@ -30,13 +30,13 @@
 
 void FormFileBrowser::onRecvSelLabels(QStringList qLSelLabels)
 {
-    m_qLSelLabels = qLSelLabels;
+    m_selectedLabels = qLSelLabels;
     // 没有收到"分组"信息时（例如从【当前目录中的标签】选择），每个标签自成一组。
-    m_qLLabelGroups.clear();
+    m_labelGroups.clear();
     for (const QString &sLabel : qLSelLabels) {
         QSet<QString> setGroup;
         setGroup.insert(sLabel);
-        m_qLLabelGroups << setGroup;
+        m_labelGroups << setGroup;
     }
 
     // 两个面板都会走到这里：点一下标签就等于"选中"，要明确告诉用户选中的是什么、
@@ -51,7 +51,7 @@ void FormFileBrowser::onRecvSelLabels(QStringList qLSelLabels)
 /** 接收【标签库】给出的分组（每组 = 选中标签 + 它的全部子标签）。 */
 void FormFileBrowser::onRecvLabelGroups(const QList<QSet<QString>> &qLLabelGroups)
 {
-    m_qLLabelGroups = qLLabelGroups;
+    m_labelGroups = qLLabelGroups;
 }
 
 void FormFileBrowser::onActionAddLabelByAITriggered()
@@ -129,7 +129,7 @@ void FormFileBrowser::onActionAddLabelsTriggered()
         return;
     }
 
-    if (m_qLSelLabels.count() == 0)
+    if (m_selectedLabels.count() == 0)
     {
         QMessageBox::information(this, "提示", "请先在右侧【标签库（分类）】里选择要添加的标签。");
         return;
@@ -140,7 +140,7 @@ void FormFileBrowser::onActionAddLabelsTriggered()
         const QMessageBox::StandardButton btn =
             QMessageBox::question(this, tr("添加标签"),
                                   tr("将为 %1 个文件添加标签【%2】，是否继续？")
-                                      .arg(qLFilePaths.size()).arg(m_qLSelLabels.join("、")),
+                                      .arg(qLFilePaths.size()).arg(m_selectedLabels.join("、")),
                                   QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
         if (btn != QMessageBox::Yes)
             return;
@@ -152,7 +152,7 @@ void FormFileBrowser::onActionAddLabelsTriggered()
     QStringList qLFailedFiles;          // 把失败的文件名带回给用户
     for (const QString &sFilePath : qLFilePaths) {
         // 追加而不是覆盖：保留文件已有标签的顺序，新标签按选中顺序追加到末尾
-        if (!ADSOperation::appendTags(sFilePath, m_qLSelLabels)) {
+        if (!ADSOperation::appendTags(sFilePath, m_selectedLabels)) {
             bAllOk = false;
             qLFailedFiles << QFileInfo(sFilePath).fileName();
         }
@@ -193,7 +193,7 @@ void FormFileBrowser::onBeforeTagsChanged(const QStringList &qLFilePaths)
             continue;
         m_mapUndoOldTags.insert(sFilePath, ADSOperation::listADSTagsInOrder(sFilePath));
     }
-    m_sUndoDesc = tr("撤销：恢复 %1 个文件的标签").arg(m_mapUndoOldTags.size());
+    m_undoDesc = tr("撤销：恢复 %1 个文件的标签").arg(m_mapUndoOldTags.size());
     emit sendUndoStateChanged(!m_mapUndoOldTags.isEmpty());
 }
 
@@ -303,16 +303,16 @@ void FormFileBrowser::setActionState(OPERATION op)
     case SEARCH_START:
     case TRAVERSER_START:
         // QAction 指针可能为 null（setActions 传入 null 时 connect 静默失败），需判空。
-        if (m_aAddLabelByAI) m_aAddLabelByAI->setEnabled(false);
-        if (m_aSearch) m_aSearch->setEnabled(false);
-        if (m_aTraverse) m_aTraverse->setEnabled(false);
+        if (m_aiTagAction) m_aiTagAction->setEnabled(false);
+        if (m_searchAction) m_searchAction->setEnabled(false);
+        if (m_traverseAction) m_traverseAction->setEnabled(false);
         break;
     case ADDTAGBYAI_FINISH:
     case SEARCH_FINISH:
     case TRAVERER_FINISH:
-        if (m_aAddLabelByAI) m_aAddLabelByAI->setEnabled(true);
-        if (m_aSearch) m_aSearch->setEnabled(true);
-        if (m_aTraverse) m_aTraverse->setEnabled(true);
+        if (m_aiTagAction) m_aiTagAction->setEnabled(true);
+        if (m_searchAction) m_searchAction->setEnabled(true);
+        if (m_traverseAction) m_traverseAction->setEnabled(true);
         break;
     }
 }

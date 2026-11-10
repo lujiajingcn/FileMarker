@@ -96,17 +96,17 @@ void FormPageFiles::updateDirLabelsPanel(const QString &sDir)
 {
     emit sendDirLabels(sDir, QSet<QString>());
     // 这里必须强制重扫：发送空集已经把面板清空了，如果再用"非强制"方式调用，
-    // 对"本会话已扫过一遍的同一目录"会被 m_sScanCompletedDir 守卫直接跳过，
+    // 对"本会话已扫过一遍的同一目录"会被 m_scanCompletedDir 守卫直接跳过，
     // 结果面板清空后永远不再填充（实测：对同一路径再按一次回车即可复现）。
     QTimer::singleShot(150, this, [this, sDir]() { scanDirLabels(sDir, true); });
 }
 
 void FormPageFiles::scanDirLabels(const QString &sDir, bool bForce)
 {
-    if (sDir.isEmpty() || !FmPageUtil::isSameDirPath(sDir, m_sCurDir))
+    if (sDir.isEmpty() || !FmPageUtil::isSameDirPath(sDir, m_curDir))
         return;
     // 已经完整扫过且不是强制刷新（例如 directoryLoaded 的重复通知）就不再扫
-    if (!bForce && m_sScanCompletedDir == sDir)
+    if (!bForce && m_scanCompletedDir == sDir)
         return;
 
     const QModelIndex rootIndex = m_modelFiles->index(sDir);
@@ -117,31 +117,31 @@ void FormPageFiles::scanDirLabels(const QString &sDir, bool bForce)
     if (nRows <= 0)
         return;   // 目录还没加载出内容，等 directoryLoaded 或下一次刷新
 
-    m_sScanDir = sDir;
+    m_scanDir = sDir;
     m_scanRootIndex = rootIndex;
-    m_nScanRow = 0;
-    m_nScanTotal = qMin(nRows, 2000);
+    m_scanRow = 0;
+    m_scanTotal = qMin(nRows, 2000);
     m_setScanLabels.clear();
-    m_sScanCompletedDir.clear();
+    m_scanCompletedDir.clear();
 
-    if (m_pScanTimer != nullptr)
-        m_pScanTimer->start();
+    if (m_scanTimer != nullptr)
+        m_scanTimer->start();
 }
 
 void FormPageFiles::continueDirLabelScan()
 {
-    if (!FmPageUtil::isSameDirPath(m_sScanDir, m_sCurDir)) {
-        if (m_pScanTimer != nullptr)
-            m_pScanTimer->stop();
+    if (!FmPageUtil::isSameDirPath(m_scanDir, m_curDir)) {
+        if (m_scanTimer != nullptr)
+            m_scanTimer->stop();
         return;
     }
 
     // 每片最多约 15ms（实测约 0.37ms/文件，即每片约 40 个文件），保证界面仍可响应
     QElapsedTimer budget;
     budget.start();
-    while (m_nScanRow < m_nScanTotal && budget.elapsed() < 15) {
-        const QModelIndex idx = m_modelFiles->index(m_nScanRow, 0, m_scanRootIndex);
-        ++m_nScanRow;
+    while (m_scanRow < m_scanTotal && budget.elapsed() < 15) {
+        const QModelIndex idx = m_modelFiles->index(m_scanRow, 0, m_scanRootIndex);
+        ++m_scanRow;
         if (!idx.isValid() || m_modelFiles->isDir(idx))
             continue;
         const QStringList qLTags = ADSOperation::listADSTagsInOrder(m_modelFiles->filePath(idx));
@@ -151,21 +151,21 @@ void FormPageFiles::continueDirLabelScan()
         m_modelFiles->cacheTagsForFile(m_modelFiles->filePath(idx), qLTags);
     }
 
-    if (m_nScanRow < m_nScanTotal)
+    if (m_scanRow < m_scanTotal)
         return;
 
-    if (m_pScanTimer != nullptr)
-        m_pScanTimer->stop();
+    if (m_scanTimer != nullptr)
+        m_scanTimer->stop();
 
-    if (!FmPageUtil::isSameDirPath(m_sScanDir, m_sCurDir))
+    if (!FmPageUtil::isSameDirPath(m_scanDir, m_curDir))
         return;
 
-    emit sendDirLabels(m_sScanDir, m_setScanLabels);
-    m_sScanCompletedDir = m_sScanDir;
+    emit sendDirLabels(m_scanDir, m_setScanLabels);
+    m_scanCompletedDir = m_scanDir;
 
     // 目录文件数超过上限时明确提示，避免用户误以为面板内容完整
-    if (m_modelFiles->rowCount(m_scanRootIndex) > m_nScanTotal) {
-        emit sendHintMessage(tr("目录文件过多，仅统计了前 %1 个文件的标签").arg(m_nScanTotal));
+    if (m_modelFiles->rowCount(m_scanRootIndex) > m_scanTotal) {
+        emit sendHintMessage(tr("目录文件过多，仅统计了前 %1 个文件的标签").arg(m_scanTotal));
     }
 }
 

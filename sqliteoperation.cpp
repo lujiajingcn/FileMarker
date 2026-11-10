@@ -47,10 +47,10 @@ void SqliteOperation::createTable()
     QSqlQuery query(m_sqlDB);
     QString sSql = R"(
                       CREATE TABLE IF NOT EXISTS  filewithlabels (
-                      id        INTEGER PRIMARY KEY AUTOINCREMENT NOT nullptr,
-                      dir       CHAR (260) NOT nullptr,
-                      filepath  CHAR (260) NOT nullptr,
-                      labels    TEXT (1024) NOT nullptr)
+                      id        INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                      dir       CHAR (260) NOT NULL,
+                      filepath  CHAR (260) NOT NULL,
+                      labels    TEXT (1024) NOT NULL)
                       )";
     if (!query.exec(sSql))
     {
@@ -60,8 +60,8 @@ void SqliteOperation::createTable()
     QSqlQuery query1(m_sqlDB);
     QString sSql1 = R"(
                       CREATE TABLE IF NOT EXISTS  dirs (
-                      id    INTEGER PRIMARY KEY AUTOINCREMENT NOT nullptr,
-                      dir   CHAR (260) UNIQUE NOT nullptr)
+                      id    INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                      dir   CHAR (260) UNIQUE NOT NULL)
                       )";
     if (!query1.exec(sSql1))
     {
@@ -84,7 +84,7 @@ void SqliteOperation::createTable()
     }
     if (!bHasUpdatedAt) {
         QSqlQuery alterQuery(m_sqlDB);
-        if (!alterQuery.exec(QStringLiteral("ALTER TABLE %1 ADD COLUMN updatedAt INTEGER NOT nullptr DEFAULT 0")
+        if (!alterQuery.exec(QStringLiteral("ALTER TABLE %1 ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
                                  .arg(TABLE_NAME_DIR))) {
             qWarning() << "为 dirs 表添加 updatedAt 列失败:" << alterQuery.lastError().text();
         }

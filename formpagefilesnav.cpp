@@ -48,14 +48,14 @@ void FormPageFiles::restoreLastDir()
 
 QString FormPageFiles::getCurDir()
 {
-    return m_sCurDir;
+    return m_curDir;
 }
 
 void FormPageFiles::curDirChanged(QString sCurDir)
 {
-    m_skBackward.push_back(m_sCurDir);
+    m_skBackward.push_back(m_curDir);
     m_skForward.clear();
-    m_sCurDir = sCurDir;
+    m_curDir = sCurDir;
     // 同步地址栏并把路径记入下拉历史
     rememberPath(sCurDir);
     // 导航栈变化时直接更新按钮状态，不再依赖 event() 拦截 Paint。
@@ -69,7 +69,7 @@ void FormPageFiles::curDirChanged(QString sCurDir)
 void FormPageFiles::refreshAddressBar()
 {
     ui->lookInCombo->setCurrentIndex(-1);
-    ui->lookInCombo->setEditText(m_sCurDir);
+    ui->lookInCombo->setEditText(m_curDir);
     if (ui->lookInCombo->lineEdit())
         ui->lookInCombo->lineEdit()->setCursorPosition(0);
 }
@@ -81,16 +81,16 @@ void FormPageFiles::rememberPath(const QString &sPath)
 
     // 最近访问的 10 个目录：去重、最近的在最前面、写回 settings
     const QString sClean = QDir::cleanPath(sPath);
-    m_qLRecentDirs.removeAll(sClean);
-    m_qLRecentDirs.prepend(sClean);
-    while (m_qLRecentDirs.size() > FmPageUtil::RECENT_DIR_LIMIT)
-        m_qLRecentDirs.removeLast();
+    m_recentDirs.removeAll(sClean);
+    m_recentDirs.prepend(sClean);
+    while (m_recentDirs.size() > FmPageUtil::RECENT_DIR_LIMIT)
+        m_recentDirs.removeLast();
     saveRecentDirs();
 
     // 用历史列表重建下拉项；地址栏文本单独设置，避免把"当前项"高亮成列表里的一项
     ui->lookInCombo->blockSignals(true);
     ui->lookInCombo->clear();
-    ui->lookInCombo->addItems(m_qLRecentDirs);
+    ui->lookInCombo->addItems(m_recentDirs);
     ui->lookInCombo->setCurrentIndex(-1);
     ui->lookInCombo->setEditText(sClean);
     ui->lookInCombo->blockSignals(false);
@@ -104,18 +104,18 @@ void FormPageFiles::loadRecentDirs()
 #endif
 
     const QStringList qLStored = settings.value(QStringLiteral("view/recentDirs")).toStringList();
-    m_qLRecentDirs.clear();
+    m_recentDirs.clear();
     for (const QString &sDir : qLStored) {
-        if (m_qLRecentDirs.size() >= FmPageUtil::RECENT_DIR_LIMIT)
+        if (m_recentDirs.size() >= FmPageUtil::RECENT_DIR_LIMIT)
             break;
         const QString sClean = QDir::cleanPath(sDir);
-        if (!sClean.isEmpty() && !m_qLRecentDirs.contains(sClean))
-            m_qLRecentDirs << sClean;
+        if (!sClean.isEmpty() && !m_recentDirs.contains(sClean))
+            m_recentDirs << sClean;
     }
 
     ui->lookInCombo->blockSignals(true);
     ui->lookInCombo->clear();
-    ui->lookInCombo->addItems(m_qLRecentDirs);
+    ui->lookInCombo->addItems(m_recentDirs);
     ui->lookInCombo->setCurrentIndex(-1);
     ui->lookInCombo->blockSignals(false);
 }
@@ -126,7 +126,7 @@ void FormPageFiles::saveRecentDirs() const
 #if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
     settings.setIniCodec("UTF-8");
 #endif
-    settings.setValue(QStringLiteral("view/recentDirs"), m_qLRecentDirs);
+    settings.setValue(QStringLiteral("view/recentDirs"), m_recentDirs);
 }
 
 void FormPageFiles::navigateToDir(const QString &sPath)
@@ -164,10 +164,10 @@ void FormPageFiles::navigateToDir(const QString &sPath)
         curDirChanged(QDir::cleanPath(sParentDir));
         const QModelIndex fileIndex = m_modelFiles->index(targetInfo.absoluteFilePath());
         if (fileIndex.isValid()) {
-            m_tvFiles->setCurrentIndex(fileIndex);
-            m_lstFiles->setCurrentIndex(fileIndex);
-            m_tvFiles->scrollTo(fileIndex, QAbstractItemView::PositionAtCenter);
-            m_lstFiles->scrollTo(fileIndex, QAbstractItemView::PositionAtCenter);
+            m_filesTree->setCurrentIndex(fileIndex);
+            m_filesList->setCurrentIndex(fileIndex);
+            m_filesTree->scrollTo(fileIndex, QAbstractItemView::PositionAtCenter);
+            m_filesList->scrollTo(fileIndex, QAbstractItemView::PositionAtCenter);
         }
         return;
     }
@@ -210,7 +210,7 @@ void FormPageFiles::updateToolButtons()
     else
         ui->forwardButton->setEnabled(true);
 
-    QModelIndex rootIndex = m_tvFiles->rootIndex();
+    QModelIndex rootIndex = m_filesTree->rootIndex();
     QString sFilePath = m_modelFiles->filePath(rootIndex);
     if (sFilePath.isEmpty())
         ui->toParentButton->setEnabled(false);
@@ -227,12 +227,12 @@ void FormPageFiles::onBackButtonClicked()
 {
     if (m_skBackward.isEmpty())
         return;
-    m_skForward.push_back(m_sCurDir);
+    m_skForward.push_back(m_curDir);
     QString sDir = m_skBackward.pop();
     if (sDir.isEmpty())
         sDir = FmPageUtil::myComputerName();
     bothSetRootIndex(m_modelFiles->index(sDir));
-    m_sCurDir = sDir;
+    m_curDir = sDir;
     refreshAddressBar();
     updateToolButtons();  // 导航栈变化后直接更新按钮
     updateDirLabelsPanel(sDir);
@@ -242,12 +242,12 @@ void FormPageFiles::onForwardButtonClicked()
 {
     if (m_skForward.isEmpty())
         return;
-    m_skBackward.push_back(m_sCurDir);
+    m_skBackward.push_back(m_curDir);
     QString sDir = m_skForward.pop();
     if (sDir.isEmpty())
         sDir = FmPageUtil::myComputerName();
     bothSetRootIndex(m_modelFiles->index(sDir));
-    m_sCurDir = sDir;
+    m_curDir = sDir;
     refreshAddressBar();
     updateToolButtons();  // 导航栈变化后直接更新按钮
     updateDirLabelsPanel(sDir);
@@ -255,7 +255,7 @@ void FormPageFiles::onForwardButtonClicked()
 
 void FormPageFiles::onToParentButtonClicked()
 {
-    QModelIndex rootIndex = m_tvFiles->rootIndex();
+    QModelIndex rootIndex = m_filesTree->rootIndex();
     QString sFilePath = m_modelFiles->filePath(rootIndex);
     QDir dir(sFilePath);
     QString sNewDirectory;
@@ -274,7 +274,7 @@ void FormPageFiles::onToParentButtonClicked()
     // 根节点没有“父路径”，不要把空字符串压进后退栈
     if (!sFilePath.isEmpty())
         m_skBackward.push_back(sFilePath);
-    m_sCurDir = sNewDirectory;
+    m_curDir = sNewDirectory;
     // 地址栏同步：之前这里漏了更新，导致点上移后地址栏还停留在旧路径。
     rememberPath(sNewDirectory);
     updateToolButtons();  // 导航栈变化后直接更新按钮
@@ -300,11 +300,11 @@ void FormPageFiles::recvGotoFile(QString sFilePath)
     // 否则缩略图模式下跳转后仍停留在旧目录。
     bothSetRootIndex(dirIndex);
 
-    // "当前目录"的状态有 5 份副本（两个视图的 rootIndex、m_sCurDir、地址栏、
+    // "当前目录"的状态有 5 份副本（两个视图的 rootIndex、m_curDir、地址栏、
     // 后退/前进栈、【当前目录中的标签】面板）。原来这里只改了 rootIndex，于是：
-    // 地址栏和标签面板还显示旧目录，点【刷新】又按 m_sCurDir 把列表弹回旧目录。
+    // 地址栏和标签面板还显示旧目录，点【刷新】又按 m_curDir 把列表弹回旧目录。
     // 现在统一走 curDirChanged()，只有"本来就在这个目录"时才只同步地址栏，避免重复压后退栈。
-    if (!FmPageUtil::isSameDirPath(sFileDir, m_sCurDir)) {
+    if (!FmPageUtil::isSameDirPath(sFileDir, m_curDir)) {
         curDirChanged(sFileDir);
     } else {
         refreshAddressBar();
@@ -313,8 +313,8 @@ void FormPageFiles::recvGotoFile(QString sFilePath)
 
     const QModelIndex fileIndex = m_modelFiles->index(fi.absoluteFilePath());
     if (fileIndex.isValid()) {
-        m_tvFiles->setCurrentIndex(fileIndex);
-        m_lstFiles->setCurrentIndex(fileIndex);
+        m_filesTree->setCurrentIndex(fileIndex);
+        m_filesList->setCurrentIndex(fileIndex);
     }
 }
 
@@ -345,13 +345,13 @@ void FormPageFiles::onDoubleClicked(const QModelIndex &index)
 
 void FormPageFiles::bothSetRootIndex(const QModelIndex &index)
 {
-    m_tvFiles->setRootIndex(index);
-    m_lstFiles->setRootIndex(index);
+    m_filesTree->setRootIndex(index);
+    m_filesList->setRootIndex(index);
     // 换目录时必须清掉选择集：两个视图共用同一个 QItemSelectionModel，
     // 而 setRootIndex() 不会清理它。不清的话，切到别的目录后工具栏【删除标签】/【添加标签】
     // 仍会作用到旧目录里"已经看不见"的文件（实测：不可见文件的标签被真实删除）。
-    if (m_tvFiles->selectionModel() != nullptr)
-        m_tvFiles->selectionModel()->clearSelection();
+    if (m_filesTree->selectionModel() != nullptr)
+        m_filesTree->selectionModel()->clearSelection();
 }
 
 void FormPageFiles::recvDblClick(const QModelIndex &index)
