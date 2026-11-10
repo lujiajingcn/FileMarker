@@ -10,6 +10,9 @@
 #include <QLabel>
 #include <QHBoxLayout>
 #include <QPainter>
+#include <QToolBar>
+#include <QStatusBar>
+#include <QMenuBar>
 #include <QtMath>
 #include <QTextDocument>
 #include <limits>
@@ -316,7 +319,7 @@ void IntroductionWidget::drawPointerArrow(QPainter &painter, const QRect &anchor
 
     // 箭头头部：两条斜线，张开约 90 度
     const qreal head = 15.0;
-    const qreal dirAngle = std::atan2(-unit.y(), -unit.x());   // 箭头指向
+    const qreal dirAngle = std::atan2(unit.y(), unit.x());   // 箭头指向
     for (int nSide = -1; nSide <= 1; nSide += 2) {
         const qreal a = dirAngle + nSide * M_PI / 4.0;
         painter.drawLine(QPointF(tip),
@@ -327,6 +330,22 @@ void IntroductionWidget::drawPointerArrow(QPainter &painter, const QRect &anchor
     painter.restore();
 }
 
+namespace {
+
+/** 目标是不是"条状"控件：工具栏 / 菜单栏 / 状态栏，或者特别矮的控件 */
+bool isBarLikeTarget(const QPointer<QWidget> &anchor)
+{
+    if (anchor.isNull())
+        return false;
+    QWidget *w = anchor.data();
+    return qobject_cast<QToolBar *>(w) != nullptr
+           || qobject_cast<QMenuBar *>(w) != nullptr
+           || qobject_cast<QStatusBar *>(w) != nullptr
+           || w->height() <= 40;
+}
+
+}   // namespace
+
 void IntroductionWidget::paintEvent(QPaintEvent *)
 {
     QPainter p(this);
@@ -335,10 +354,15 @@ void IntroductionWidget::paintEvent(QPaintEvent *)
     if (m_stepPointerAnchor) {
         const QPoint anchorPos = m_stepPointerAnchor->mapTo(parentWidget(), QPoint{0, 0});
         const QRect anchorRect(anchorPos, m_stepPointerAnchor->size());
-        const QRect spotlightRect = anchorRect.adjusted(-SPOTLIGHTMARGIN,
-                                                        -SPOTLIGHTMARGIN,
-                                                        SPOTLIGHTMARGIN,
-                                                        SPOTLIGHTMARGIN);
+        // 条状目标（工具栏/菜单栏/状态栏）只照亮它自己那一行：
+        // 用 18px 外扩会顺带把下面的地址栏/工具条也照亮，和"只框住这一处"的预期不符。
+        const bool bBarTarget = isBarLikeTarget(m_stepPointerAnchor);
+        const QRect spotlightRect = bBarTarget
+                                        ? anchorRect.adjusted(-4, -2, 4, 2)
+                                        : anchorRect.adjusted(-SPOTLIGHTMARGIN,
+                                                              -SPOTLIGHTMARGIN,
+                                                              SPOTLIGHTMARGIN,
+                                                              SPOTLIGHTMARGIN);
 
         // darken the background to create a spotlighted area
         if (spotlightRect.left() > 0) {
@@ -367,13 +391,21 @@ void IntroductionWidget::paintEvent(QPaintEvent *)
         }
 
         // smooth borders of the spotlighted area by gradients
-        drawCornerImage(m_borderImage,
-                         &p,
-                         spotlightRect,
-                         SPOTLIGHTMARGIN,
-                         SPOTLIGHTMARGIN,
-                         SPOTLIGHTMARGIN,
-                         SPOTLIGHTMARGIN);
+        if (bBarTarget) {
+            p.setOpacity(0.55);
+            p.setPen(QPen(QColor(65, 205, 82), 1));
+            p.setBrush(Qt::NoBrush);
+            p.drawRect(spotlightRect.adjusted(0, 0, -1, -1));
+            p.setOpacity(0.87);
+        } else {
+            drawCornerImage(m_borderImage,
+                             &p,
+                             spotlightRect,
+                             SPOTLIGHTMARGIN,
+                             SPOTLIGHTMARGIN,
+                             SPOTLIGHTMARGIN,
+                             SPOTLIGHTMARGIN);
+        }
 
         // 目标旁边画一小段箭头，指向被高亮的控件（参考 Qt Creator 的 UI tour）：
         // 箭头贴着控件外侧、长度固定，不跨越整屏空白。
