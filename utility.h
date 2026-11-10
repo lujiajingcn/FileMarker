@@ -36,6 +36,12 @@ public:
     /** 判断一个QStringList是否包含另一个QStringList的全部元素，不考虑元素顺序 */
     static bool isContains(const QStringList &list1, const QStringList &list2);
 
+    /**
+     ** 判断一个流名是否属于"本程序的标签流"。
+     ** 注意语义：不是语法校验（非法字符由 ADSOperation::sanitizeTagName 负责），
+     ** 这里只排除空名、浏览器写的 Zone.Identifier 和本程序自己的归属清单。
+     ** 入参按值传递：内部会去掉 :$DATA 后缀，不能改到调用者的字符串。
+     **/
     static bool isADSNameValid(QString sADSName);
 
     /** 去掉 NTFS 流名末尾的 ":$DATA"（FindFirstStreamW 返回的形式），得到真正的标签名 */

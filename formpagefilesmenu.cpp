@@ -1,3 +1,5 @@
+// FormPageFiles 的菜单实现：右键菜单、排序、视图切换、命令条。
+
 #include "formpagefiles.h"
 #include "ui_formpagefiles.h"
 #include "formpagefilesutil.h"

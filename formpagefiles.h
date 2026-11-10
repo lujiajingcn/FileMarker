@@ -110,7 +110,7 @@ protected:
 
     void onCustomContextMenuRequested(const QPoint &pos);
 
-    // 鼠标离开缩略图视图时清除悬停高亮
+    // 视图事件拦截：缩略图悬停高亮清除；两个视图都接收"从标签库拖过来的标签"
     bool eventFilter(QObject *watched, QEvent *event) override;
 
 public slots:
@@ -144,13 +144,13 @@ private:
 
     void recvDblClick(const QModelIndex &index);
 
-    // 双击标签区域 / 双击标签列时弹出"增删式"标签对话框（A3）。
+    // 双击标签区域 / 双击标签列时弹出"增删式"标签对话框。
     void onEditTag(const QModelIndex &index);
 
     // 点了标签 chip 上的 ✕：把该标签从文件上移除（可撤销）
     void onRemoveTagFromRow(const QModelIndex &index, const QString &sTag);
 
-    // 重命名入口：两个视图都不再就地改名，统一走右键【重命名…】。
+    // 重命名入口：两个视图都不再就地改名，统一走右键【重命名…】或 F2。
     void renameFile(const QModelIndex &index);
 
     // 切换缩略图尺寸档位（小/中/大）

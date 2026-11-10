@@ -1,3 +1,5 @@
+// FormLabels 的树操作实现：新建/删除/移动/改名，以及改名后同步到文件。
+
 #include "formlabels.h"
 #include "ui_formlabels.h"
 

@@ -161,6 +161,7 @@ IntroductionWidget::IntroductionWidget(QWidget *parent)
              "<tr><td style=\"padding-right: 20px\">删除标签:</td><td>删除选中文件的所有标签。</td></tr>"
              "<tr><td style=\"padding-right: 20px\">查找文件:</td><td>根据选中的标签，在选中的文件夹中查找匹配的文件。</td></tr>"
              "<tr><td style=\"padding-right: 20px\">遍历文件:</td><td>遍历选中的文件夹，将标签信息存入缓存数据库以加速后续查询。</td></tr>"
+             "<tr><td style=\"padding-right: 20px\">查找条件:</td><td>点搜索按钮右侧的小箭头（或按 F3），选择标签之间的逻辑关系（与/或）和查找数据来源（缓存/磁盘）。</td></tr>"
              "<tr><td>界面介绍:</td><td>本界面介绍向导。</td></tr>"
              "</table></p>")},
         {QLatin1String("wFileListToolBar"),
@@ -169,7 +170,9 @@ IntroductionWidget::IntroductionWidget(QWidget *parent)
          tr("<ul>"
              "<li>查找文件：根据标签区选中的标签查找匹配文件。</li>"
              "<li>遍历文件：遍历选中文件夹，将结果存入缓存数据库。</li>"
-             "<li>设置查找条件：配置多个标签之间的逻辑关系（与/或），以及查找方式（从缓存数据库或直接从磁盘查询）。</li>"
+             "<li>查找条件：点搜索按钮右侧的小箭头（或按 F3）选择标签逻辑关系（与/或）和数据来源（缓存/磁盘）。</li>"
+             "<li>搜索结果页会显示这份缓存是多久之前遍历的，并可点【重新扫描】直接重新查磁盘。</li>"
+             "<li>标签备份：【文件 → 导出标签… / 导入标签…】把标签存成 JSON，防止拷到 U 盘/压缩包后丢失。</li>"
              "</ul>")},
         {QLatin1String("statusBar"),
          tr("状态栏"),

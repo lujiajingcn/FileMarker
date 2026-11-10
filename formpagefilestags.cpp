@@ -1,3 +1,5 @@
+// FormPageFiles 的标签实现：编辑/删除标签、目录标签扫描、重命名。
+
 #include "formpagefiles.h"
 #include "ui_formpagefiles.h"
 #include "formpagefilesutil.h"

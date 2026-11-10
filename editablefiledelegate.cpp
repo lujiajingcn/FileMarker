@@ -178,7 +178,7 @@ int EditableDelegate::preferredCellHeight(int iconSize, const QFont &font)
 {
     const QFontMetrics fm(font);
     const QFontMetrics tagFm(tagFontFor(font));
-    // 图标 + 两行文件名 + 两行标签 + 内外边距
+    // 图标 + 两行文件名 + 两行标签 chip + 内外边距
     return ITEM_MARGIN + iconSize + ITEM_GAP
            + 2 * fm.lineSpacing() + ITEM_GAP
            + 2 * tagFm.lineSpacing() + ITEM_MARGIN;
@@ -240,7 +240,7 @@ LayoutRects EditableDelegate::calculateRects(const QStyleOptionViewItem &option,
     if (tagHeight > 0)
         layout.customRect = QRect(option.rect.left() + ITEM_MARGIN, y, width, tagHeight);
 
-    // 标签编辑区域：有标签时就是标签文字区；没有标签时放在文件名下方的一行，
+    // 标签双击区域：有标签时覆盖 chip 区域；没有标签时放在文件名下方的一行，
     // 这样还没打标签的文件在缩略图里也能双击这个位置进入编辑。
     if (!layout.customRect.isEmpty()) {
         layout.tagEditRect = layout.customRect;

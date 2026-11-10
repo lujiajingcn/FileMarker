@@ -1,3 +1,5 @@
+// FormPageFiles 的导航实现：前进/后退/上级、地址栏历史、双击打开。
+
 #include "formpagefiles.h"
 #include "ui_formpagefiles.h"
 #include "formpagefilesutil.h"

@@ -23,7 +23,7 @@ protected:
     void run();
 
 signals:
-    void sigState(bool bIsStop);
+    // 扫描结束时的完整结果；处理完由 FormFileBrowser::onRecvSearchResult 接手
     void sigResult(QStringList qLHostFiles);
     void sendProcessInfo(QString sProcessedFilePath);
 

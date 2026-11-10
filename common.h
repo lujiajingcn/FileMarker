@@ -3,9 +3,6 @@
 
 #include <QString>
 
-#define LOGIC_AND "与"
-#define LOGIC_OR "或"
-
 #define ADS_TAIL ":$DATA"
 
 enum labelLogic{
@@ -13,7 +10,8 @@ enum labelLogic{
     OR
 };
 
-#define FILTER_TAG "Zone.Identifier"    // 系统自己生成的标签
+// 浏览器下载文件时 Windows 自己写的流，不是标签：既不显示也不删除。
+#define FILTER_TAG "Zone.Identifier"
 
 // FileMarker 自己的“标签归属清单”流：列出本程序写入的标签名。
 // 有它时只信任清单里的名字，0 字节第三方 ADS 不会被误删/误判。
@@ -37,7 +35,7 @@ extern QString g_sAppDir;
 #define ICON_SIZE_MEDIUM 128
 #define ICON_SIZE_LARGE 192
 
-#define THUMB_GRID_MARGIN 88    // 图标之外留给文件名（最多两行）和标签（最多两行）的空间
+#define THUMB_GRID_MARGIN 88    // 图标之外留给文件名（最多两行）和标签 chip（最多两行）的空间
 
 #define ICON_SIZE ICON_SIZE_MEDIUM  // 以缩略图方式显示文件时的默认图标大小
 #define GRID_SIZE (ICON_SIZE + THUMB_GRID_MARGIN)   // 以缩略图方式显示文件时的默认格子大小

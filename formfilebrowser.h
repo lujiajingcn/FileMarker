@@ -146,7 +146,7 @@ private:
     Ui::FormFileBrowser *ui;
 
     // 左侧【文件导航】面板的收起/展开：
-    // 收起后整个面板只剩一条 24px 的窄条，按钮还在上面，点一下即可展开。
+    // 收起后整个面板只剩一条窄条（kNavRailWidth = 36px），按钮还在上面，点一下即可展开。
     void initNavPanelToggle();
     void setNavPanelVisible(bool bVisible, bool bSave = true);
     void saveNavPanelVisible(bool bVisible) const;

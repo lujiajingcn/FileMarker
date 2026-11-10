@@ -1,9 +1,10 @@
 /**
-** 【可编辑代理】
+** 【缩略图代理】
 **
-** 缩略图模式下绘制文件：图标 + 文件名（最多两行）+ 标签（次要颜色，最多两行）。
+** 缩略图模式下绘制文件：图标 + 文件名（最多两行）+ 标签 chip（最多两行）。
 ** 标签为空时不占行，整个内容块在格子里垂直居中；鼠标悬停时给淡色圆角底。
-** 双击文件名区域编辑文件名，双击标签区域就地编辑标签（写回第 5 列）。
+** 交互：双击任何区域都是"打开/进入"；双击标签区弹出"增删式"标签对话框；
+** 点 chip 上的 ✕ 直接删掉该标签；重命名走右键菜单或 F2（不再就地改名）。
 **/
 #ifndef EDITABLEDELEGATE_H
 #define EDITABLEDELEGATE_H
@@ -19,15 +20,16 @@
 
 class ThumbnailIconProvider;
 
-// 标记当前处于什么编辑模式
+// 编辑器创建时记在 QWidget::property("fmEditTarget") 上的值。
+// 现在只剩标签列会创建编辑器（其它列由 NoEditDelegate 拒绝），因此只用得到 TargetCustomData。
 enum EditTarget { TargetNone, TargetFileName, TargetCustomData };
 
 // 统一管理布局，保证 paint 和 editorEvent 使用相同的坐标逻辑
 struct LayoutRects {
     QRect iconRect;
     QRect nameRect;
-    QRect customRect;    // 标签文字区域（没有标签时为空）
-    QRect tagEditRect;   // 标签编辑区域：没有标签时是文件名下方的一行，保证仍可双击编辑
+    QRect customRect;    // 标签 chip 的绘制区域（没有标签时为空）
+    QRect tagEditRect;   // 双击该区域=弹出标签对话框；没有标签时是文件名下方的一行，保证仍可双击
 };
 
 class EditableDelegate : public QStyledItemDelegate {

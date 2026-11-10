@@ -1,3 +1,5 @@
+// FormFileBrowser 的标签操作实现：AI 打标、添加标签、撤销、标签回传。
+
 #include "formfilebrowser.h"
 #include <QMenu>
 #include <QToolButton>

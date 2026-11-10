@@ -1,3 +1,5 @@
+// FormFileBrowser 的标签备份实现：导出成 JSON、从 JSON 写回。
+
 #include "formfilebrowser.h"
 #include <QMenu>
 #include <QToolButton>

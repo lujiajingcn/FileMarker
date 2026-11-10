@@ -1,3 +1,5 @@
+// FormFileBrowser 的搜索相关实现：缓存查询、磁盘扫描、重新扫描、目录遍历。
+
 #include "formfilebrowser.h"
 #include <QMenu>
 #include <QToolButton>

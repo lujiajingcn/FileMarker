@@ -177,7 +177,7 @@ FormFileBrowser::~FormFileBrowser()
  * 左侧【文件导航】面板的收起/展开按钮。
  *
  * 做法：把原本直接放在 QSplitter 里的 wFileNavigation 包进一个容器 m_navPanel，
- * 容器顶部放一个"◀/▶"按钮；收起时隐藏目录树、把容器限宽成 24px 的窄条，
+ * 容器顶部放一个"◀/▶"按钮；收起时隐藏目录树、把容器限宽成 kNavRailWidth 的窄条，
  * 按钮仍留在窄条上，点一下即可展开（和 DeepSeek Harness 左侧栏的折叠按钮一个意思）。
  */
 void FormFileBrowser::initNavPanelToggle()
@@ -401,7 +401,7 @@ void FormFileBrowser::onTvNavigationClicked(const QModelIndex &index)
  * filepath1:label1
  * filepath1:label2
  * filepath2:label3
- * todo: 后续可以在ads文件中写入一些内容，比如标签的简介
+ * 说明：标签流里目前只存顺序号；以后想给标签加简介之类的元数据，可以写在这里。
 */
 
 /**

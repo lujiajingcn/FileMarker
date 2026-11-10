@@ -1,3 +1,5 @@
+// FormLabels 的杂项实现：右键菜单、拖拽、外部标签回传。
+
 #include "formlabels.h"
 #include "ui_formlabels.h"
 

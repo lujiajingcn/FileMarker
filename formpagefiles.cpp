@@ -35,48 +35,12 @@
 
 namespace {
 
-// 详情视图第 5 列（标签列）专用代理：
-// 默认代理的编辑器在标签列上只按文字宽度显示，输入长标签时几乎不可用；
-// 这里让编辑器铺满整个单元格，其余行为与默认代理一致（写回模型第 5 列）。
-class TagColumnDelegate : public QStyledItemDelegate
-{
-public:
-    explicit TagColumnDelegate(QObject *parent = nullptr) : QStyledItemDelegate(parent) {}
-
-    QWidget *createEditor(QWidget *parent, const QStyleOptionViewItem &option, const QModelIndex &index) const override
-    {
-        Q_UNUSED(option);
-        QLineEdit *editor = new QLineEdit(parent);
-        editor->setPlaceholderText(index.data(Qt::DisplayRole).toString());
-        return editor;
-    }
-
-    void setEditorData(QWidget *editor, const QModelIndex &index) const override
-    {
-        QLineEdit *lineEdit = qobject_cast<QLineEdit *>(editor);
-        if (lineEdit)
-            lineEdit->setText(index.data(Qt::EditRole).toString());
-    }
-
-    void setModelData(QWidget *editor, QAbstractItemModel *model, const QModelIndex &index) const override
-    {
-        QLineEdit *lineEdit = qobject_cast<QLineEdit *>(editor);
-        if (lineEdit)
-            model->setData(index, lineEdit->text(), Qt::EditRole);
-    }
-
-    void updateEditorGeometry(QWidget *editor, const QStyleOptionViewItem &option, const QModelIndex &index) const override
-    {
-        Q_UNUSED(index);
-        editor->setGeometry(option.rect.adjusted(1, 1, -1, -1));
-    }
-};
-
 // 详情视图第 0~3 列（名称/大小/类型/修改日期）禁止就地编辑。
-// 原因：为了让第 5 列（标签）可编辑，代码里调用了 m_modelFiles->setReadOnly(false)，
-// 而 QFileSystemModel::flags() 会因此把第 0 列也标成 ItemIsEditable —— 于是双击文件名或按 F2
-// 会真的重命名磁盘文件（无确认、无撤销，实测把 audio.wav 改了名）。
-// 这里用一个"拒绝创建编辑器"的代理把这些列锁死；标签列仍用 TagColumnDelegate。
+// 原因：重命名走的是 QFileSystemModel::setData()，而那要求模型不是只读的，
+// 所以代码里调用了 m_modelFiles->setReadOnly(false)；副作用是 flags() 会把第 0 列
+// 也标成 ItemIsEditable —— 双击文件名或按 F2 会直接就地改名（无确认、无撤销，
+// 实测把 audio.wav 改错了名）。
+// 这里用"拒绝创建编辑器"的代理把这些列锁死；标签列用的是 TagChipDelegate（chip + ✕）。
 class NoEditDelegate : public QStyledItemDelegate
 {
 public:

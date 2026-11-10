@@ -617,7 +617,7 @@ bool ADSOperation::appendTags(const QString &filePath, const QStringList &tags)
 
 /**
  ** 把文件上的某个标签改名（保留它在标签序列中的位置）。
- ** 用于【标签库】重命名后"同时改文件上的标签"这个选项（A2）。
+ ** 用于【标签库】重命名后"同时改文件上的标签"这个选项。
  ** 文件上本来就没有这个标签时返回 true（视为无需处理）。
  **/
 bool ADSOperation::renameTag(const QString &filePath, const QString &sOldTag, const QString &sNewTag)
@@ -647,7 +647,7 @@ bool ADSOperation::renameTag(const QString &filePath, const QString &sOldTag, co
 
 /**
  ** 从文件上移除某个标签（保留其余标签的顺序）。
- ** 用于【标签库】删除标签时"同时从文件移除"这个选项（A2）。
+ ** 用于【标签库】删除标签时"同时从文件移除"这个选项。
  ** 文件上本来就没有这个标签时返回 true。
  **/
 bool ADSOperation::removeTag(const QString &filePath, const QString &sTag)
