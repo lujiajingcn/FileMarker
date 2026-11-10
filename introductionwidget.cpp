@@ -9,7 +9,13 @@
 #include <QKeyEvent>
 #include <QLabel>
 #include <QHBoxLayout>
+#include <QLineF>
 #include <QPainter>
+#include <limits>
+#include <cmath>
+#include <QToolBar>
+#include <QStatusBar>
+#include <QMenuBar>
 #include <QPointer>
 #include <QPushButton>
 #include <QVBoxLayout>
@@ -236,6 +242,43 @@ bool IntroductionWidget::eventFilter(QObject *obj, QEvent *ev)
 const int SPOTLIGHTMARGIN = 18;
 const int POINTER_WIDTH = 3;
 
+namespace {
+
+/** 目标是不是"细长条"（工具栏/菜单栏/状态栏）：这种目标不画箭头 */
+bool shouldDrawPointer(const QPointer<QWidget> &anchor)
+{
+    if (anchor.isNull())
+        return false;
+    QWidget *w = anchor.data();
+    if (qobject_cast<QToolBar *>(w) != nullptr
+        || qobject_cast<QMenuBar *>(w) != nullptr
+        || qobject_cast<QStatusBar *>(w) != nullptr)
+        return false;
+    // 兜底：高度很小的控件一律当作条状
+    return w->height() >= 60;
+}
+
+/** 从矩形中心朝 target 方向，求射线与矩形边界的交点 */
+QPoint pointOnRectTowards(const QRect &rect, const QPoint &target)
+{
+    const QPoint center = rect.center();
+    const int dx = target.x() - center.x();
+    const int dy = target.y() - center.y();
+    if (dx == 0 && dy == 0)
+        return center;
+
+    const qreal halfW = rect.width() / 2.0;
+    const qreal halfH = rect.height() / 2.0;
+    qreal t = std::numeric_limits<qreal>::max();
+    if (dx != 0)
+        t = qMin(t, halfW / qAbs(dx));
+    if (dy != 0)
+        t = qMin(t, halfH / qAbs(dy));
+    return QPoint(qRound(center.x() + dx * t), qRound(center.y() + dy * t));
+}
+
+}   // namespace
+
 void IntroductionWidget::paintEvent(QPaintEvent *)
 {
     QPainter p(this);
@@ -284,18 +327,46 @@ void IntroductionWidget::paintEvent(QPaintEvent *)
                          SPOTLIGHTMARGIN,
                          SPOTLIGHTMARGIN);
 
-        // draw pointer
-        const QColor qtGreen(65, 205, 82);
-        p.setOpacity(1.);
-        p.setPen(QPen(QBrush(qtGreen),
-                      POINTER_WIDTH,
-                      Qt::SolidLine,
-                      Qt::RoundCap,
-                      Qt::MiterJoin));
-        p.setRenderHint(QPainter::Antialiasing);
-        //指向工具栏和菜单栏时，箭头显示错误，去掉箭头
-//        for (const QPolygonF &poly : pointerPolygon(spotlightRect, rect()))
-//            p.drawPolyline(poly);
+        // ---- 指示箭头 ----
+        // 从正文块指向高亮区。工具栏/菜单栏/状态栏这类"细长条"目标上，箭头会指在
+        // 一条几十像素高的缝里，既难看也没帮助，所以这类目标只保留高亮框。
+        if (shouldDrawPointer(m_stepPointerAnchor)) {
+            const QColor qtGreen(65, 205, 82);
+            p.setOpacity(1.);
+            p.setRenderHint(QPainter::Antialiasing, true);
+
+            const QPoint target = spotlightRect.center();
+            const QPoint start = pointOnRectTowards(m_textWidget->geometry(), target);
+            QPointF dir(target.x() - start.x(), target.y() - start.y());
+            const qreal length = std::hypot(dir.x(), dir.y());
+            // 正文块本身压在高亮区里（例如整块文件区）时没有可指的方向，直接不画
+            const bool bOverlapping = m_textWidget->geometry().intersects(anchorRect);
+            if (length > 40.0 && !bOverlapping) {
+                dir /= length;
+                // 起点离开正文块一点；终点收在高亮区外沿（而不是目标中心），
+                // 否则箭头会一直扎进被高亮的控件里面。
+                const QPointF from = QPointF(start) + dir * 6.0;
+                const QPoint edge = pointOnRectTowards(spotlightRect.adjusted(2, 2, -2, -2), start);
+                const QPointF to = QPointF(edge) - dir * 6.0;
+
+                // 正文块离目标太近时箭头只剩一小截，反而碍眼，直接不画
+                if (QLineF(from, to).length() >= 30.0) {
+                    p.setPen(QPen(QBrush(qtGreen), POINTER_WIDTH, Qt::SolidLine,
+                                  Qt::RoundCap, Qt::MiterJoin));
+                    p.drawLine(from, to);
+
+                    // 箭头（两条斜线）
+                    const qreal arrowLen = 18.0;
+                    const qreal arrowAngle = M_PI / 7.0;   // 约 25°
+                    const qreal baseAngle = std::atan2(dir.y(), dir.x());
+                    for (int nSide = -1; nSide <= 1; nSide += 2) {
+                        const qreal a = baseAngle + M_PI + nSide * arrowAngle;
+                        p.drawLine(to, QPointF(to.x() + arrowLen * std::cos(a),
+                                               to.y() + arrowLen * std::sin(a)));
+                    }
+                }
+            }
+        }
     } else {
         p.fillRect(rect(), backgroundColor);
     }
@@ -407,6 +478,8 @@ void IntroductionWidget::calTextGeometry()
     const int margin = 20;
     // 正文块比窗口一半稍宽一点，长条目少换几行；同时给上下留出标题栏和按钮的位置
     const int textWidth = qBound(420, int(width() * 0.58), width() - 2 * margin);
+    // 单侧排版时的最大宽度：太宽会贴着被高亮的控件，箭头就没地方画了
+    const int maxTextWidth = qBound(420, int(width() * 0.52), 720);
     // 高度跟着内容走：文字少的时候不要撑出一大片空白黑块
     int textHeight = int(height() * 0.62);
     if (m_textWidget->layout() != nullptr) {
@@ -442,25 +515,27 @@ void IntroductionWidget::calTextGeometry()
             // 聚光灯占据了整个窗口，回退到默认居中
             textRect = QRect(width()/4, height()/4, width()/2, height()/2);
         } else if (maxSpace == rightSpace && rightSpace >= width() * 0.4) {
-            // 右侧空间足够，放在右边
+            // 右侧空间足够，放在右边（窄一点，给指向高亮区的箭头留出位置）
+            const int w = qMin(rightSpace, maxTextWidth);
             textRect = QRect(spotlightRect.right() + margin,
                              qMax(margin, (height() - height()/2) / 2),
-                             rightSpace, height()/2);
+                             w, height()/2);
         } else if (maxSpace == leftSpace && leftSpace >= width() * 0.4) {
-            // 左侧空间足够，放在左边
+            // 左侧空间足够，放在左边（同上）
+            const int w = qMin(leftSpace, maxTextWidth);
             textRect = QRect(margin,
                              qMax(margin, (height() - height()/2) / 2),
-                             leftSpace, height()/2);
+                             w, height()/2);
         } else if (maxSpace == topSpace && topSpace >= height() * 0.3) {
             // 上方空间足够，放在上面
-            textRect = QRect(qMax(margin, (width() - width()/2) / 2),
+            textRect = QRect(qMax(margin, (width() - maxTextWidth) / 2),
                              margin,
-                             width()/2, topSpace);
+                             maxTextWidth, topSpace);
         } else if (maxSpace == botSpace && botSpace >= height() * 0.3) {
             // 下方空间足够，放在下面
-            textRect = QRect(qMax(margin, (width() - width()/2) / 2),
+            textRect = QRect(qMax(margin, (width() - maxTextWidth) / 2),
                              spotlightRect.bottom() + margin,
-                             width()/2, botSpace);
+                             maxTextWidth, botSpace);
         } else {
             // 没有足够的单独空间，回退到默认居中
             textRect = QRect(width()/4, height()/4, width()/2, height()/2);
