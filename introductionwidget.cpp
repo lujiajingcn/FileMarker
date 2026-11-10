@@ -10,6 +10,8 @@
 #include <QLabel>
 #include <QHBoxLayout>
 #include <QPainter>
+#include <limits>
+#include <cmath>
 #include <QPointer>
 #include <QPushButton>
 #include <QVBoxLayout>
@@ -79,7 +81,16 @@ IntroductionWidget::IntroductionWidget(QWidget *parent)
     // 浅灰正文压在白底文件名上几乎看不清。
     m_textWidget->setAttribute(Qt::WA_StyledBackground, true);
     m_textWidget->setStyleSheet(QStringLiteral(
-        "background-color: rgba(18, 18, 18, 245); border-radius: 10px;"));
+        "background-color: #121212; border-radius: 10px;"));
+    // 样式表在纯 QWidget 上偶尔不生效（取决于平台样式），再补一层调色板底色兜底，
+    // 保证正文块永远是不透明的，不会和底下的文件列表糊在一起。
+    m_textWidget->setAutoFillBackground(true);
+    {
+        QPalette textPal = m_textWidget->palette();
+        textPal.setColor(QPalette::Window, QColor(18, 18, 18));
+        m_textWidget->setPalette(textPal);
+    }
+    // 正文与页码两个 QLabel 用透明底，避免各自刷一块颜色把圆角盖住
     layout->setContentsMargins(22, 18, 22, 14);
     layout->setSpacing(8);
     m_textWidget->setLayout(layout);
@@ -88,7 +99,11 @@ IntroductionWidget::IntroductionWidget(QWidget *parent)
     m_stepText->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     m_stepText->setWordWrap(true);
     m_stepText->setTextFormat(Qt::RichText);
-    m_stepText->setPalette(palette());
+    {
+        QPalette labelPal = m_stepText->palette();
+        labelPal.setColor(QPalette::WindowText, QColor(220, 220, 220));
+        m_stepText->setPalette(labelPal);
+    }
     m_stepText->setOpenExternalLinks(true);
     m_stepText->installEventFilter(this);
     layout->addWidget(m_stepText);
@@ -235,6 +250,74 @@ bool IntroductionWidget::eventFilter(QObject *obj, QEvent *ev)
 
 const int SPOTLIGHTMARGIN = 18;
 
+/** 从矩形中心朝 target 方向，求射线与矩形边界的交点 */
+static QPoint pointOnRectTowards(const QRect &rect, const QPoint &target)
+{
+    const QPoint center = rect.center();
+    const int dx = target.x() - center.x();
+    const int dy = target.y() - center.y();
+    if (dx == 0 && dy == 0)
+        return center;
+
+    const qreal halfW = rect.width() / 2.0;
+    const qreal halfH = rect.height() / 2.0;
+    qreal t = std::numeric_limits<qreal>::max();
+    if (dx != 0)
+        t = qMin(t, halfW / qAbs(dx));
+    if (dy != 0)
+        t = qMin(t, halfH / qAbs(dy));
+    return QPoint(qRound(center.x() + dx * t), qRound(center.y() + dy * t));
+}
+
+/**
+ * 在锚点外侧画一小段指向锚点的箭头。
+ *
+ * 位置规则：沿"正文块中心 -> 锚点中心"的射线，与"锚点外扩 gap 的矩形"相交得到箭尖，
+ * 箭头再沿反方向回退固定长度 —— 所以箭头永远贴着被高亮的控件、朝它指，
+ * 不会出现横跨整屏空白的长线。
+ */
+void IntroductionWidget::drawPointerArrow(QPainter &painter, const QRect &anchorRect)
+{
+    const int arrowLength = 42;   // 箭头总长
+    const int gap = 10;           // 箭尖与控件外沿的距离
+
+    const QPoint textCenter = m_textWidget->geometry().center();
+    if (anchorRect.contains(textCenter)) {
+        // 正文块本身就在高亮区里（例如整个文件区），没有可指的方向
+        return;
+    }
+
+    const QRect outsideRect = anchorRect.adjusted(-gap, -gap, gap, gap);
+    const QPoint tip = pointOnRectTowards(outsideRect, textCenter);
+    const QPointF dir(textCenter.x() - tip.x(), textCenter.y() - tip.y());
+    const qreal len = std::hypot(dir.x(), dir.y());
+    if (len < 0.1)
+        return;
+
+    const QPointF unit(dir.x() / len, dir.y() / len);   // 由箭尖指向正文块
+    const QPointF tail = QPointF(tip) + unit * arrowLength;
+
+    painter.save();
+    painter.setOpacity(1.0);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+
+    const QColor color(65, 205, 82);   // 与 Qt Creator 的 tour 相同的绿色
+    painter.setPen(QPen(QBrush(color), 4, Qt::SolidLine, Qt::RoundCap, Qt::MiterJoin));
+    painter.drawLine(tail, QPointF(tip));
+
+    // 箭头头部：两条斜线，张开约 90 度
+    const qreal head = 16.0;
+    const qreal baseAngle = std::atan2(unit.y(), unit.x());   // 由箭尖朝外
+    for (int nSide = -1; nSide <= 1; nSide += 2) {
+        const qreal a = baseAngle - nSide * M_PI / 4.0;
+        painter.drawLine(QPointF(tip),
+                         QPointF(tip.x() + head * std::cos(a),
+                                 tip.y() + head * std::sin(a)));
+    }
+
+    painter.restore();
+}
+
 void IntroductionWidget::paintEvent(QPaintEvent *)
 {
     QPainter p(this);
@@ -283,6 +366,9 @@ void IntroductionWidget::paintEvent(QPaintEvent *)
                          SPOTLIGHTMARGIN,
                          SPOTLIGHTMARGIN);
 
+        // 目标旁边画一小段箭头，指向被高亮的控件（参考 Qt Creator 的 UI tour）：
+        // 箭头贴着控件外侧、长度固定，不跨越整屏空白。
+        drawPointerArrow(p, anchorRect);
     } else {
         p.fillRect(rect(), backgroundColor);
     }
@@ -382,87 +468,33 @@ void IntroductionWidget::resizeToParent()
     calTextGeometry();
 }
 
-// 在本工程中，文件查看区域较大，占据了界面的中心区域，所以使得显示在中心位置的说明文字显示不清晰
-// 应该将说明文字显示在聚光灯锚点之外的空白区域
+/**
+ * 正文块的位置固定，不跟着高亮的控件跑。
+ * 参考 Qt Creator 自己的 UI tour：说明文字和"第几步"始终在同一个位置，
+ * 用户翻页时视线不用重新找；指向由聚光灯 + 目标旁边的小箭头负责。
+ */
 void IntroductionWidget::calTextGeometry()
 {
-    if(parentWidget() == nullptr)
-    {
+    if (parentWidget() == nullptr)
         return;
-    }
 
-    const int margin = 20;
-    // 正文块比窗口一半稍宽一点，长条目少换几行；同时给上下留出标题栏和按钮的位置
-    const int textWidth = qBound(420, int(width() * 0.58), width() - 2 * margin);
-    // 单侧排版时的最大宽度：太宽会一直铺到被高亮的控件边上
-    const int maxTextWidth = qBound(420, int(width() * 0.52), 720);
-    // 高度跟着内容走：文字少的时候不要撑出一大片空白黑块
-    int textHeight = int(height() * 0.62);
+    const int margin = 24;
+
+    // 宽度：窗口的 46%，限制在 [420, 700] 之间，保证长条目不会换行太碎
+    const int textWidth = qBound(420, int(width() * 0.46), 700);
+
+    // 高度：跟着内容走（内容少就不要撑出一大片空黑块），但不超过窗口的 50%
+    int textHeight = int(height() * 0.5);
     if (m_textWidget->layout() != nullptr) {
         const int hfw = m_textWidget->layout()->heightForWidth(textWidth - 44);
         if (hfw > 0)
             textHeight = qMin(textHeight, hfw + 40);
     }
-    textHeight = qBound(200, textHeight, height() - 2 * margin);
-    QRect textRect((width() - textWidth) / 2,
-                   qMax(margin, int(height() * 0.16)),
-                   textWidth,
-                   textHeight);
+    textHeight = qBound(180, textHeight, qMax(180, height() - 2 * margin));
 
-    if(m_stepPointerAnchor) {
-        // 将锚点映射到父窗口坐标系，加上聚光灯边缘
-        const QPoint anchorPos = m_stepPointerAnchor->mapTo(parentWidget(), QPoint{0, 0});
-        const QRect anchorRect(anchorPos, m_stepPointerAnchor->size());
-        const QRect spotlightRect = anchorRect.adjusted(-SPOTLIGHTMARGIN,
-                                                        -SPOTLIGHTMARGIN,
-                                                        SPOTLIGHTMARGIN,
-                                                        SPOTLIGHTMARGIN);
+    // 位置：水平居中，垂直放在窗口偏上一点（和 Qt Creator 的 tour 一致）
+    const int left = (width() - textWidth) / 2;
+    const int top = qMax(margin, int(height() * 0.34));
 
-        // 计算聚光灯四周的可用空间
-        const int leftSpace  = spotlightRect.left() - margin;
-        const int rightSpace = width() - spotlightRect.right() - margin;
-        const int topSpace   = spotlightRect.top() - margin;
-        const int botSpace   = height() - spotlightRect.bottom() - margin;
-
-        // 找到空间最大的方向
-        const int maxSpace = qMax(qMax(leftSpace, rightSpace), qMax(topSpace, botSpace));
-
-        if (maxSpace <= 0) {
-            // 聚光灯占据了整个窗口，回退到默认居中
-            textRect = QRect(width()/4, height()/4, width()/2, height()/2);
-        } else if (maxSpace == rightSpace && rightSpace >= width() * 0.4) {
-            // 右侧空间足够，放在右边（不铺满整侧，免得贴着被高亮的面板）
-            const int w = qMin(rightSpace, maxTextWidth);
-            textRect = QRect(spotlightRect.right() + margin,
-                             qMax(margin, (height() - height()/2) / 2),
-                             w, height()/2);
-        } else if (maxSpace == leftSpace && leftSpace >= width() * 0.4) {
-            // 左侧空间足够，放在左边（同上）
-            const int w = qMin(leftSpace, maxTextWidth);
-            textRect = QRect(margin,
-                             qMax(margin, (height() - height()/2) / 2),
-                             w, height()/2);
-        } else if (maxSpace == topSpace && topSpace >= height() * 0.3) {
-            // 上方空间足够，放在上面
-            textRect = QRect(qMax(margin, (width() - maxTextWidth) / 2),
-                             margin,
-                             maxTextWidth, topSpace);
-        } else if (maxSpace == botSpace && botSpace >= height() * 0.3) {
-            // 下方空间足够，放在下面
-            textRect = QRect(qMax(margin, (width() - maxTextWidth) / 2),
-                             spotlightRect.bottom() + margin,
-                             maxTextWidth, botSpace);
-        } else {
-            // 没有足够的单独空间，回退到默认居中
-            textRect = QRect(width()/4, height()/4, width()/2, height()/2);
-        }
-    }
-
-    // 确保文本区域大小合理
-    if (textRect.width() < 100)
-        textRect.setWidth(100);
-    if (textRect.height() < 100)
-        textRect.setHeight(100);
-
-    m_textWidget->setGeometry(textRect);
+    m_textWidget->setGeometry(QRect(left, top, textWidth, textHeight));
 }

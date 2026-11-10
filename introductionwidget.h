@@ -37,6 +37,7 @@ protected:
     void mouseReleaseEvent(QMouseEvent *me) override;
 
     void calTextGeometry();
+    void drawPointerArrow(QPainter &painter, const QRect &anchorRect);
 
 private:
     void finish();
