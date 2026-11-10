@@ -38,6 +38,9 @@ protected:
 
     void calTextGeometry();
     void drawPointerArrow(QPainter &painter, const QRect &anchorRect);
+    int  measurePageHeight(const Item &item, int textWidth) const;
+    int  m_nTextBlockHeight = 0;   // 所有页面共用的正文块高度
+    int  m_nMeasureWidth = -1;     // 上次测量时用的正文宽度
 
 private:
     void finish();

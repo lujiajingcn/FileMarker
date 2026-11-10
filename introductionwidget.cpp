@@ -10,6 +10,8 @@
 #include <QLabel>
 #include <QHBoxLayout>
 #include <QPainter>
+#include <QtMath>
+#include <QTextDocument>
 #include <limits>
 #include <cmath>
 #include <QPointer>
@@ -469,32 +471,45 @@ void IntroductionWidget::resizeToParent()
 }
 
 /**
- * 正文块的位置固定，不跟着高亮的控件跑。
- * 参考 Qt Creator 自己的 UI tour：说明文字和"第几步"始终在同一个位置，
- * 用户翻页时视线不用重新找；指向由聚光灯 + 目标旁边的小箭头负责。
+ * 正文块在所有页面用同一套尺寸与位置。
+ *
+ * 参考 Qt Creator 的 UI tour：翻页时文字框不移动、也不缩放，
+ * 用户只需要读内容、看箭头，不用重新寻找版面。
+ * 高度取"最长的一页"并缓存，只有窗口宽度变化时才重新测量。
  */
 void IntroductionWidget::calTextGeometry()
 {
-    if (parentWidget() == nullptr)
+    if (parentWidget() == nullptr || m_stepText == nullptr)
         return;
 
     const int margin = 24;
+    // 宽度：窗口的 46%，限制在 [540, 700] 之间
+    const int textWidth = qBound(540, int(width() * 0.46), 700);
+    const int innerWidth = qMax(200, textWidth - 44);   // 去掉左右内边距后的正文宽度
 
-    // 宽度：窗口的 46%，限制在 [420, 700] 之间，保证长条目不会换行太碎
-    const int textWidth = qBound(420, int(width() * 0.46), 700);
-
-    // 高度：跟着内容走（内容少就不要撑出一大片空黑块），但不超过窗口的 50%
-    int textHeight = int(height() * 0.5);
-    if (m_textWidget->layout() != nullptr) {
-        const int hfw = m_textWidget->layout()->heightForWidth(textWidth - 44);
-        if (hfw > 0)
-            textHeight = qMin(textHeight, hfw + 40);
+    if (m_nMeasureWidth != innerWidth) {
+        int nMaxHeight = 0;
+        for (const Item &item : m_items)
+            nMaxHeight = qMax(nMaxHeight, measurePageHeight(item, innerWidth));
+        // 再留出页码、内边距和行距的位置
+        m_nTextBlockHeight = qBound(320, nMaxHeight + 96, int(height() * 0.72));
+        m_nMeasureWidth = innerWidth;
     }
-    textHeight = qBound(180, textHeight, qMax(180, height() - 2 * margin));
 
-    // 位置：水平居中，垂直放在窗口偏上一点（和 Qt Creator 的 tour 一致）
     const int left = (width() - textWidth) / 2;
-    const int top = qMax(margin, int(height() * 0.34));
+    const int top = qMax(margin, (height() - m_nTextBlockHeight) / 2);
+    m_textWidget->setGeometry(QRect(left, top, textWidth, m_nTextBlockHeight));
+}
 
-    m_textWidget->setGeometry(QRect(left, top, textWidth, textHeight));
+/** 用 QTextDocument 量一页正文需要多高（与真实渲染一致，避免翻页时框体跳动） */
+int IntroductionWidget::measurePageHeight(const Item &item, int textWidth) const
+{
+    const QString html = "<html><body style=\"" + m_bodyCss + "\">" + "<h1>" + item.title
+                         + "</h1><p>" + item.brief + "</p>" + item.description + "</body></html>";
+
+    QTextDocument doc;
+    doc.setDefaultFont(m_stepText->font());
+    doc.setTextWidth(textWidth);
+    doc.setHtml(html);
+    return qCeil(doc.size().height());
 }
