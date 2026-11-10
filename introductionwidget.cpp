@@ -105,7 +105,11 @@ IntroductionWidget::IntroductionWidget(QWidget *parent)
     });
     connect(m_btnNext, &QPushButton::clicked, this, &IntroductionWidget::step);
 
-    m_bodyCss = "font-size: 16px; line-height: 150%;";
+    // 正文字号跟随系统字号（而不是写死 16px）：高分屏或用户在系统里放大字号时，
+    // 文字跟着一起变，排版不用重新调。pointSize 无效（用像素字号）时退回 16px。
+    const qreal basePointSize = font().pointSizeF() > 0 ? font().pointSizeF() : 12.0;
+    m_bodyCss = QStringLiteral("font-size: %1pt; line-height: 150%;")
+                    .arg(basePointSize * 1.15, 0, 'f', 1);
     m_items = {
         {QLatin1String("dwLabels"),
          tr("标签管理"),
@@ -127,6 +131,18 @@ IntroductionWidget::IntroductionWidget(QWidget *parent)
             "<li>点击这里的标签，等同于在标签库里选中它，可以直接用于查找文件。</li>"
             "<li>切换浏览目录时，列表会自动更新。</li>"
             "</ul>")},
+        {QLatin1String("menuBar"),
+         tr("标签备份（重要）"),
+         tr("标签存在文件里，换个介质就会丢"),
+         tr("<ul>"
+             "<li>标签保存在文件的 NTFS 数据流中：把文件拷到 U 盘(FAT32/exFAT)、压成 zip、"
+             "传网盘或聊天工具时，标签会一起丢失，且没有任何提示。</li>"
+             "<li>跨机器、跨介质搬运前，先用【文件 → 导出标签…】存一份 JSON 备份；"
+             "需要时再用【文件 → 导入标签…】写回。</li>"
+             "<li>导入时可以选\"覆盖原有标签\"或\"追加\"；如果文件路径变了，"
+             "还能指定新的根目录，程序会按备份里的相对路径把文件找回来。</li>"
+             "<li>标签库（标签树本身）是另一份东西，自动保存在 labels.xml，不需要导出。</li>"
+             "</ul>")},
         {QLatin1String("centralWidget"),
          tr("文件浏览"),
          tr("模拟 Windows 文件管理器，用于查看和管理文件"),
@@ -151,15 +167,12 @@ IntroductionWidget::IntroductionWidget(QWidget *parent)
              "<tr><td style=\"padding-right: 20px\">查找条件:</td><td>点搜索按钮右侧的小箭头（或按 F3），选择标签之间的逻辑关系（与/或）和查找数据来源（缓存/磁盘）。</td></tr>"
              "<tr><td>帮助菜单:</td><td>界面介绍（就是本向导）、作者信息、检查 AI 打标环境。</td></tr>"
              "</table></p>")},
-        {QLatin1String("menuBar"),
-         tr("查找结果与标签备份"),
-         tr("结果页怎么看、标签怎么备份，以及常用快捷键"),
+        {QLatin1String("fileCommandBar"),
+         tr("查找结果"),
+         tr("结果页怎么读、什么时候该重新扫描"),
          tr("<ul>"
-             "<li>查找结果页顶部会写明搜索条件、来源（缓存 / 磁盘扫描），以及这份缓存是多久之前遍历的。</li>"
+             "<li>结果页顶部会写明搜索条件、来源（缓存 / 磁盘扫描），以及这份缓存是多久之前遍历的。</li>"
              "<li>对结果没把握时点【重新扫描】：忽略缓存，直接按同样的条件重新查磁盘。</li>"
-             "<li>标签存在 NTFS 数据流里：文件拷到 U 盘(FAT32)、压成 zip、传网盘时会丢失，"
-             "跨机器/跨介质前请先用【文件 → 导出标签…】存一份 JSON，需要时再【导入标签…】写回。</li>"
-             "<li>导入时如果文件路径变了，可以指定新的根目录，程序会按备份里的相对路径找回。</li>"
              "<li>常用快捷键：Ctrl+F 查找、F3 查找条件、Ctrl+A 全选、Enter 打开、F2 重命名、"
              "Delete / Ctrl+Shift+C 清空标签、Ctrl+Z 撤销。</li>"
              "</ul>")},
