@@ -115,7 +115,6 @@ private slots:
                               QStringList qLCompletedDirs,
                               bool bAborted);
 
-    void onActionSearchConfigTriggered();
 
     void onRecvStopSearch();
 

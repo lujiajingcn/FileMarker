@@ -17,7 +17,6 @@
 
 #include "adsoperation.h"
 #include "configoperation.h"
-#include "dlgsearchconfig.h"
 #include "utility.h"
 
 namespace {
@@ -721,29 +720,18 @@ void FormFileBrowser::onRecvTraverseResult(QMap<QString, FILE_TAGS> dirAndFileTa
     qInfo() << "遍历完成: dirs=" << qLCompletedDirs.size() << "files=" << nFiles << "labels=" << nLabels;
 }
 
-void FormFileBrowser::onActionSearchConfigTriggered()
-{
-    DlgSearchConfig dlg(this, g_sAppDir + "/" + SEARCH_CONFIG_FILE);
-    dlg.exec();
-}
-
 /**
  * 搜索按钮右侧小箭头菜单的内容。
  *
  * 主按钮点一下 = 直接用上次保存的条件搜索（不再每次弹对话框）；
- * 想改条件时点小箭头：
- *   - 搜索条件…          -> 打开原来的查找条件对话框
- *   - 标签关系：与/或     -> 最常改的一个开关，直接切
- *   - 数据来源：缓存/磁盘 -> 另一个常改的开关，直接切
+ * 想改条件时点小箭头：这里就是"查找条件"的唯一入口，
+ *   - 标签关系：与/或
+ *   - 数据来源：缓存/磁盘
+ * （原来还有一个"搜索条件…"对话框，内容和这两个子菜单完全重复，已删除。）
  */
 void FormFileBrowser::initSearchButtonMenu()
 {
     m_searchMenu = new QMenu(this);
-
-    QAction *pConfigAction = m_searchMenu->addAction(tr("搜索条件…"));
-    connect(pConfigAction, &QAction::triggered, this, &FormFileBrowser::onActionSearchConfigTriggered);
-
-    m_searchMenu->addSeparator();
 
     QMenu *pLogicMenu = m_searchMenu->addMenu(tr("标签关系"));
     auto *pLogicGroup = new QActionGroup(this);
@@ -772,7 +760,7 @@ void FormFileBrowser::initSearchButtonMenu()
     connect(m_searchMenu, &QMenu::aboutToShow, this, &FormFileBrowser::refreshSearchButtonMenu);
 }
 
-/** 打开菜单前按当前配置刷新勾选状态（对话框里改过也能反映出来）。 */
+/** 打开菜单前按 config.ini 里的当前配置刷新勾选状态。 */
 void FormFileBrowser::refreshSearchButtonMenu()
 {
     const SearchConfig sc = ConfigOperation::readSearchConfig(g_sAppDir + "/" + SEARCH_CONFIG_FILE);
