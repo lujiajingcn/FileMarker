@@ -36,6 +36,9 @@ SOURCES += \
         formfilenavigation.cpp \
         formlabels.cpp \
         formpagefiles.cpp \
+        formpagefilesmenu.cpp \
+        formpagefilesnav.cpp \
+        formpagefilestags.cpp \
         formpagefilterdfiles.cpp \
         formpageprogressinfo.cpp \
         introductionwidget.cpp \
@@ -65,6 +68,7 @@ HEADERS += \
         formfilenavigation.h \
         formlabels.h \
         formpagefiles.h \
+        formpagefilesutil.h \
         formpagefilterdfiles.h \
         formpageprogressinfo.h \
         introductionwidget.h \
