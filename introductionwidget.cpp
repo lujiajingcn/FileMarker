@@ -75,6 +75,13 @@ IntroductionWidget::IntroductionWidget(QWidget *parent)
 
     m_textWidget = new QWidget(this);
     auto layout = new QVBoxLayout;
+    // 给正文块一个不透明的深色底：半透明遮罩下层的文件列表还会透出来，
+    // 浅灰正文压在白底文件名上几乎看不清。
+    m_textWidget->setAttribute(Qt::WA_StyledBackground, true);
+    m_textWidget->setStyleSheet(QStringLiteral(
+        "background-color: rgba(18, 18, 18, 245); border-radius: 10px;"));
+    layout->setContentsMargins(22, 18, 22, 14);
+    layout->setSpacing(8);
     m_textWidget->setLayout(layout);
 
     m_stepText = new QLabel(this);
@@ -102,8 +109,15 @@ IntroductionWidget::IntroductionWidget(QWidget *parent)
     m_btnPrev = new QPushButton(tr("上一步"));
     m_btnNext = new QPushButton(tr("下一步"));
     for (QPushButton *btn : {m_btnSkip, m_btnPrev, m_btnNext}) {
-        btn->setPalette(palette());
+        // 正文块是深色底，按钮默认的浅灰文字会糊在背景里，这里统一成浅色描边样式
         btn->setAutoDefault(false);
+        btn->setStyleSheet(QStringLiteral(
+            "QPushButton { color: #E6E6E6; background-color: rgba(255,255,255,0.10);"
+            " border: 1px solid rgba(255,255,255,0.35); border-radius: 6px;"
+            " padding: 4px 16px; }"
+            "QPushButton:hover { background-color: rgba(255,255,255,0.20); }"
+            "QPushButton:disabled { color: rgba(230,230,230,0.40);"
+            " border-color: rgba(255,255,255,0.15); }"));
     }
     m_buttonLayout->addWidget(m_btnSkip);
     m_buttonLayout->addStretch();
@@ -118,39 +132,39 @@ IntroductionWidget::IntroductionWidget(QWidget *parent)
     });
     connect(m_btnNext, &QPushButton::clicked, this, &IntroductionWidget::step);
 
-    m_bodyCss = "font-size: 16px;";
+    m_bodyCss = "font-size: 16px; line-height: 150%;";
     m_items = {
         {QLatin1String("dwLabels"),
          tr("标签管理"),
          tr("通过树形结构来对标签进行展示和管理"),
          tr("<ul>"
-            "<li>工具栏中的按钮用于管理标签，可以根据标签之间的关联来构建成树形结构，或者简单的列表形式。</li>"
-            "<li>操作包括：新建标签，新建子标签，删除标签，上移标签，下移标签，左移标签，右移标签。</li>"
-            "<li>建立好的标签结构会保存到 xml 文件，下次启动时自动读取展示。</li>"
-            "<li>可以点击选中一个标签，也可以按住 Ctrl 或 Shift 来选中多个标签。</li>"
-            "<li>为文件关联标签时，会用到当前选中的标签。</li>"
-                           "<li>快捷键：Ctrl+F 查找文件、F3 调整查找条件、Ctrl+A 全选文件、Enter 打开选中项、"
-                           "<li>也可以把标签库里的标签直接拖到文件上：拖到某个文件=只给它加，拖到空白处=给当前选中的文件加。</li>"
-                           "F2 重命名、Delete / Ctrl+Shift+C 清空文件标签、Ctrl+Z 撤销上一次标签操作。</li>"
+            "<li>本面板自己的工具条用于管理标签：新建标签、新建子标签、删除标签、上移/下移/左移/右移。</li>"
+            "<li>标签之间可以任意嵌套成树，也可以保持成简单列表。</li>"
+            "<li>每次改动都会自动保存到 labels.xml，下次启动时自动读取。</li>"
+            "<li>点击可以选中一个标签，按住 Ctrl 或 Shift 可以多选。</li>"
+            "<li>给文件打标签、按标签查找文件，用的都是\"当前选中的标签\"。</li>"
+            "<li>也可以把标签从本面板直接拖到文件上：拖到某个文件=只给它加，拖到空白处=给当前选中的文件批量加。</li>"
+            "<li>右键菜单还有：重命名、删除标签，以及\"同时把改名/删除同步到文件上的标签\"等选项。</li>"
             "</ul>")},
         {QLatin1String("dwCurDirLabels"),
          tr("当前目录标签"),
          tr("展示当前浏览目录中文件的所有标签"),
          tr("<ul>"
-            "<li>遍历文件后，该窗口会显示当前目录下所有文件使用的标签。</li>"
-            "<li>点击标签可以快速将其选中，用于查找文件等操作。</li>"
-            "<li>切换浏览目录时，标签列表会自动更新。</li>"
+            "<li>进入某个目录后会自动扫描，列出该目录下所有文件用到的标签（不需要先执行\"遍历文件\"）。</li>"
+            "<li>点击这里的标签，等同于在标签库里选中它，可以直接用于查找文件。</li>"
+            "<li>切换浏览目录时，列表会自动更新。</li>"
             "</ul>")},
         {QLatin1String("centralWidget"),
          tr("文件浏览"),
          tr("模拟 Windows 文件管理器，用于查看和管理文件"),
          tr("<ul>"
             "<li>分为两个部分：左侧的目录导航栏和右侧的文件显示区。</li>"
-            "<li>支持两种视图模式：详细列表视图和缩略图视图，右键可切换。</li>"
+            "<li>两种视图：详细列表和缩略图，点右上角的\"详情显示 / 缩略图显示\"切换，右键菜单里也能切。</li>"
             "<li>可以点击选中单个文件或文件夹，也可按住 Ctrl 或 Shift 选中多个。</li>"
-            "<li>文件显示区选中文件，标签管理区选中标签，即可通过工具栏为文件添加标签。</li>"
-            "<li>在缩略图模式下，双击文件标签区域可内联编辑标签。</li>"
-            "<li>双击文件夹可进入该目录，双击文件会使用默认程序打开。</li>"
+            "<li>文件显示区选中文件 + 标签管理区选中标签，即可通过工具栏为文件添加标签。</li>"
+            "<li>双击标签单元格（两种视图都可以）会弹出\"增删式\"标签对话框；标签上的 ✕ 直接删掉这个标签。</li>"
+            "<li>双击文件夹可进入该目录，双击文件会使用默认程序打开；重命名按 F2 或右键。</li>"
+            "<li>右侧的标签列是一行行带 ✕ 的小药丸（chip），多了会自动换行。</li>"
             "</ul>")},
         {QLatin1String("fileCommandBar"),
          tr("工具栏"),
@@ -158,21 +172,23 @@ IntroductionWidget::IntroductionWidget(QWidget *parent)
          tr("<p style=\"margin-top: 20px\">各个按钮的说明如下：<table>"
              "<tr><td style=\"padding-right: 20px\">AI自动生成标签:</td><td>调用 AI 分析选中文件并自动生成标签。</td></tr>"
              "<tr><td style=\"padding-right: 20px\">添加标签:</td><td>根据标签区选中的标签为文件查看区选中的文件添加标签。</td></tr>"
-             "<tr><td style=\"padding-right: 20px\">删除标签:</td><td>删除选中文件的所有标签。</td></tr>"
+             "<tr><td style=\"padding-right: 20px\">清空标签:</td><td>清空选中文件的全部标签（会先确认，可用 Ctrl+Z 撤销）。</td></tr>"
              "<tr><td style=\"padding-right: 20px\">查找文件:</td><td>根据选中的标签，在选中的文件夹中查找匹配的文件。</td></tr>"
-             "<tr><td style=\"padding-right: 20px\">遍历文件:</td><td>遍历选中的文件夹，将标签信息存入缓存数据库以加速后续查询。</td></tr>"
+             "<tr><td style=\"padding-right: 20px\">遍历文件:</td><td>遍历选中的文件夹，把标签信息写入缓存数据库，加速后续查找。</td></tr>"
              "<tr><td style=\"padding-right: 20px\">查找条件:</td><td>点搜索按钮右侧的小箭头（或按 F3），选择标签之间的逻辑关系（与/或）和查找数据来源（缓存/磁盘）。</td></tr>"
-             "<tr><td>界面介绍:</td><td>本界面介绍向导。</td></tr>"
+             "<tr><td>帮助菜单:</td><td>界面介绍（就是本向导）、作者信息、检查 AI 打标环境。</td></tr>"
              "</table></p>")},
-        {QLatin1String("wFileListToolBar"),
-         tr("查找文件菜单"),
-         tr("查找和遍历文件的相关菜单"),
+        {QLatin1String("menuBar"),
+         tr("查找结果与标签备份"),
+         tr("结果页怎么看、标签怎么备份，以及常用快捷键"),
          tr("<ul>"
-             "<li>查找文件：根据标签区选中的标签查找匹配文件。</li>"
-             "<li>遍历文件：遍历选中文件夹，将结果存入缓存数据库。</li>"
-             "<li>查找条件：点搜索按钮右侧的小箭头（或按 F3）选择标签逻辑关系（与/或）和数据来源（缓存/磁盘）。</li>"
-             "<li>搜索结果页会显示这份缓存是多久之前遍历的，并可点【重新扫描】直接重新查磁盘。</li>"
-             "<li>标签备份：【文件 → 导出标签… / 导入标签…】把标签存成 JSON，防止拷到 U 盘/压缩包后丢失。</li>"
+             "<li>查找结果页顶部会写明搜索条件、来源（缓存 / 磁盘扫描），以及这份缓存是多久之前遍历的。</li>"
+             "<li>对结果没把握时点【重新扫描】：忽略缓存，直接按同样的条件重新查磁盘。</li>"
+             "<li>标签存在 NTFS 数据流里：文件拷到 U 盘(FAT32)、压成 zip、传网盘时会丢失，"
+             "跨机器/跨介质前请先用【文件 → 导出标签…】存一份 JSON，需要时再【导入标签…】写回。</li>"
+             "<li>导入时如果文件路径变了，可以指定新的根目录，程序会按备份里的相对路径找回。</li>"
+             "<li>常用快捷键：Ctrl+F 查找、F3 查找条件、Ctrl+A 全选、Enter 打开、F2 重命名、"
+             "Delete / Ctrl+Shift+C 清空标签、Ctrl+Z 撤销。</li>"
              "</ul>")},
         {QLatin1String("statusBar"),
          tr("状态栏"),
@@ -362,8 +378,10 @@ void IntroductionWidget::updateButtonStates()
     m_btnPrev->setEnabled(m_step > 0);
     if (m_step >= m_items.size() - 1) {
         m_btnNext->setText(tr("完成"));
+        m_btnSkip->setVisible(false);   // 已经在最后一页了，没有可跳过的内容
     } else {
         m_btnNext->setText(tr("下一步"));
+        m_btnSkip->setVisible(true);
     }
 }
 
@@ -387,7 +405,20 @@ void IntroductionWidget::calTextGeometry()
     }
 
     const int margin = 20;
-    QRect textRect(width()/4, height()/4, width()/2, height()/2);
+    // 正文块比窗口一半稍宽一点，长条目少换几行；同时给上下留出标题栏和按钮的位置
+    const int textWidth = qBound(420, int(width() * 0.58), width() - 2 * margin);
+    // 高度跟着内容走：文字少的时候不要撑出一大片空白黑块
+    int textHeight = int(height() * 0.62);
+    if (m_textWidget->layout() != nullptr) {
+        const int hfw = m_textWidget->layout()->heightForWidth(textWidth - 44);
+        if (hfw > 0)
+            textHeight = qMin(textHeight, hfw + 40);
+    }
+    textHeight = qBound(200, textHeight, height() - 2 * margin);
+    QRect textRect((width() - textWidth) / 2,
+                   qMax(margin, int(height() * 0.16)),
+                   textWidth,
+                   textHeight);
 
     if(m_stepPointerAnchor) {
         // 将锚点映射到父窗口坐标系，加上聚光灯边缘
