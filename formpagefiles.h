@@ -192,6 +192,7 @@ private:
     int                     m_nIconSize;            // 当前缩略图边长（逻辑像素）
     int                     m_nSortColumn;          // 当前排序列
     Qt::SortOrder           m_sortOrder;            // 当前排序方向
+    bool                    m_bHeaderRestored = false;  // 是否已恢复过上次的列宽（恢复后不再套用默认列宽）
 
     // 【当前目录标签】分片扫描状态
     QTimer                 *m_pScanTimer;

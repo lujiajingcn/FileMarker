@@ -166,14 +166,14 @@ FormPageFiles::FormPageFiles(QWidget *parent) :
         if (nSettingsVersion >= 2 && !headerState.isEmpty()
                 && m_tvFiles != nullptr && m_tvFiles->header() != nullptr) {
             m_tvFiles->header()->restoreState(headerState);
-            // 旧版本保存的状态可能把列模式/表头可点击性也恢复成旧值，这里重申当前策略
+            m_bHeaderRestored = true;
+            // 旧版本保存的状态可能把列模式/表头可点击性也恢复成旧值，这里重申当前策略：
+            // 所有列都可拖动调宽（与 Windows 资源管理器一致），最后一列不再自动撑满。
             QHeaderView *header = m_tvFiles->header();
             header->setSectionsClickable(true);
-            header->setSectionResizeMode(0, QHeaderView::Stretch);
-            header->setSectionResizeMode(1, QHeaderView::Interactive);
-            header->setSectionResizeMode(2, QHeaderView::Interactive);
-            header->setSectionResizeMode(3, QHeaderView::Interactive);
-            header->setSectionResizeMode(4, QHeaderView::Interactive);
+            for (int i = 0; i < header->count(); ++i)
+                header->setSectionResizeMode(i, QHeaderView::Interactive);
+            header->setStretchLastSection(false);
         }
 
         // restoreState 会恢复上次的表头排序箭头，但模型排序状态仍是初始值；
@@ -356,20 +356,29 @@ void FormPageFiles::initDetailFileList()
     QHeaderView *treeHeader = m_tvFiles->header();
     QFontMetrics fm(m_tvFiles->font());
     treeHeader->setMinimumSectionSize(60);
-    // 名称列吃掉剩余宽度，其余数据列固定宽度，标签列给一个可用宽度并可拖动。
-    // 这样窗口较窄时优先压缩名称列，而不是把“标签”列挤出可视区（默认 994x663 时
-    // 以前必须横向滚动才能看到标签）。
-    treeHeader->setSectionResizeMode(0, QHeaderView::Stretch);
-    // 其余列保持可拖动（之前设为 Fixed 会让用户无法再调整大小/类型/日期列宽）
-    treeHeader->setSectionResizeMode(1, QHeaderView::Interactive);
-    treeHeader->setSectionResizeMode(2, QHeaderView::Interactive);
-    treeHeader->setSectionResizeMode(3, QHeaderView::Interactive);
-    treeHeader->setSectionResizeMode(4, QHeaderView::Interactive);
+    // 所有列都允许拖动调整宽度（和 Windows 资源管理器一致），最后一列不再自动撑满，
+    // 拖动结果由 view/headerState 持久化。
+    treeHeader->setSectionResizeMode(QHeaderView::Interactive);
+    treeHeader->setStretchLastSection(false);
     treeHeader->resizeSection(1, fm.horizontalAdvance(QLatin1String("128.88 GB")) + 15);
     treeHeader->resizeSection(2, fm.horizontalAdvance(QLatin1String("mp3Folder")) + 35);
     treeHeader->resizeSection(3, fm.horizontalAdvance(QLatin1String("10/29/1981 02:02PM")) + 5);
     treeHeader->resizeSection(4, 180);
     treeHeader->setContextMenuPolicy(Qt::ActionsContextMenu);
+
+    // 名称列默认吃掉剩余宽度；只设一次初始值，之后完全交给用户拖动。
+    // 放到事件循环里做，构造时 viewport 还没有真实宽度。
+    QTimer::singleShot(0, this, [this]() {
+        if (m_bHeaderRestored || m_tvFiles == nullptr || m_tvFiles->header() == nullptr)
+            return;
+        QHeaderView *h = m_tvFiles->header();
+        int nUsed = 0;
+        for (int i = 1; i < h->count(); ++i)
+            nUsed += h->sectionSize(i);
+        const int nNameWidth = m_tvFiles->viewport()->width() - nUsed;
+        if (nNameWidth > 160)
+            h->resizeSection(0, nNameWidth);
+    });
 
     m_sCurDir = MY_COMPUTER_NAME;
 }
