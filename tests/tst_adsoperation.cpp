@@ -119,3 +119,16 @@ void TstAdsOperation::emptyFileHasNoTags()
     QVERIFY(ADSOperation::listADSTagsInOrder(sFile).isEmpty());
 }
 
+// 撤销"打标签"就是拿空列表覆盖回去，必须真的把标签和清单都删掉
+void TstAdsOperation::replaceTagsWithEmptyListClearsAll()
+{
+    const QString sFile = makeTempFile("clearviaempty.txt");
+    QVERIFY(ADSOperation::replaceTags(sFile, QStringList()
+                                               << QStringLiteral("X") << QStringLiteral("Y")));
+    QCOMPARE(ADSOperation::listADSTagsInOrder(sFile).size(), 2);
+
+    QVERIFY(ADSOperation::replaceTags(sFile, QStringList()));
+    QVERIFY(ADSOperation::listADSTagsInOrder(sFile).isEmpty());
+    QVERIFY(!QFile::exists(sFile + QStringLiteral(":") + QString::fromLatin1(FM_TAG_MARKER)));
+}
+

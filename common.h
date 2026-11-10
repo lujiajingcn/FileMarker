@@ -21,6 +21,9 @@ enum labelLogic{
 
 #define NEW_LABEL_NAME "新标签"
 
+// 从【标签库】把标签拖到文件列表时用的 MIME 类型（内容是若干行标签名）
+#define MIME_FILEMARKER_LABEL "application/x-filemarker-label"
+
 extern QString g_sAppDir;
 
 #define SEARCH_CONFIG_FILE "config.ini"

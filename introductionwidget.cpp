@@ -130,6 +130,7 @@ IntroductionWidget::IntroductionWidget(QWidget *parent)
             "<li>可以点击选中一个标签，也可以按住 Ctrl 或 Shift 来选中多个标签。</li>"
             "<li>为文件关联标签时，会用到当前选中的标签。</li>"
                            "<li>快捷键：Ctrl+F 查找文件、F3 调整查找条件、Ctrl+A 全选文件、Enter 打开选中项、"
+                           "<li>也可以把标签库里的标签直接拖到文件上：拖到某个文件=只给它加，拖到空白处=给当前选中的文件加。</li>"
                            "F2 重命名、Delete / Ctrl+Shift+C 清空文件标签、Ctrl+Z 撤销上一次标签操作。</li>"
             "</ul>")},
         {QLatin1String("dwCurDirLabels"),

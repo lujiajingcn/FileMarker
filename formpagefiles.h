@@ -183,6 +183,9 @@ private:
     // 缩略图列表的悬停项变化
     void onThumbnailHoverChanged(const QModelIndex &index);
 
+    /** 把从标签库拖过来的标签写到目标文件上（dropIndex 无效时作用于选中的文件） */
+    void applyDroppedLabels(const QStringList &qLLabels, const QModelIndex &dropIndex);
+
     // 应用排序（列：0 名称 / 1 大小 / 2 类型 / 3 修改日期）
     void applySort(int column, Qt::SortOrder order);
 

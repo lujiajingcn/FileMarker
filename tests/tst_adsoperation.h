@@ -22,6 +22,7 @@ private slots:
     void thirdPartyStreamIsPreserved();
     void deleteAllOnlyRemovesOurTags();
     void emptyFileHasNoTags();
+    void replaceTagsWithEmptyListClearsAll();
 
 private:
     /** 在临时目录里建一个空文件，返回绝对路径 */

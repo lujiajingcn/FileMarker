@@ -4,6 +4,8 @@
 
 #include <QKeySequence>
 #include <QMenu>
+#include <QDebug>
+#include <QMimeData>
 #include <QDesktopServices>
 #include <QUrl>
 #include <QInputDialog>
@@ -290,6 +292,10 @@ void FormPageFiles::initDetailFileList()
     m_tvFiles = ui->tvFiles;
      // 设置可以选中多行
     m_tvFiles->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    // 接受从【标签库】拖过来的标签（见 eventFilter / applyDroppedLabels）
+    m_tvFiles->setAcceptDrops(true);
+    m_tvFiles->viewport()->setAcceptDrops(true);
+    m_tvFiles->viewport()->installEventFilter(this);
     m_tvFiles->setModel(m_modelFiles);
     // 第 0~3 列装"拒绝编辑"代理，禁止 F2/双击把文件名改到磁盘上。
     for (int nCol = 0; nCol <= 3; ++nCol)
@@ -366,6 +372,10 @@ void FormPageFiles::initDetailFileList()
 void FormPageFiles::initThumbnailFileList()
 {
     m_lstFiles = ui->listView;
+    // 同样接受从【标签库】拖过来的标签
+    m_lstFiles->setAcceptDrops(true);
+    m_lstFiles->viewport()->setAcceptDrops(true);
+    // eventFilter 在下面（悬停高亮那里）已经装过，这里不重复装
 
     // 缩略图生成器：由 delegate 在 GUI 线程按需调用。
     // 不设置为 model 的 iconProvider：QFileSystemModel 是在后台线程取图标的，
@@ -527,7 +537,96 @@ bool FormPageFiles::eventFilter(QObject *watched, QEvent *event)
             m_delegate->setHoveredIndex(QModelIndex());
         m_lstFiles->viewport()->update();
     }
+
+    // 从【标签库】把标签拖到文件列表 = 给文件打标签
+    const bool bIsFileView = (m_tvFiles != nullptr && watched == m_tvFiles->viewport())
+                             || (m_lstFiles != nullptr && watched == m_lstFiles->viewport());
+    if (bIsFileView && (event->type() == QEvent::DragEnter || event->type() == QEvent::DragMove)) {
+        auto *pDragEvent = static_cast<QDragMoveEvent *>(event);
+        if (pDragEvent->mimeData() != nullptr
+            && pDragEvent->mimeData()->hasFormat(QString::fromLatin1(MIME_FILEMARKER_LABEL))) {
+            pDragEvent->setDropAction(Qt::CopyAction);
+            pDragEvent->accept();
+            return true;
+        }
+    } else if (bIsFileView && event->type() == QEvent::Drop) {
+        auto *pDropEvent = static_cast<QDropEvent *>(event);
+        if (pDropEvent->mimeData() != nullptr
+            && pDropEvent->mimeData()->hasFormat(QString::fromLatin1(MIME_FILEMARKER_LABEL))) {
+            const QString sPayload = QString::fromUtf8(
+                pDropEvent->mimeData()->data(QString::fromLatin1(MIME_FILEMARKER_LABEL)));
+            QStringList qLLabels;
+            for (const QString &sLabel : sPayload.split(QLatin1Char('\n'))) {
+                const QString sTrimmed = sLabel.trimmed();
+                if (!sTrimmed.isEmpty() && !qLLabels.contains(sTrimmed))
+                    qLLabels << sTrimmed;
+            }
+
+            QAbstractItemView *pView = nullptr;
+            if (m_lstFiles != nullptr && watched == m_lstFiles->viewport())
+                pView = m_lstFiles;
+            else
+                pView = m_tvFiles;
+            const QModelIndex dropIndex = pView != nullptr ? pView->indexAt(pDropEvent->pos()) : QModelIndex();
+            pDropEvent->setDropAction(Qt::CopyAction);
+            pDropEvent->accept();
+            applyDroppedLabels(qLLabels, dropIndex);
+            return true;
+        }
+    }
+
     return QWidget::eventFilter(watched, event);
+}
+
+/**
+ * 把从标签库拖过来的标签写到文件上。
+ * 拖到某个文件上 → 只作用于这个文件；拖到空白处/文件夹上 → 作用于当前选中的文件。
+ */
+void FormPageFiles::applyDroppedLabels(const QStringList &qLLabels, const QModelIndex &dropIndex)
+{
+    if (qLLabels.isEmpty())
+        return;
+
+    QStringList qLTargets;
+    if (dropIndex.isValid() && !m_modelFiles->isDir(dropIndex)) {
+        qLTargets << m_modelFiles->filePath(dropIndex);
+    } else {
+        qLTargets = getSelFilePath();
+    }
+    qLTargets.removeAll(QString());
+
+    if (qLTargets.isEmpty()) {
+        emit sendHintMessage(tr("请先把要打标签的文件选中，或者把标签直接拖到某个文件上。"));
+        return;
+    }
+
+    emit sendBeforeTagsChanged(qLTargets);   // 支持 Ctrl+Z 撤销
+
+    int nFailed = 0;
+    QStringList qLFailedFiles;
+    for (const QString &sFilePath : qLTargets) {
+        if (!ADSOperation::appendTags(sFilePath, qLLabels)) {
+            ++nFailed;
+            qLFailedFiles << QFileInfo(sFilePath).fileName();
+        }
+    }
+
+    emit sendTagsChanged(qLTargets);
+    onBtnRefreshClicked();
+
+    if (nFailed > 0) {
+        QMessageBox::warning(this, tr("添加标签失败"),
+                             tr("以下 %1 个文件没能写入标签（可能被占用或只读）：\n%2")
+                                 .arg(nFailed)
+                                 .arg(qLFailedFiles.mid(0, 5).join(QStringLiteral("\n"))));
+    } else {
+        emit sendHintMessage(tr("已给 %1 个文件添加标签：%2")
+                                 .arg(qLTargets.size())
+                                 .arg(qLLabels.join(QStringLiteral("、"))));
+    }
+
+    // 注意：不要用 sendLabels 去"同步面板"——那个信号的含义是
+    // "请把这份标签文本写到这个文件上"，会再做一次写盘并把撤销点覆盖成写入后的状态。
 }
 
 

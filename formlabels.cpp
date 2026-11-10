@@ -6,7 +6,10 @@
 #include <QHBoxLayout>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QApplication>
 #include <QDebug>
+#include <QDrag>
+#include <QMimeData>
 #include <QAction>
 #include <QMenu>
 #include <QCheckBox>
@@ -62,7 +65,59 @@ FormLabels::FormLabels(QWidget *parent) :
     initLabels();
 
     connect(m_modelAllLabels, &QStandardItemModel::itemChanged, this, &FormLabels::onItemChanged);
+
+    // 把标签从标签库拖到文件列表 = 给文件打标签。
+    // 这里自己起 QDrag（不用视图内建的 startDrag），是因为要给拖拽数据打上
+    // 我们自己的 MIME 类型，文件列表那边才好识别"这是一次打标签的拖拽"。
+    m_tvAllLabels->viewport()->installEventFilter(this);
 }
+
+bool FormLabels::eventFilter(QObject *watched, QEvent *event)
+{
+    if (watched == m_tvAllLabels->viewport()) {
+        if (event->type() == QEvent::MouseButtonPress) {
+            auto *pMouseEvent = static_cast<QMouseEvent *>(event);
+            if (pMouseEvent->button() == Qt::LeftButton) {
+                m_ptDragStart = pMouseEvent->pos();
+                m_bMayStartDrag = true;
+            }
+        } else if (event->type() == QEvent::MouseMove && m_bMayStartDrag) {
+            auto *pMouseEvent = static_cast<QMouseEvent *>(event);
+            if ((pMouseEvent->buttons() & Qt::LeftButton)
+                && (pMouseEvent->pos() - m_ptDragStart).manhattanLength()
+                       >= QApplication::startDragDistance()) {
+                m_bMayStartDrag = false;
+                startLabelDrag();
+            }
+        } else if (event->type() == QEvent::MouseButtonRelease) {
+            m_bMayStartDrag = false;
+        }
+    }
+    return QWidget::eventFilter(watched, event);
+}
+
+/** 把当前选中的标签打包成拖拽数据，交给文件列表那边处理。 */
+void FormLabels::startLabelDrag()
+{
+    QStringList qLLabels = getSelLabels();
+    if (qLLabels.isEmpty()) {
+        const QModelIndex index = m_tvAllLabels->currentIndex();
+        if (index.isValid())
+            qLLabels << index.data(Qt::DisplayRole).toString();
+    }
+    qLLabels.removeAll(QString());
+    if (qLLabels.isEmpty())
+        return;
+
+    auto *pMime = new QMimeData;
+    pMime->setData(QString::fromLatin1(MIME_FILEMARKER_LABEL), qLLabels.join("\n").toUtf8());
+    pMime->setText(qLLabels.join(","));
+
+    auto *pDrag = new QDrag(m_tvAllLabels);
+    pDrag->setMimeData(pMime);
+    pDrag->exec(Qt::CopyAction);
+}
+
 
 FormLabels::~FormLabels()
 {

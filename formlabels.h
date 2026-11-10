@@ -67,6 +67,8 @@ signals:
     void sendSelLabels(QStringList qLSelLabels);
 
 protected:
+    bool eventFilter(QObject *watched, QEvent *event) override;
+
     /** 创建带 UUID 的标签节点 */
     QStandardItem* createLabelItem(const QString &name, const QString &uuid = QString());
     /** 将节点（含子树）登记到 m_setLabels 与 m_committedText，供去重/回退使用 */
@@ -127,6 +129,11 @@ private:
     Ui::FormLabels *ui;
 
     QTreeView               *m_tvAllLabels;
+
+    // 从标签库把标签拖到文件列表 = 给文件打标签
+    void startLabelDrag();
+    QPoint                   m_ptDragStart;      // 按下时的位置，用来判断是否拖起来
+    bool                     m_bMayStartDrag = false;
     QStandardItemModel      *m_modelAllLabels;
 
     QSet<QString>           m_setLabels;
