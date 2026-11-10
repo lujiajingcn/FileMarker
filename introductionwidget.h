@@ -56,7 +56,6 @@ private:
     QPushButton *m_btnSkip;
     QPushButton *m_btnPrev;
     QPushButton *m_btnNext;
-    QImage m_borderImage;
     QString m_bodyCss;
     std::vector<Item> m_items;
     QPointer<QWidget> m_stepPointerAnchor;

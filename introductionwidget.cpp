@@ -21,56 +21,9 @@
 #include <QPushButton>
 #include <QVBoxLayout>
 
-void drawCornerImage(const QImage &img, QPainter *painter, const QRect &rect,
-                                  int left, int top, int right, int bottom)
-{
-    // source rect for drawImage() calls needs to be specified in DIP unit of the image
-    const qreal imagePixelRatio = img.devicePixelRatio();
-    const qreal leftDIP = left * imagePixelRatio;
-    const qreal topDIP = top * imagePixelRatio;
-    const qreal rightDIP = right * imagePixelRatio;
-    const qreal bottomDIP = bottom * imagePixelRatio;
-
-    const QSize size = img.size();
-    if (top > 0) { //top
-        painter->drawImage(QRectF(rect.left() + left, rect.top(), rect.width() -right - left, top), img,
-                           QRectF(leftDIP, 0, size.width() - rightDIP - leftDIP, topDIP));
-        if (left > 0) //top-left
-            painter->drawImage(QRectF(rect.left(), rect.top(), left, top), img,
-                               QRectF(0, 0, leftDIP, topDIP));
-        if (right > 0) //top-right
-            painter->drawImage(QRectF(rect.left() + rect.width() - right, rect.top(), right, top), img,
-                               QRectF(size.width() - rightDIP, 0, rightDIP, topDIP));
-    }
-    //left
-    if (left > 0)
-        painter->drawImage(QRectF(rect.left(), rect.top()+top, left, rect.height() - top - bottom), img,
-                           QRectF(0, topDIP, leftDIP, size.height() - bottomDIP - topDIP));
-    //center
-    painter->drawImage(QRectF(rect.left() + left, rect.top()+top, rect.width() -right - left,
-                              rect.height() - bottom - top), img,
-                       QRectF(leftDIP, topDIP, size.width() - rightDIP - leftDIP,
-                              size.height() - bottomDIP - topDIP));
-    if (right > 0) //right
-        painter->drawImage(QRectF(rect.left() +rect.width() - right, rect.top()+top, right, rect.height() - top - bottom), img,
-                           QRectF(size.width() - rightDIP, topDIP, rightDIP, size.height() - bottomDIP - topDIP));
-    if (bottom > 0) { //bottom
-        painter->drawImage(QRectF(rect.left() +left, rect.top() + rect.height() - bottom,
-                                  rect.width() - right - left, bottom), img,
-                           QRectF(leftDIP, size.height() - bottomDIP,
-                                  size.width() - rightDIP - leftDIP, bottomDIP));
-        if (left > 0) //bottom-left
-            painter->drawImage(QRectF(rect.left(), rect.top() + rect.height() - bottom, left, bottom), img,
-                               QRectF(0, size.height() - bottomDIP, leftDIP, bottomDIP));
-        if (right > 0) //bottom-right
-            painter->drawImage(QRectF(rect.left() + rect.width() - right, rect.top() + rect.height() - bottom, right, bottom), img,
-                               QRectF(size.width() - rightDIP, size.height() - bottomDIP, rightDIP, bottomDIP));
-    }
-}
 
 IntroductionWidget::IntroductionWidget(QWidget *parent)
-    : QWidget(parent),
-      m_borderImage(":/Resources/border.png")
+    : QWidget(parent)
 {
     setFocusPolicy(Qt::StrongFocus);
     setFocus();
@@ -253,7 +206,8 @@ bool IntroductionWidget::eventFilter(QObject *obj, QEvent *ev)
     return QWidget::eventFilter(obj, ev);
 }
 
-const int SPOTLIGHTMARGIN = 18;
+const int SPOTLIGHT_INSET_X = 4;   // 聚光灯相对目标左右各外扩多少
+const int SPOTLIGHT_INSET_Y = 2;   // 上下各外扩多少
 
 
 /**
@@ -403,10 +357,12 @@ void IntroductionWidget::paintEvent(QPaintEvent *)
             if (!contentRect.isEmpty())
                 targetRect = contentRect;
         }
-        const QRect spotlightRect = targetRect.adjusted(-SPOTLIGHTMARGIN,
-                                                        -SPOTLIGHTMARGIN,
-                                                        SPOTLIGHTMARGIN,
-                                                        SPOTLIGHTMARGIN);
+        // 所有页面统一：聚光灯紧贴目标（左右 4px、上下 2px），不做大范围外扩。
+        // 外扩 18px 会在目标周围糊出一大圈亮边，和"只框住这一处"的预期不符。
+        const QRect spotlightRect = targetRect.adjusted(-SPOTLIGHT_INSET_X,
+                                                        -SPOTLIGHT_INSET_Y,
+                                                        SPOTLIGHT_INSET_X,
+                                                        SPOTLIGHT_INSET_Y);
 
         // darken the background to create a spotlighted area
         if (spotlightRect.left() > 0) {
@@ -434,14 +390,12 @@ void IntroductionWidget::paintEvent(QPaintEvent *)
                        backgroundColor);
         }
 
-        // smooth borders of the spotlighted area by gradients
-        drawCornerImage(m_borderImage,
-                         &p,
-                         spotlightRect,
-                         SPOTLIGHTMARGIN,
-                         SPOTLIGHTMARGIN,
-                         SPOTLIGHTMARGIN,
-                         SPOTLIGHTMARGIN);
+        // 高亮区外沿画一圈细绿线：比圆角边框图更贴合"紧贴目标"的小范围
+        p.setOpacity(0.55);
+        p.setPen(QPen(QColor(65, 205, 82), 1));
+        p.setBrush(Qt::NoBrush);
+        p.drawRect(spotlightRect.adjusted(0, 0, -1, -1));
+        p.setOpacity(0.87);
 
         // 目标旁边画一小段箭头，指向被高亮的控件（参考 Qt Creator 的 UI tour）：
         // 箭头贴着控件外侧、长度固定，不跨越整屏空白。
