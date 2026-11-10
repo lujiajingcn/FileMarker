@@ -17,6 +17,12 @@
         <file>Resources/arrow-up.png</file>
         <file>Resources/spinner.png</file>
         <file>Resources/ai.png</file>
+        <file>Resources/white/ai.png</file>
+        <file>Resources/white/204-link.png</file>
+        <file>Resources/white/breaklink.png</file>
+        <file>Resources/white/search.png</file>
+        <file>Resources/white/database.png</file>
+
         <file>Resources/breaklink.png</file>
     </qresource>
 </RCC>

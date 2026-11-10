@@ -158,14 +158,25 @@ IntroductionWidget::IntroductionWidget(QWidget *parent)
         {QLatin1String("fileCommandBar"),
          tr("工具栏"),
          tr("根据选中的文件和标签执行各种操作"),
-         tr("<p style=\"margin-top: 20px\">各个按钮的说明如下：<table>"
-             "<tr><td style=\"padding-right: 20px\">AI自动生成标签:</td><td>调用 AI 分析选中文件并自动生成标签。</td></tr>"
-             "<tr><td style=\"padding-right: 20px\">添加标签:</td><td>根据标签区选中的标签为文件查看区选中的文件添加标签。</td></tr>"
-             "<tr><td style=\"padding-right: 20px\">清空标签:</td><td>清空选中文件的全部标签（会先确认，可用 Ctrl+Z 撤销）。</td></tr>"
-             "<tr><td style=\"padding-right: 20px\">查找文件:</td><td>根据选中的标签，在选中的文件夹中查找匹配的文件。</td></tr>"
-             "<tr><td style=\"padding-right: 20px\">遍历文件:</td><td>遍历选中的文件夹，把标签信息写入缓存数据库，加速后续查找。</td></tr>"
-             "<tr><td style=\"padding-right: 20px\">查找条件:</td><td>点搜索按钮右侧的小箭头（或按 F3），选择标签之间的逻辑关系（与/或）和查找数据来源（缓存/磁盘）。</td></tr>"
-             "<tr><td>帮助菜单:</td><td>界面介绍（就是本向导）、作者信息、检查 AI 打标环境。</td></tr>"
+         tr("<p style=\"margin-top: 16px\">各个按钮的说明如下：<table cellspacing=\"2\">"
+             "<tr><td><img src=\":/Resources/white/ai.png\" width=\"16\" height=\"16\"></td>"
+             "<td style=\"padding-right: 14px\">&nbsp;AI自动生成标签:</td>"
+             "<td>调用 AI 分析选中文件并自动生成标签。</td></tr>"
+             "<tr><td><img src=\":/Resources/white/204-link.png\" width=\"16\" height=\"16\"></td>"
+             "<td style=\"padding-right: 14px\">&nbsp;添加标签:</td>"
+             "<td>根据标签区选中的标签为文件查看区选中的文件添加标签。</td></tr>"
+             "<tr><td><img src=\":/Resources/white/breaklink.png\" width=\"16\" height=\"16\"></td>"
+             "<td style=\"padding-right: 14px\">&nbsp;清空标签:</td>"
+             "<td>清空选中文件的全部标签（会先确认，可用 Ctrl+Z 撤销）。</td></tr>"
+             "<tr><td><img src=\":/Resources/white/search.png\" width=\"16\" height=\"16\"></td>"
+             "<td style=\"padding-right: 14px\">&nbsp;查找文件:</td>"
+             "<td>根据选中的标签，在选中的文件夹中查找匹配的文件。</td></tr>"
+             "<tr><td><img src=\":/Resources/white/database.png\" width=\"16\" height=\"16\"></td>"
+             "<td style=\"padding-right: 14px\">&nbsp;遍历文件:</td>"
+             "<td>遍历选中的文件夹，把标签信息写入缓存数据库，加速后续查找。</td></tr>"
+             "<tr><td></td><td style=\"padding-right: 14px\">查找条件:</td>"
+             "<td>点搜索按钮右侧的小箭头（或按 F3），选择标签之间的逻辑关系（与/或）和查找数据来源（缓存/磁盘）。</td></tr>"
+             "<tr><td></td><td>帮助菜单:</td><td>界面介绍（就是本向导）、作者信息、检查 AI 打标环境。</td></tr>"
              "</table></p>")},
         {QLatin1String("fileCommandBar"),
          tr("查找结果"),
