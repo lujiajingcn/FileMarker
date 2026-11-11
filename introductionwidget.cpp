@@ -166,6 +166,8 @@ IntroductionWidget::IntroductionWidget(QWidget *parent)
             "<li>双击标签单元格（两种视图都可以）会弹出\"增删式\"标签对话框；标签上的 ✕ 直接删掉这个标签。</li>"
             "<li>双击文件夹可进入该目录，双击文件会使用默认程序打开；重命名按 F2 或右键。</li>"
             "<li>右侧的标签列是一行行带 ✕ 的小药丸（chip），多了会自动换行。</li>"
+                         "<li>常用快捷键：Ctrl+F 查找、F3 查找条件、Ctrl+A 全选、Enter 打开、F2 重命名、"
+                         "Delete / Ctrl+Shift+C 清空标签、Ctrl+Z 撤销。</li>"
             "</ul>")},
         {QLatin1String("fileCommandBar"),
          tr("工具栏"),
@@ -190,15 +192,6 @@ IntroductionWidget::IntroductionWidget(QWidget *parent)
              "<td>点搜索按钮右侧的小箭头（或按 F3），选择标签之间的逻辑关系（与/或）和查找数据来源（缓存/磁盘）。</td></tr>"
              "<tr><td></td><td>帮助菜单:</td><td>界面介绍（就是本向导）、作者信息、检查 AI 打标环境。</td></tr>"
              "</table></p>")},
-        {QLatin1String("fileCommandBar"),
-         tr("查找结果"),
-         tr("结果页怎么读、什么时候该重新扫描"),
-         tr("<ul>"
-             "<li>结果页顶部会写明搜索条件、来源（缓存 / 磁盘扫描），以及这份缓存是多久之前遍历的。</li>"
-             "<li>对结果没把握时点【重新扫描】：忽略缓存，直接按同样的条件重新查磁盘。</li>"
-             "<li>常用快捷键：Ctrl+F 查找、F3 查找条件、Ctrl+A 全选、Enter 打开、F2 重命名、"
-             "Delete / Ctrl+Shift+C 清空标签、Ctrl+Z 撤销。</li>"
-             "</ul>")},
         {QLatin1String("statusBar"),
          tr("状态栏"),
          tr("显示当前操作的状态和进度信息"),
@@ -379,6 +372,7 @@ bool isBarLikeTarget(const QPointer<QWidget> &anchor)
 }
 
 }   // namespace
+
 
 void IntroductionWidget::paintEvent(QPaintEvent *)
 {
