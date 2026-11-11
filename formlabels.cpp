@@ -1,4 +1,6 @@
 #include "formlabels.h"
+
+#include "toolicons.h"
 #include "ui_formlabels.h"
 
 #include <QToolButton>
@@ -31,6 +33,15 @@ FormLabels::FormLabels(QWidget *parent) :
     ui(new Ui::FormLabels)
 {
     ui->setupUi(this);
+
+    // 标签库工具条的图标改成代码绘制（原来的 16x16 PNG 在高分屏上是锯齿）
+    ui->actionAdd->setIcon(ToolIcons::make(ToolIcons::AddNode));
+    ui->actionAddChild->setIcon(ToolIcons::make(ToolIcons::AddChild));
+    ui->actionDelete->setIcon(ToolIcons::make(ToolIcons::DeleteNode));
+    ui->actionMoveUp->setIcon(ToolIcons::make(ToolIcons::MoveUp));
+    ui->actionMoveDown->setIcon(ToolIcons::make(ToolIcons::MoveDown));
+    ui->actionMoveLeft->setIcon(ToolIcons::make(ToolIcons::MoveLeft));
+    ui->actionMoveRight->setIcon(ToolIcons::make(ToolIcons::MoveRight));
 
     m_promptShowing = false;
     m_labelsTree = ui->treeView;

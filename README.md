@@ -153,6 +153,10 @@ package.ps1                 一键打包
 - 注释用中文、写"为什么"而不是"做了什么"；不要留 `【C12】`/`P2-21` 这类评审编号。
 - 命名：成员变量一律用描述性名字（`m_curDir`、`m_labelGroups`、`m_scanTimer`），
   **不再使用类型前缀**（历史上的 `m_sXxx` / `m_nXxx` / `m_bXxx` / `m_qLXxx` / `m_pXxx` 已统一改掉）。
+- **图标一律用代码画**：`toolicons.h/.cpp` 的 `ToolIcons::make(Kind, color)` 按目标像素尺寸
+  渲染（16/20/24/32/40/48/64/96 各一张），高分屏下不会出现锯齿。
+  新增工具条按钮时请复用它，不要再往 `Resources/` 里加 16x16 的 PNG。
+  界面介绍这类富文本要图片 URL 的，用 `ToolIcons::whiteImageUrl(kind)`（运行时渲染白色大图）。
 - **高 DPI**：exe 里编入了 `app.manifest`（PerMonitorV2），界面按 Windows 每块显示器的缩放比自动放大；
   文字一律用点（pt）或系统字体相对变化，不要在样式表里写死 `px`。
   个别显示器上还嫌小，可在 exe 旁边放 `FileMarker.ini`：

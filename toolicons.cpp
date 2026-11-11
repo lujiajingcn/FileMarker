@@ -3,6 +3,11 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QPixmap>
+#include <QUrl>
+#include <QStandardPaths>
+#include <QHash>
+#include <QFileInfo>
+#include <QDir>
 #include <QtMath>
 
 #include <cmath>
@@ -28,6 +33,38 @@ void drawArrow(QPainter &painter, const QPointF &from, const QPointF &to)
     const QPointF wing2 = to - unit * head - normal * (head * 0.62);
     painter.drawLine(to, wing1);
     painter.drawLine(to, wing2);
+}
+
+
+/** 画一个"标签树"的图形：上面一个方框、下面两个方框，用折线连起来 */
+void drawTreeNodes(QPainter &painter, const QRectF &top, const QRectF &leftBottom,
+                   const QRectF &rightBottom)
+{
+    painter.setBrush(Qt::NoBrush);
+    painter.drawRect(top);
+    painter.drawRect(leftBottom);
+    painter.drawRect(rightBottom);
+
+    const qreal midX = top.center().x();
+    const qreal midY = (top.bottom() + leftBottom.top()) / 2.0;
+    painter.drawLine(QPointF(midX, top.bottom()), QPointF(midX, midY));
+    painter.drawLine(QPointF(leftBottom.center().x(), midY),
+                     QPointF(rightBottom.center().x(), midY));
+    painter.drawLine(QPointF(leftBottom.center().x(), midY),
+                     QPointF(leftBottom.center().x(), leftBottom.top()));
+    painter.drawLine(QPointF(rightBottom.center().x(), midY),
+                     QPointF(rightBottom.center().x(), rightBottom.top()));
+}
+
+/** 画加减号 */
+void drawPlusMinus(QPainter &painter, const QPointF &center, qreal half, bool plus)
+{
+    painter.drawLine(QPointF(center.x() - half, center.y()),
+                     QPointF(center.x() + half, center.y()));
+    if (plus) {
+        painter.drawLine(QPointF(center.x(), center.y() - half),
+                         QPointF(center.x(), center.y() + half));
+    }
 }
 
 void paintIcon(QPainter &painter, ToolIcons::Kind kind, const QColor &color)
@@ -110,6 +147,44 @@ void paintIcon(QPainter &painter, ToolIcons::Kind kind, const QColor &color)
         painter.drawPath(head);
         break;
     }
+    case ToolIcons::AddNode:
+        drawTreeNodes(painter, QRectF(3.0, 1.6, 4.6, 4.6),
+                      QRectF(0.8, 9.4, 4.6, 4.6), QRectF(5.8, 9.4, 4.6, 4.6));
+        drawPlusMinus(painter, QPointF(13.0, 4.0), 2.0, true);
+        break;
+    case ToolIcons::AddChild:
+        drawTreeNodes(painter, QRectF(3.0, 1.6, 4.6, 4.6),
+                      QRectF(0.8, 9.4, 4.6, 4.6), QRectF(5.8, 9.4, 4.6, 4.6));
+        drawPlusMinus(painter, QPointF(13.0, 12.0), 2.0, true);
+        break;
+    case ToolIcons::DeleteNode:
+        drawTreeNodes(painter, QRectF(3.0, 1.6, 4.6, 4.6),
+                      QRectF(0.8, 9.4, 4.6, 4.6), QRectF(5.8, 9.4, 4.6, 4.6));
+        drawPlusMinus(painter, QPointF(13.0, 8.0), 2.2, false);
+        break;
+    case ToolIcons::MoveUp:
+    case ToolIcons::MoveDown: {
+        // 两个节点 + 箭头，箭头在上/下
+        painter.setBrush(Qt::NoBrush);
+        painter.drawRect(QRectF(1.2, 1.5, 4.6, 4.6));
+        painter.drawRect(QRectF(1.2, 9.9, 4.6, 4.6));
+        if (kind == ToolIcons::MoveUp)
+            drawArrow(painter, QPointF(12.0, 14.5), QPointF(12.0, 2.5));
+        else
+            drawArrow(painter, QPointF(12.0, 1.5), QPointF(12.0, 13.5));
+        break;
+    }
+    case ToolIcons::MoveLeft:
+    case ToolIcons::MoveRight: {
+        painter.setBrush(Qt::NoBrush);
+        painter.drawRect(QRectF(2.0, 1.2, 4.4, 4.4));
+        painter.drawRect(QRectF(2.0, 9.2, 4.4, 4.4));
+        if (kind == ToolIcons::MoveLeft)
+            drawArrow(painter, QPointF(15.0, 7.8), QPointF(8.6, 7.8));
+        else
+            drawArrow(painter, QPointF(8.0, 7.8), QPointF(14.4, 7.8));
+        break;
+    }
     }
 }
 
@@ -130,6 +205,47 @@ QPixmap renderPixmap(ToolIcons::Kind kind, int pixelSize, const QColor &color)
 }
 
 }   // namespace
+
+namespace {
+
+/** 把图标渲染成指定像素尺寸的图片（供白图 URL 用） */
+QImage renderImage(int kind, int pixelSize, const QColor &color)
+{
+    QImage image(pixelSize, pixelSize, QImage::Format_ARGB32_Premultiplied);
+    image.fill(Qt::transparent);
+    QPainter painter(&image);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    painter.setRenderHint(QPainter::TextAntialiasing, true);
+    const qreal scale = pixelSize / kDesignSize;
+    painter.scale(scale, scale);
+    paintIcon(painter, static_cast<ToolIcons::Kind>(kind), color);
+    painter.end();
+    return image;
+}
+
+}   // namespace
+
+QString ToolIcons::whiteImageUrl(Kind kind)
+{
+    // 深色背景下用白图；渲染成 96x96，富文本里再按 16x16 显示，
+    // 相当于超采样缩小，高分屏下不会糊。
+    static QHash<int, QString> cache;
+    if (cache.contains(kind))
+        return cache.value(kind);
+
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
+                        + QStringLiteral("/icon-cache");
+    QDir().mkpath(dir);
+    const QString path = dir + QStringLiteral("/white-%1.png").arg(int(kind));
+
+    QFileInfo info(path);
+    if (!info.exists() || info.size() == 0) {
+        renderImage(kind, 96, Qt::white).save(path, "PNG");
+    }
+    const QString url = QUrl::fromLocalFile(path).toString();
+    cache.insert(kind, url);
+    return url;
+}
 
 QIcon ToolIcons::make(Kind kind, const QColor &color)
 {
