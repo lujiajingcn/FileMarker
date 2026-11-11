@@ -501,14 +501,22 @@ void FormPageFiles::initThumbnailFileList()
 
 QStringList FormPageFiles::getSelFilePath()
 {
-    // selectedIndexes() 会为同一行的每一列都返回一个索引，
-    // 若直接收集会导致每个文件被重复返回 5 次（打标签/删标签时重复操作）。
-    // 这里只取第 0 列（每选中的行一个索引），自动去重。
+    // 注意不能用 selectionModel()->selectedRows(0)：它只返回"整行都被选中"的行，
+    // 而缩略图视图是 IconMode、只选到第 0 列，QFileSystemModel 却仍有 5 列，
+    // 于是 selectedRows(0) 在缩略图里永远为空 —— 表现为"框选了一堆文件，
+    // 点添加标签却提示未选中文件"。
+    // 改成取 selectedIndexes() 再只保留第 0 列，既覆盖两种视图，也不会重复 5 次。
     QStringList selFilePath;
-    QModelIndexList selected = m_filesTree->selectionModel()->selectedRows(0);
-    for (QModelIndexList::const_iterator cit = selected.begin(); cit != selected.end(); ++cit)
-    {
-        selFilePath << m_modelFiles->filePath(*cit);
+    QItemSelectionModel *model = m_filesTree->selectionModel();
+    if (model == nullptr)
+        return selFilePath;
+    const QModelIndexList selected = model->selectedIndexes();
+    for (const QModelIndex &index : selected) {
+        if (index.column() != 0)
+            continue;
+        const QString sPath = m_modelFiles->filePath(index);
+        if (!sPath.isEmpty() && !selFilePath.contains(sPath))
+            selFilePath << sPath;
     }
     return selFilePath;
 }
@@ -516,13 +524,17 @@ QStringList FormPageFiles::getSelFilePath()
 QStringList FormPageFiles::getSelDirs()
 {
     QStringList qLSelDirs;
-    QModelIndexList selected = m_filesTree->selectionModel()->selectedRows();
+    QItemSelectionModel *selModel = m_filesTree->selectionModel();
+    const QModelIndexList selected = selModel != nullptr ? selModel->selectedIndexes()
+                                                         : QModelIndexList();
     QString sSelect;
-    for (QModelIndexList::const_iterator cit = selected.begin(); cit != selected.end(); ++cit)
+    for (const QModelIndex &index : selected)
     {
-        QString sFilePath = m_modelFiles->filePath(*cit);
+        if (index.column() != 0)
+            continue;   // 同一行只取一次（缩略图里只选到第 0 列，详情里整行都被选中）
+        QString sFilePath = m_modelFiles->filePath(index);
         QFileInfo fileInfo(sFilePath);
-        if (fileInfo.isDir())
+        if (fileInfo.isDir() && !qLSelDirs.contains(sFilePath))
         {
             qLSelDirs << sFilePath;
         }
