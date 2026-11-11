@@ -18,6 +18,7 @@
 #include <QToolBar>
 #include <QStandardItemModel>
 #include <QEvent>
+#include <QElapsedTimer>
 #include <QSet>
 
 #include "myqfilesystemmodel.h"
@@ -243,6 +244,7 @@ private:
     QModelIndex             m_scanRootIndex;
     int                     m_scanRow;
     int                     m_scanTotal;
+    QElapsedTimer           m_scanElapsed;   // 扫描耗时（只用于日志）
     QSet<QString>           m_setScanLabels;
     QString                 m_scanCompletedDir;    // 已完整扫描过的目录（避免 directoryLoaded 重复扫）
 

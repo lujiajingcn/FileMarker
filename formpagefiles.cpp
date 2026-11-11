@@ -93,7 +93,38 @@ FormPageFiles::FormPageFiles(QWidget *parent) :
         if (FmPageUtil::isSameDirPath(sPath, m_curDir))
             scanDirLabels(m_curDir);
     });
-    // 扫描过程中排序/目录内容变化会改变行顺序，已扫描的行号会错位；只有正在扫描时才重启。
+    // 大目录加载时 QFileSystemModel 是**分批**插入行的。以前每插入一批就从第 0 行
+    // 重扫一遍（scanDirLabels(..., true) 会把 m_scanRow 归零），几万个文件等于 O(N²)，
+    // 表现就是"进大目录后一直卡着、永远扫不完"。
+    // 现在改成续扫：行号跟着插入/删除平移，只在真正的重排/重置时才重来。
+    connect(m_modelFiles, &QAbstractItemModel::rowsInserted, this,
+            [this](const QModelIndex &parent, int first, int last) {
+                if (m_scanDir.isEmpty() || !FmPageUtil::isSameDirPath(m_scanDir, m_curDir))
+                    return;
+                if (m_scanRootIndex.isValid() && parent != m_scanRootIndex)
+                    return;   // 只关心当前目录这一层的行
+                if (first < m_scanRow)
+                    m_scanRow += (last - first + 1);   // 插在已扫区域之前，行号整体后移
+                const int nRows = m_modelFiles->rowCount(m_scanRootIndex);
+                m_scanTotal = qMin(qMax(m_scanTotal, nRows), LABEL_SCAN_MAX_FILES);
+                if (m_scanTimer != nullptr && !m_scanTimer->isActive() && m_scanRow < m_scanTotal)
+                    m_scanTimer->start();   // 已经扫完的目录，追加文件后继续补扫
+            });
+    connect(m_modelFiles, &QAbstractItemModel::rowsRemoved, this,
+            [this](const QModelIndex &parent, int first, int last) {
+                if (m_scanDir.isEmpty() || !FmPageUtil::isSameDirPath(m_scanDir, m_curDir))
+                    return;
+                if (m_scanRootIndex.isValid() && parent != m_scanRootIndex)
+                    return;
+                const int nRemoved = last - first + 1;
+                if (first < m_scanRow)
+                    m_scanRow = qMax(0, m_scanRow - nRemoved);
+                const int nRows = m_modelFiles->rowCount(m_scanRootIndex);
+                m_scanTotal = qBound(m_scanRow, m_scanTotal - nRemoved, nRows);
+                if (m_scanTimer != nullptr && !m_scanTimer->isActive() && m_scanRow < m_scanTotal)
+                    m_scanTimer->start();
+            });
+    // 排序/重排会让所有行号失效，只能重来（只有用户主动排序才会触发，代价可接受）。
     auto restartScanIfActive = [this]() {
         if (m_scanTimer != nullptr && m_scanTimer->isActive() && !m_curDir.isEmpty())
             scanDirLabels(m_curDir, true);
@@ -101,10 +132,6 @@ FormPageFiles::FormPageFiles(QWidget *parent) :
     connect(m_modelFiles, &QAbstractItemModel::layoutChanged, this, [restartScanIfActive]() {
         restartScanIfActive();
     });
-    connect(m_modelFiles, &QAbstractItemModel::rowsInserted, this,
-            [restartScanIfActive](const QModelIndex &, int, int) { restartScanIfActive(); });
-    connect(m_modelFiles, &QAbstractItemModel::rowsRemoved, this,
-            [restartScanIfActive](const QModelIndex &, int, int) { restartScanIfActive(); });
     connect(m_modelFiles, &QAbstractItemModel::modelReset, this,
             [restartScanIfActive]() { restartScanIfActive(); });
 

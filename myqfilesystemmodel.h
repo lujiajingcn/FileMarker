@@ -2,6 +2,7 @@
 #define MYQFILESYSTEMMODEL_H
 
 #include <QFileSystemModel>
+#include <QCache>
 #include <QHash>
 #include <QPair>
 #include <QFileInfo>
@@ -41,7 +42,14 @@ private:
     QStringList tagListForFile(const QString &sFilePath) const;
 
     // 缓存“文件路径 -> (文件修改时间, 标签列表)”，避免标签列每次重绘都枚举 NTFS 流。
-    mutable QHash<QString, QPair<qint64, QStringList>> m_tagCache;
+    // 标签缓存：键 = 文件路径。用 QCache 做 LRU 淘汰，
+    // 原来"超过 2000 条就整体清空"会在大目录里反复失效，等于缓存从没生效过。
+    struct TagCacheEntry
+    {
+        qint64 mtime = 0;
+        QStringList tags;
+    };
+    mutable QCache<QString, TagCacheEntry> m_tagCache;
 };
 
 #endif // MYQFILESYSTEMMODEL_H

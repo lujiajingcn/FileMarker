@@ -8,6 +8,9 @@
 MyQFileSystemModel::MyQFileSystemModel(QObject *parent) :
     QFileSystemModel(parent)
 {
+    // 标签缓存最多留 4000 个文件（每条 1 个单位），超出按 LRU 淘汰最久没用的，
+    // 不再像以前那样整体清空（整体清空会让大目录里每行都重新读盘）。
+    m_tagCache.setMaxCost(4000);
 }
 
 int MyQFileSystemModel::columnCount( const QModelIndex & index ) const
@@ -115,17 +118,20 @@ QStringList MyQFileSystemModel::tagListForFile(const QString &sFilePath) const
     // 因此 mtime 不变即可认为标签集合未变，避免每次重绘都枚举流。
     // 注：QFileSystemModel 在 Qt5.13 无 ModifiedRole 角色，故仍需 QFileInfo。
     const qint64 mtime = QFileInfo(sFilePath).lastModified().toMSecsSinceEpoch();
-    auto it = m_tagCache.find(sFilePath);
-    if (it != m_tagCache.end() && it.value().first == mtime)
-        return it.value().second;
+    if (const TagCacheEntry *cached = m_tagCache.object(sFilePath)) {
+        if (cached->mtime == mtime)
+            return cached->tags;
+    }
 
     // 按用户录入顺序取标签：流内容里存了顺序号，可还原录入顺序
     const QStringList tags = ADSOperation::listADSTagsInOrder(sFilePath);
 
-    // 缓存容量上限：长会话下避免内存只增不减。超出后整体清空（下次访问重新枚举，P3）。
-    if (m_tagCache.size() > 2000)
-        m_tagCache.clear();
-    m_tagCache[sFilePath] = qMakePair(mtime, tags);
+    // QCache 自带 LRU 淘汰：超过容量由 QCache 丢掉最久没用的那条，
+    // 不再整体清空（整体清空会让大目录里每行都反复读盘）。
+    auto *entry = new TagCacheEntry;
+    entry->mtime = mtime;
+    entry->tags = tags;
+    m_tagCache.insert(sFilePath, entry, 1);
     return tags;
 }
 
@@ -164,9 +170,10 @@ void MyQFileSystemModel::cacheTagsForFile(const QString &sFilePath, const QStrin
     if (sFilePath.isEmpty())
         return;
     const qint64 mtime = QFileInfo(sFilePath).lastModified().toMSecsSinceEpoch();
-    if (m_tagCache.size() > 2000)
-        m_tagCache.clear();
-    m_tagCache[sFilePath] = qMakePair(mtime, tags);
+    auto *entry = new TagCacheEntry;
+    entry->mtime = mtime;
+    entry->tags = tags;
+    m_tagCache.insert(sFilePath, entry, 1);
 }
 
 // 让第4列【标签】可编辑

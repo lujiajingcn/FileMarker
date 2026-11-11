@@ -120,9 +120,10 @@ void FormPageFiles::scanDirLabels(const QString &sDir, bool bForce)
     m_scanDir = sDir;
     m_scanRootIndex = rootIndex;
     m_scanRow = 0;
-    m_scanTotal = qMin(nRows, 2000);
+    m_scanTotal = qMin(nRows, LABEL_SCAN_MAX_FILES);
     m_setScanLabels.clear();
     m_scanCompletedDir.clear();
+    m_scanElapsed.start();   // 仅用于日志：统计这次扫描实际花了多久
 
     if (m_scanTimer != nullptr)
         m_scanTimer->start();
@@ -162,6 +163,10 @@ void FormPageFiles::continueDirLabelScan()
 
     emit sendDirLabels(m_scanDir, m_setScanLabels);
     m_scanCompletedDir = m_scanDir;
+
+    // 日志：大目录优化效果就看这一行（耗时应该随文件数线性增长，而不是爆炸）
+    qInfo("[目录标签扫描] 完成 dir=%s files=%d 用时=%lldms",
+          qPrintable(m_scanDir), m_scanTotal, static_cast<long long>(m_scanElapsed.elapsed()));
 
     // 目录文件数超过上限时明确提示，避免用户误以为面板内容完整
     if (m_modelFiles->rowCount(m_scanRootIndex) > m_scanTotal) {
