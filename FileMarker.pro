@@ -69,6 +69,7 @@ SOURCES += \
         thumbnailiconprovider.cpp \
         traversedirectory.cpp \
         toolicons.cpp \
+    pathbreadcrumb.cpp \
     utility.cpp \
         xmloperation.cpp
 
@@ -100,6 +101,7 @@ HEADERS += \
         thumbnailiconprovider.h \
         traversedirectory.h \
         toolicons.h \
+    pathbreadcrumb.h \
     utility.h \
         xmloperation.h
 

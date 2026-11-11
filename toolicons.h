@@ -24,6 +24,7 @@ enum Kind
     Forward,     // →
     Up,          // ↑
     Refresh,     // 圆形箭头：刷新
+    Computer,    // 显示器：路径面包屑里的"我的电脑"
 
     // 标签库面板的工具条
     AddNode,     // 树 + 加号：新建标签

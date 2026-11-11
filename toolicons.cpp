@@ -131,6 +131,12 @@ void paintIcon(QPainter &painter, ToolIcons::Kind kind, const QColor &color)
     case ToolIcons::Up:
         drawArrow(painter, QPointF(8.0, 13.0), QPointF(8.0, 3.2));
         break;
+    case ToolIcons::Computer: {
+        painter.drawRoundedRect(QRectF(1.4, 2.6, 13.2, 8.8), 1.6, 1.6);
+        painter.drawLine(QPointF(8.0, 11.4), QPointF(8.0, 13.4));
+        painter.drawLine(QPointF(4.8, 13.6), QPointF(11.2, 13.6));
+        break;
+    }
     case ToolIcons::Refresh: {
         // 缺口圆 + 箭头：表示"重新加载"
         const QRectF box(2.6, 2.6, 10.8, 10.8);

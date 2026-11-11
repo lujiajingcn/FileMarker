@@ -25,6 +25,7 @@
 
 class EditableDelegate;
 class ThumbnailIconProvider;
+class PathBreadcrumb;
 class QTimer;
 class QMenu;
 class QToolButton;
@@ -215,6 +216,7 @@ private:
     QStack<QString>         m_skBackward;           // 访问过的路径，用于后退功能
     QStack<QString>         m_skForward;            // 访问过的路径，用于前进功能
     QString                 m_curDir;             // 当前正在访问的路径
+    PathBreadcrumb         *m_breadcrumb;        // 资源管理器风格的路径面包屑
     QStringList             m_recentDirs;        // 地址栏下拉历史（最多 10 条，最近的在前）
     int                     m_iconSize;            // 当前缩略图边长（逻辑像素）
     int                     m_sortColumn;          // 当前排序列

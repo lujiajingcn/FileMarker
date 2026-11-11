@@ -1,5 +1,6 @@
 #include "formpagefiles.h"
 
+#include "pathbreadcrumb.h"
 #include "toolicons.h"
 #include "formpagefilesutil.h"
 #include "ui_formpagefiles.h"
@@ -218,20 +219,50 @@ FormPageFiles::FormPageFiles(QWidget *parent) :
     connect(m_actionSearchMenu, &QAction::triggered, this, &FormPageFiles::popupSearchMenu);
     addAction(m_actionSearchMenu);
 
-    // 地址栏下拉：展示最近 10 次打开过的目录（持久化，重启后仍在）。
-    // 不用 QComboBox 的自动插入（InsertAtBottom），历史由 rememberPath() 统一维护。
+    // 地址栏：资源管理器风格的路径面包屑（我的电脑 › 盘符 › 目录…，点哪段跳哪层）。
+    // 原来的 QComboBox 换成 PathBreadcrumb；历史记录仍然由 rememberPath() 维护，
+    // 通过面包屑末尾的 ▾ 按钮或右键弹出。
+    m_breadcrumb = new PathBreadcrumb(this);
+    QLayout *navLayout = ui->lookInCombo->parentWidget() != nullptr
+                             ? ui->lookInCombo->parentWidget()->layout()
+                             : nullptr;
+    if (navLayout != nullptr) {
+        navLayout->replaceWidget(ui->lookInCombo, m_breadcrumb);
+        ui->lookInCombo->hide();   // 只留下当历史数据的壳，不再显示
+        // 原来靠 QComboBox 的 hsizetype=Ignored 撑满那一格；换成面包屑后要显式
+        // 给所在列加拉伸，否则它只占 sizeHint 的宽度、缩在行的中间。
+        if (auto *grid = qobject_cast<QGridLayout *>(navLayout)) {
+            grid->setColumnStretch(5, 1);
+            grid->setColumnStretch(0, 0);
+        }
+    }
+    connect(m_breadcrumb, &PathBreadcrumb::pathActivated, this, [this](const QString &sPath) {
+        navigateToDir(sPath.isEmpty() ? FmPageUtil::myComputerName() : sPath);
+    });
+    connect(m_breadcrumb, &PathBreadcrumb::editCommitted, this, &FormPageFiles::navigateToDir);
+    connect(m_breadcrumb, &PathBreadcrumb::recentDirsRequested, this, [this](const QPoint &globalPos) {
+        QMenu menu;
+        for (const QString &sDir : m_recentDirs)
+            menu.addAction(sDir);
+        if (menu.isEmpty())
+            menu.addAction(tr("（还没有最近访问记录）"))->setEnabled(false);
+        QAction *chosen = menu.exec(globalPos);
+        if (chosen != nullptr && chosen->isEnabled())
+            navigateToDir(chosen->text());
+    });
+
     ui->lookInCombo->setInsertPolicy(QComboBox::NoInsert);
     ui->lookInCombo->setMaxVisibleItems(10);
     loadRecentDirs();
     ui->lookInCombo->setEditText(m_curDir);
+    m_breadcrumb->setPath(m_curDir);
 
-    // 地址栏是可编辑的（.ui 中 editable=true）：回车或选择历史项时按路径导航。
-    connect(ui->lookInCombo->lineEdit(), &QLineEdit::returnPressed,
-            this, &FormPageFiles::onLookInComboReturnPressed);
-    connect(ui->lookInCombo, QOverload<int>::of(&QComboBox::activated), this, [this](int index) {
-        if (index >= 0)
-            navigateToDir(ui->lookInCombo->itemText(index));
-    });
+    // Ctrl+L：把面包屑切换成可输入路径的输入框（和资源管理器一样）
+    auto *actionFocusPath = new QAction(this);
+    actionFocusPath->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_L));
+    actionFocusPath->setShortcutContext(Qt::WindowShortcut);
+    connect(actionFocusPath, &QAction::triggered, this, [this]() { m_breadcrumb->startEditing(); });
+    addAction(actionFocusPath);
 
     connect(m_modelFiles, &MyQFileSystemModel::sendLabels, this, &FormPageFiles::onRecvLabels);
 }

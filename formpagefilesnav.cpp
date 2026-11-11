@@ -1,6 +1,8 @@
 // FormPageFiles 的导航实现：前进/后退/上级、地址栏历史、双击打开。
 
 #include "formpagefiles.h"
+
+#include "pathbreadcrumb.h"
 #include "ui_formpagefiles.h"
 #include "formpagefilesutil.h"
 
@@ -56,7 +58,9 @@ void FormPageFiles::curDirChanged(const QString &sCurDir)
     m_skBackward.push_back(m_curDir);
     m_skForward.clear();
     m_curDir = sCurDir;
-    // 同步地址栏并把路径记入下拉历史
+    // 同步面包屑与下拉历史
+    if (m_breadcrumb != nullptr)
+        m_breadcrumb->setPath(m_curDir);
     rememberPath(sCurDir);
     // 导航栈变化时直接更新按钮状态，不再依赖 event() 拦截 Paint。
     updateToolButtons();
@@ -72,6 +76,8 @@ void FormPageFiles::refreshAddressBar()
     ui->lookInCombo->setEditText(m_curDir);
     if (ui->lookInCombo->lineEdit())
         ui->lookInCombo->lineEdit()->setCursorPosition(0);
+    if (m_breadcrumb != nullptr)
+        m_breadcrumb->setPath(m_curDir);
 }
 
 void FormPageFiles::rememberPath(const QString &sPath)
