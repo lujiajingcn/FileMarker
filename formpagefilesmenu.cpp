@@ -252,31 +252,19 @@ void FormPageFiles::setCommandActions(const QList<QAction *> &actions)
         // 只显示图标：文字全部收进 tooltip（悬停提示），命令条更紧凑
         m_commandBar->setToolButtonStyle(Qt::ToolButtonIconOnly);
 
-        // 命令条和"详情显示 / 缩略图显示"放在同一行，后者靠右对齐：
-        // 原来这两个按钮单独占一行、压在列表表头上方，把命令条右侧那片空白浪费掉了。
-        // 注意要包一层行容器：QToolBar::clear() 会删掉 addWidget 加进去的东西，
-        // 直接塞进工具条的话，重新 setCommandActions() 时这两个按钮会被一起删掉。
+        // 命令条本身靠右对齐（左侧留给弹性空白），和资源管理器把"命令区"放在右侧一致。
+        // 包一层行容器是因为 QToolBar 自己不带"前置弹性空白"，直接插进 verticalLayout
+        // 只能左对齐；注意行容器要在 setCommandActions() 之外只建一次，
+        // 因为下面 m_commandBar->clear() 会清掉工具栏里的内容。
         m_commandRow = new QWidget(this);
         auto *rowLayout = new QHBoxLayout(m_commandRow);
         rowLayout->setContentsMargins(0, 0, 0, 0);
-        rowLayout->setSpacing(6);
-        rowLayout->addWidget(m_commandBar);
+        rowLayout->setSpacing(0);
 
         auto *spacer = new QWidget(m_commandRow);
         spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
         rowLayout->addWidget(spacer);
-
-        auto *viewBox = new QWidget(m_commandRow);
-        auto *viewLayout = new QHBoxLayout(viewBox);
-        viewLayout->setContentsMargins(0, 0, 0, 0);
-        viewLayout->setSpacing(4);
-        viewLayout->addWidget(ui->tbDetail);
-        viewLayout->addWidget(ui->tbThumbnail);
-        rowLayout->addWidget(viewBox);
-
-        // 原来放这两个按钮的那一行已经空了，隐藏掉，免得上面多出一条空白
-        if (ui->widget_3 != nullptr)
-            ui->widget_3->hide();
+        rowLayout->addWidget(m_commandBar);
 
         // 放在地址栏那一行上方：ui->verticalLayout 的第 0 项
         ui->verticalLayout->insertWidget(0, m_commandRow);
