@@ -66,6 +66,9 @@ public:
 signals:
     void sendSelLabels(const QStringList &qLSelLabels);
 
+    /** 用户把文件拖到了某个标签上：请给这些文件加上这个标签 */
+    void filesDroppedOnLabel(const QStringList &qLFiles, const QString &sLabel);
+
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
 

@@ -73,6 +73,9 @@ FormLabels::FormLabels(QWidget *parent) :
     // 这里自己起 QDrag（不用视图内建的 startDrag），是因为要给拖拽数据打上
     // 我们自己的 MIME 类型，文件列表那边才好识别"这是一次打标签的拖拽"。
     m_labelsTree->viewport()->installEventFilter(this);
+    // 接受"把文件拖到标签上"（反方向）：详见 eventFilter 里的 Drop 分支
+    m_labelsTree->setAcceptDrops(true);
+    m_labelsTree->viewport()->setAcceptDrops(true);
 }
 
 

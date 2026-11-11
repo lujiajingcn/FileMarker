@@ -171,6 +171,9 @@ MainWindow::MainWindow(QWidget *parent) :
 
     // 【标签库】中选中的标签，同步给文件浏览页（用于添加标签/查找）
     connect(ui->dwcLabels, &FormLabels::sendSelLabels, ui->wFileBrowser, &FormFileBrowser::onRecvSelLabels);
+    // 反过来：把文件拖到标签库的某个标签上 = 给这些文件加这个标签
+    connect(ui->dwcLabels, &FormLabels::filesDroppedOnLabel,
+            ui->wFileBrowser, &FormFileBrowser::onFilesDroppedOnLabel);
 
     // search treats a selected parent label as "this label + all of its children".
     // Must be connected AFTER the line above (which resets groups to singletons).

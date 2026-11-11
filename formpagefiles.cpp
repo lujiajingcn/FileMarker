@@ -327,6 +327,10 @@ void FormPageFiles::initDetailFileList()
     // 接受从【标签库】拖过来的标签（见 eventFilter / applyDroppedLabels）
     m_filesTree->setAcceptDrops(true);
     m_filesTree->viewport()->setAcceptDrops(true);
+    // 也允许把文件"拖出去"：拖到左侧标签库的某个标签上 = 给它加这个标签。
+    // QFileSystemModel 的 mimeData() 会给出标准的 text/uri-list。
+    m_filesTree->setDragEnabled(true);
+    m_filesTree->setDragDropMode(QAbstractItemView::DragDrop);
     m_filesTree->viewport()->installEventFilter(this);
     m_filesTree->setModel(m_modelFiles);
     // 第 0~3 列装"拒绝编辑"代理，禁止 F2/双击把文件名改到磁盘上。
@@ -407,6 +411,9 @@ void FormPageFiles::initThumbnailFileList()
     // 同样接受从【标签库】拖过来的标签
     m_filesList->setAcceptDrops(true);
     m_filesList->viewport()->setAcceptDrops(true);
+    // 缩略图视图同样可以把文件拖出去（拖到标签上打标签）
+    m_filesList->setDragEnabled(true);
+    m_filesList->setDragDropMode(QAbstractItemView::DragDrop);
     // eventFilter 在下面（悬停高亮那里）已经装过，这里不重复装
 
     // 缩略图生成器：由 delegate 在 GUI 线程按需调用。
@@ -628,6 +635,30 @@ void FormPageFiles::applyDroppedLabels(const QStringList &qLLabels, const QModel
         return;
     }
 
+    applyLabelsToFiles(qLLabels, qLTargets);
+}
+
+/**
+ * 把指定标签写到指定文件上（拖拽的两种方向都走这里）：
+ *  - 标签 → 文件：applyDroppedLabels() 先算出目标文件再调用本函数；
+ *  - 文件 → 标签：FormLabels 那边把文件列表传过来，调用本函数。
+ * 这里统一处理撤销点、缓存失效、界面刷新和失败提示。
+ */
+void FormPageFiles::applyLabelsToFiles(const QStringList &qLLabels, const QStringList &qLFiles)
+{
+    // 统一成 QFileSystemModel 的路径形式（正斜杠），否则 clearTagCacheForFile() 清不掉，
+    // 标签列的 chip 会停留在旧内容。
+    QStringList qLTargets;
+    for (const QString &sFile : qLFiles) {
+        if (sFile.trimmed().isEmpty())
+            continue;
+        const QString sClean = QDir::cleanPath(sFile);
+        if (!qLTargets.contains(sClean))
+            qLTargets << sClean;
+    }
+    if (qLLabels.isEmpty() || qLTargets.isEmpty())
+        return;
+
     emit sendBeforeTagsChanged(qLTargets);   // 支持 Ctrl+Z 撤销
 
     int nFailed = 0;
@@ -657,6 +688,14 @@ void FormPageFiles::applyDroppedLabels(const QStringList &qLLabels, const QModel
     // "请把这份标签文本写到这个文件上"，会再做一次写盘并把撤销点覆盖成写入后的状态。
 }
 
+
+/** 由 FormLabels 转发过来：用户把文件拖到了某个标签上。 */
+void FormPageFiles::onFilesDroppedOnLabel(const QStringList &qLFiles, const QString &sLabel)
+{
+    if (sLabel.trimmed().isEmpty())
+        return;
+    applyLabelsToFiles(QStringList() << sLabel.trimmed(), qLFiles);
+}
 
 QModelIndex FormPageFiles::currentIndexInActiveView() const
 {

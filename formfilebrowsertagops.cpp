@@ -228,6 +228,12 @@ void FormFileBrowser::undoLastTagOperation()
         emit sendStatusMessage(tr("已撤销上一次标签操作（%1 个文件）。").arg(nTotal));
 }
 
+/** 标签库那边把文件拖到了某个标签上：交给文件页统一写盘（撤销点/缓存/刷新都在那里）。 */
+void FormFileBrowser::onFilesDroppedOnLabel(const QStringList &qLFiles, const QString &sLabel)
+{
+    ui->pageFiles->onFilesDroppedOnLabel(qLFiles, sLabel);
+}
+
 void FormFileBrowser::onRecvLabels(const QString &sFilePath, const QString &sLabels)
 {
     // 内联编辑/弹框编辑标签时，只作用于被编辑的那一个文件，

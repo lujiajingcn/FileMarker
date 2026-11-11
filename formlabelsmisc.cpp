@@ -56,6 +56,47 @@ bool FormLabels::eventFilter(QObject *watched, QEvent *event)
             }
         } else if (event->type() == QEvent::MouseButtonRelease) {
             m_mayStartDrag = false;
+        } else if (event->type() == QEvent::DragEnter || event->type() == QEvent::DragMove) {
+            // 反过来：把文件拖到某个标签上 = 给这些文件加这个标签
+            auto *dragEvent = static_cast<QDragMoveEvent *>(event);
+            const QMimeData *mime = dragEvent->mimeData();
+            if (mime != nullptr && mime->hasUrls()
+                && !mime->hasFormat(QString::fromLatin1(MIME_FILEMARKER_LABEL))) {
+                const QModelIndex index = m_labelsTree->indexAt(dragEvent->pos());
+                if (index.isValid()) {
+                    dragEvent->setDropAction(Qt::CopyAction);
+                    dragEvent->accept();
+                    return true;
+                }
+            }
+        } else if (event->type() == QEvent::Drop) {
+            auto *dropEvent = static_cast<QDropEvent *>(event);
+            const QMimeData *mime = dropEvent->mimeData();
+            if (mime != nullptr && mime->hasUrls()
+                && !mime->hasFormat(QString::fromLatin1(MIME_FILEMARKER_LABEL))) {
+                const QModelIndex index = m_labelsTree->indexAt(dropEvent->pos());
+                if (!index.isValid())
+                    return false;
+                QStringList qLFiles;
+                for (const QUrl &url : mime->urls()) {
+                    if (!url.isLocalFile())
+                        continue;
+                    // 统一用正斜杠（QDir::cleanPath），和 QFileSystemModel::filePath() 保持一致，
+                    // 否则文件页按路径清缓存会清不掉，界面上的标签列不刷新。
+                    const QString sPath = QDir::cleanPath(url.toLocalFile());
+                    if (QFileInfo::exists(sPath) && !qLFiles.contains(sPath))
+                        qLFiles << sPath;
+                }
+                if (qLFiles.isEmpty())
+                    return false;
+                const QString sLabel = index.data(Qt::DisplayRole).toString().trimmed();
+                if (sLabel.isEmpty())
+                    return false;
+                dropEvent->setDropAction(Qt::CopyAction);
+                dropEvent->accept();
+                emit filesDroppedOnLabel(qLFiles, sLabel);
+                return true;
+            }
         }
     }
     return QWidget::eventFilter(watched, event);

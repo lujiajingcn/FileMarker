@@ -87,6 +87,10 @@ public:
     void showFilesWidget();
 
 public slots:
+
+    /** 标签库把文件拖到标签上时，转给文件页去写盘（打在哪个文件上由文件页决定） */
+    void onFilesDroppedOnLabel(const QStringList &qLFiles, const QString &sLabel);
+
     void showFilteredFile(QStringList qLFilteredFiles);
 
     void onGotoFilePath(const QString &sFilePath);

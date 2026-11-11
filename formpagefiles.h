@@ -118,6 +118,9 @@ public slots:
 
     void recvGotoFile(const QString &sFilePath);
 
+    /** 由 FormLabels 转发：用户把文件拖到了某个标签上 */
+    void onFilesDroppedOnLabel(const QStringList &qLFiles, const QString &sLabel);
+
     void onTvNavigationClicked(const QModelIndex &index);
 
 private:
@@ -195,6 +198,7 @@ private:
 
     /** 把从标签库拖过来的标签写到目标文件上（dropIndex 无效时作用于选中的文件） */
     void applyDroppedLabels(const QStringList &qLLabels, const QModelIndex &dropIndex);
+    void applyLabelsToFiles(const QStringList &qLLabels, const QStringList &qLFiles);
 
     /**
      * 标签写盘之后刷新界面。只让这几个文件的标签缓存失效，
