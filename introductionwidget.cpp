@@ -108,18 +108,28 @@ IntroductionWidget::IntroductionWidget(QWidget *parent)
 
     // 正文字号跟随系统字号，并且在系统字号基础上再放大一档：
     // 向导是"读一遍就关掉"的界面，字太小会让人费力。
-    // 用 pt 而不是 px，高分屏/系统放大字号时会一起变；pointSize 无效（像素字号）时按 12pt 算。
-    const qreal basePointSize = font().pointSizeF() > 0 ? font().pointSizeF() : 12.0;
-    const qreal bodyPointSize = qMax<qreal>(14.0, basePointSize * 1.45);
-    m_bodyCss = QStringLiteral("font-size: %1pt; line-height: 155%;")
-                    .arg(bodyPointSize, 0, 'f', 1);
+    // 应用字体现在是用"像素"设定的（见 main.cpp 的 applySystemUiFont），
+    // 所以两种单位都要兼容：有 pixelSize 就按像素放大，否则退回按磅值算。
     m_bodyFont = font();
-    m_bodyFont.setPointSizeF(bodyPointSize);
+    if (m_bodyFont.pixelSize() > 0) {
+        const int bodyPixelSize = qMax(12, qRound(m_bodyFont.pixelSize() * 1.3));
+        m_bodyCss = QStringLiteral("font-size: %1px; line-height: 155%;").arg(bodyPixelSize);
+        m_bodyFont.setPixelSize(bodyPixelSize);
+    } else {
+        const qreal basePointSize = m_bodyFont.pointSizeF() > 0 ? m_bodyFont.pointSizeF() : 12.0;
+        const qreal bodyPointSize = qMax<qreal>(14.0, basePointSize * 1.45);
+        m_bodyCss = QStringLiteral("font-size: %1pt; line-height: 155%;")
+                        .arg(bodyPointSize, 0, 'f', 1);
+        m_bodyFont.setPointSizeF(bodyPointSize);
+    }
     m_stepText->setFont(m_bodyFont);
 
     // 页码跟着正文字号一起放大（比正文再大一点），否则会出现"正文比页码还大"的怪样子
     QFont pageFont = m_bodyFont;
-    pageFont.setPointSizeF(bodyPointSize * 1.25);
+    if (pageFont.pixelSize() > 0)
+        pageFont.setPixelSize(qRound(pageFont.pixelSize() * 1.15));
+    else
+        pageFont.setPointSizeF(pageFont.pointSizeF() * 1.15);
     pageFont.setBold(true);
     m_continueLabel->setFont(pageFont);
     m_items = {

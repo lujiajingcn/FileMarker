@@ -1,7 +1,10 @@
+#include <windows.h>
+
 #include "mainwindow.h"
 
 #include <QApplication>
 #include <QFileInfo>
+#include <QScreen>
 #include <QSettings>
 #include <QByteArray>
 #include <QDir>
@@ -40,6 +43,74 @@ void earlyMessageHandler(QtMsgType type, const QMessageLogContext &, const QStri
 
 }   // namespace
 
+namespace {
+
+/** 取 Windows 的"消息字体"（界面默认字体），按当前缩放比换算成像素后设为应用字体。
+ *
+ * 换算方式：lfHeight 是 96 DPI 下的逻辑高度（负数，例如 -12 = 9pt），
+ * 想要的实际物理高度 = |lfHeight| × 系统缩放比，再除以 Qt 的 devicePixelRatio
+ * （Qt 画像素时会再乘回 dpr）。这样 150% 屏上 12px 的字会画成 18px，和系统一致性最好。
+ */
+void applySystemUiFont()
+{
+#ifdef Q_OS_WIN
+    NONCLIENTMETRICSW ncm;
+    ZeroMemory(&ncm, sizeof(ncm));
+    ncm.cbSize = sizeof(ncm);
+    if (!::SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0))
+        return;
+
+    const QScreen *screen = QGuiApplication::primaryScreen();
+    if (screen == nullptr)
+        return;
+
+    const qreal dpr = screen->devicePixelRatio();
+    // 本进程是 PerMonitorV2，SPI_GETNONCLIENTMETRICS 返回的字号**已经按系统缩放比放大过**
+    // （150% 的屏上是 18，而不是 96 DPI 下的 12）。所以这里只需要除回 Qt 的
+    // devicePixelRatio：18 / 2 = 9 逻辑像素，画出来正好是 18 个物理像素。
+    // 之前误用了 physicalDotsPerInch() —— 它由显示器自报的物理尺寸算出，很多屏不准
+    // （这台机器算出来只有 81 DPI），结果字被再次缩小。
+    const int scaledHeight = qAbs(int(ncm.lfMessageFont.lfHeight));
+
+    QFont uiFont(QString::fromWCharArray(ncm.lfMessageFont.lfFaceName));
+    const int px = qMax(8, qRound(scaledHeight / qMax<qreal>(1.0, dpr)));
+    uiFont.setPixelSize(px);
+    QApplication::setFont(uiFont);
+
+#endif
+}
+
+/** 自动界面缩放比例：高分屏 + 系统还是 100% 缩放时，把界面放大到 125%。
+ *
+ * 没做这一步时，2560x1440 / 3840x2160 这类屏幕在 Windows 默认 100% 下，
+ * 9pt 的系统字体会小到看不清 —— 用户换显示器后抱怨"字变小了"多半就是这种情形。
+ */
+double autoUiScale()
+{
+#ifdef Q_OS_WIN
+    // 进程已经是 PerMonitorV2，GetDeviceCaps 拿到的是真实 DPI
+    HDC screenDc = ::GetDC(nullptr);
+    const int systemDpi = screenDc != nullptr ? ::GetDeviceCaps(screenDc, LOGPIXELSY) : 96;
+    if (screenDc != nullptr) {
+        ::ReleaseDC(nullptr, screenDc);
+    }
+    const int screenWidth = ::GetSystemMetrics(SM_CXSCREEN);   // 物理像素
+    const double systemScale = systemDpi > 0 ? systemDpi / 96.0 : 1.0;
+
+    // 系统自己已经放大过了（125% 及以上），不要叠加
+    if (systemScale > 1.05) {
+        return 1.0;
+    }
+    // 屏幕够大：1080p 及以下保持原样，2K/4K 放大到 125%
+    if (screenWidth >= 1920) {
+        return 1.25;
+    }
+#endif
+    return 1.0;
+}
+
+}   // namespace
+
 int main(int argc, char *argv[])
 {
 #if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
@@ -49,19 +120,23 @@ int main(int argc, char *argv[])
     QCoreApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
 #endif
 
-    // 手动缩放的存在意义：程序已经按 Windows 每块显示器的缩放比自动放大，
-    // 但如果某台显示器上还是嫌字小，可以在 exe 旁边放一个 FileMarker.ini：
-    //     [General]
-    //     uiScale=1.25
-    // 整个界面会再乘上这个比例（0 或没写 = 完全跟随系统）。
+    // 界面缩放：
+    //  1) 用户在 exe 旁边的 FileMarker.ini 里写了 uiScale，就完全按它来；
+    //  2) 没写则自动判断：Windows 缩放比还是 100%、但屏幕分辨率很高
+    //     （笔记本/显示器常见的 2K、4K 屏）时，界面按 125% 画 —— 否则 9pt 系统字体
+    //     在高分屏上会小到看不清，这也是"换显示器后字变小"的真正原因；
+    //  3) 系统已经放大过（125%/150%/200%）就原样跟随，不再叠加。
     // 必须在 QApplication 之前设置 QT_SCALE_FACTOR，Qt 只在启动时读一次。
     {
         // 注意：这里 QApplication 还没建出来，applicationDirPath() 会返回空，
         // 只能从 argv[0] 推 exe 所在目录。
         const QString exeDir = QFileInfo(QString::fromLocal8Bit(argv[0])).absolutePath();
         QSettings uiIni(exeDir + QStringLiteral("/FileMarker.ini"), QSettings::IniFormat);
-        const double uiScale = uiIni.value(QStringLiteral("uiScale"), 0.0).toDouble();
-        if (uiScale > 0.5 && uiScale < 4.0) {
+        double uiScale = uiIni.value(QStringLiteral("uiScale"), 0.0).toDouble();
+        if (uiScale <= 0.5 || uiScale >= 4.0) {
+            uiScale = autoUiScale();
+        }
+        if (uiScale > 1.01) {
             qputenv("QT_SCALE_FACTOR", QByteArray::number(uiScale, 'f', 2));
         }
     }
@@ -70,6 +145,13 @@ int main(int argc, char *argv[])
     qInstallMessageHandler(earlyMessageHandler);
 
     QApplication a(argc, argv);
+
+    // 显式设置界面字体。
+    // Qt 5 在 Windows 上会拿 SPI_GETNONCLIENTMETRICS 里的字号，再按**物理** DPI 折算成磅值；
+    // 150% 缩放的 4K 屏上会算出 6pt（还退化成宋体），实际画出来只有 12 物理像素 ——
+    // 这就是"换显示器后字变小"的根因。这里改成按像素设定，直接算成"系统字号 × 缩放比"。
+    applySystemUiFont();
+
     a.setApplicationName(QStringLiteral("FileMarker"));
     a.setApplicationVersion(QStringLiteral("1.0.0"));
 
