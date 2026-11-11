@@ -21,6 +21,7 @@ enum labelLogic{
 
 // 从【标签库】把标签拖到文件列表时用的 MIME 类型（内容是若干行标签名）
 #define MIME_FILEMARKER_LABEL "application/x-filemarker-label"
+#define MIME_FILEMARKER_FILES "application/x-filemarker-files"   // 拖拽中的文件列表（\n 分隔）
 
 extern QString g_sAppDir;
 

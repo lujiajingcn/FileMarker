@@ -66,8 +66,8 @@ public:
 signals:
     void sendSelLabels(const QStringList &qLSelLabels);
 
-    /** 用户把文件拖到了某个标签上：请给这些文件加上这个标签 */
-    void filesDroppedOnLabel(const QStringList &qLFiles, const QString &sLabel);
+    /** 用户把文件拖到了某个标签上：请给这些文件加上这些标签（拖到多选范围内 = 全部选中标签） */
+    void filesDroppedOnLabel(const QStringList &qLFiles, const QStringList &qLLabels);
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
@@ -90,6 +90,8 @@ protected:
     bool saveLabelToXmlFile();
 
     bool                     m_shuttingDown = false;      // 析构期间不弹模态框
+    QStringList              m_dragEnterLabels;            // 文件拖入时记住的标签选择（松开鼠标后会被 Qt 收窄）
+    QStringList              m_pendingDragLabels;          // 按下时记住的标签选择（QTreeView 会立刻把它收窄成一行）
     bool                     m_saveFailureWarned = false; // 失败提示只弹一次
 
     void addItem(QStandardItem *parentItem = nullptr);

@@ -9,6 +9,7 @@
 #include <QDebug>
 #include <QDir>
 #include <QDrag>
+#include <QFile>
 #include <QMenu>
 #include <QMessageBox>
 #include <QMimeData>
@@ -45,6 +46,9 @@ bool FormLabels::eventFilter(QObject *watched, QEvent *event)
             if (mouseEvent->button() == Qt::LeftButton) {
                 m_ptDragStart = mouseEvent->pos();
                 m_mayStartDrag = true;
+                // 先把"这一刻选中的标签"记下来：紧接着 QTreeView 自己处理这个按下事件时，
+                // 会把多选收窄成按下那一行，等真正开始拖拽时就只剩一个标签了。
+                m_pendingDragLabels = getSelLabels();
             }
         } else if (event->type() == QEvent::MouseMove && m_mayStartDrag) {
             auto *mouseEvent = static_cast<QMouseEvent *>(event);
@@ -56,14 +60,21 @@ bool FormLabels::eventFilter(QObject *watched, QEvent *event)
             }
         } else if (event->type() == QEvent::MouseButtonRelease) {
             m_mayStartDrag = false;
+            m_pendingDragLabels.clear();
+            m_dragEnterLabels.clear();
         } else if (event->type() == QEvent::DragEnter || event->type() == QEvent::DragMove) {
             // 反过来：把文件拖到某个标签上 = 给这些文件加这个标签
             auto *dragEvent = static_cast<QDragMoveEvent *>(event);
             const QMimeData *mime = dragEvent->mimeData();
-            if (mime != nullptr && mime->hasUrls()
+            if (mime != nullptr
+                && (mime->hasUrls() || mime->hasFormat(QString::fromLatin1(MIME_FILEMARKER_FILES)))
                 && !mime->hasFormat(QString::fromLatin1(MIME_FILEMARKER_LABEL))) {
                 const QModelIndex index = m_labelsTree->indexAt(dragEvent->pos());
                 if (index.isValid()) {
+                    // 趁选择还在，先把"拖入时选中的标签"记下来：
+                    // 鼠标一松开，Qt 会把树的选择收窄成按下那一行，drop 时再取就只剩一个了。
+                    if (event->type() == QEvent::DragEnter)
+                        m_dragEnterLabels = getSelLabels();
                     dragEvent->setDropAction(Qt::CopyAction);
                     dragEvent->accept();
                     return true;
@@ -72,29 +83,52 @@ bool FormLabels::eventFilter(QObject *watched, QEvent *event)
         } else if (event->type() == QEvent::Drop) {
             auto *dropEvent = static_cast<QDropEvent *>(event);
             const QMimeData *mime = dropEvent->mimeData();
-            if (mime != nullptr && mime->hasUrls()
+            if (mime != nullptr
+                && (mime->hasUrls() || mime->hasFormat(QString::fromLatin1(MIME_FILEMARKER_FILES)))
                 && !mime->hasFormat(QString::fromLatin1(MIME_FILEMARKER_LABEL))) {
                 const QModelIndex index = m_labelsTree->indexAt(dropEvent->pos());
                 if (!index.isValid())
                     return false;
                 QStringList qLFiles;
-                for (const QUrl &url : mime->urls()) {
-                    if (!url.isLocalFile())
-                        continue;
-                    // 统一用正斜杠（QDir::cleanPath），和 QFileSystemModel::filePath() 保持一致，
-                    // 否则文件页按路径清缓存会清不掉，界面上的标签列不刷新。
-                    const QString sPath = QDir::cleanPath(url.toLocalFile());
-                    if (QFileInfo::exists(sPath) && !qLFiles.contains(sPath))
-                        qLFiles << sPath;
+                if (mime->hasFormat(QString::fromLatin1(MIME_FILEMARKER_FILES))) {
+                    // 本程序自己拖的文件列表（多选时也完整）
+                    const QString sPayload = QString::fromUtf8(
+                        mime->data(QString::fromLatin1(MIME_FILEMARKER_FILES)));
+                    for (const QString &sLine : sPayload.split(QLatin1Char('\n'))) {
+                        const QString sPath = QDir::cleanPath(sLine.trimmed());
+                        if (!sPath.isEmpty() && QFileInfo::exists(sPath) && !qLFiles.contains(sPath))
+                            qLFiles << sPath;
+                    }
+                } else {
+                    for (const QUrl &url : mime->urls()) {
+                        if (!url.isLocalFile())
+                            continue;
+                        // 统一用正斜杠（QDir::cleanPath），和 QFileSystemModel::filePath() 保持一致，
+                        // 否则文件页按路径清缓存会清不掉，界面上的标签列不刷新。
+                        const QString sPath = QDir::cleanPath(url.toLocalFile());
+                        if (QFileInfo::exists(sPath) && !qLFiles.contains(sPath))
+                            qLFiles << sPath;
+                    }
                 }
                 if (qLFiles.isEmpty())
                     return false;
                 const QString sLabel = index.data(Qt::DisplayRole).toString().trimmed();
                 if (sLabel.isEmpty())
                     return false;
+
+                // 拖到的这一行本身在多选范围内 → 把选中的标签全都加上（和资源管理器一致）；
+                // 否则只加这一行的标签。
+                QStringList qLLabels;
+                const QStringList qLSelLabels = m_dragEnterLabels;
+                m_dragEnterLabels.clear();
+                if (qLSelLabels.size() > 1 && qLSelLabels.contains(sLabel))
+                    qLLabels = qLSelLabels;
+                else
+                    qLLabels << sLabel;
+
                 dropEvent->setDropAction(Qt::CopyAction);
                 dropEvent->accept();
-                emit filesDroppedOnLabel(qLFiles, sLabel);
+                emit filesDroppedOnLabel(qLFiles, qLLabels);
                 return true;
             }
         }
@@ -105,7 +139,9 @@ bool FormLabels::eventFilter(QObject *watched, QEvent *event)
 /** 把当前选中的标签打包成拖拽数据，交给文件列表那边处理。 */
 void FormLabels::startLabelDrag()
 {
-    QStringList qLLabels = getSelLabels();
+    QStringList qLLabels = m_pendingDragLabels;
+    if (qLLabels.isEmpty())
+        qLLabels = getSelLabels();
     if (qLLabels.isEmpty()) {
         const QModelIndex index = m_labelsTree->currentIndex();
         if (index.isValid())

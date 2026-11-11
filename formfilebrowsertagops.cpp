@@ -229,9 +229,9 @@ void FormFileBrowser::undoLastTagOperation()
 }
 
 /** 标签库那边把文件拖到了某个标签上：交给文件页统一写盘（撤销点/缓存/刷新都在那里）。 */
-void FormFileBrowser::onFilesDroppedOnLabel(const QStringList &qLFiles, const QString &sLabel)
+void FormFileBrowser::onFilesDroppedOnLabel(const QStringList &qLFiles, const QStringList &qLLabels)
 {
-    ui->pageFiles->onFilesDroppedOnLabel(qLFiles, sLabel);
+    ui->pageFiles->onFilesDroppedOnLabel(qLFiles, qLLabels);
 }
 
 void FormFileBrowser::onRecvLabels(const QString &sFilePath, const QString &sLabels)

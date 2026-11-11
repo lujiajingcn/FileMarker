@@ -15,6 +15,7 @@
 #include <QToolButton>
 #include <QActionGroup>
 #include <QApplication>
+#include <QDrag>
 #include <QClipboard>
 #include <QCursor>
 #include <QDir>
@@ -327,10 +328,10 @@ void FormPageFiles::initDetailFileList()
     // 接受从【标签库】拖过来的标签（见 eventFilter / applyDroppedLabels）
     m_filesTree->setAcceptDrops(true);
     m_filesTree->viewport()->setAcceptDrops(true);
-    // 也允许把文件"拖出去"：拖到左侧标签库的某个标签上 = 给它加这个标签。
-    // QFileSystemModel 的 mimeData() 会给出标准的 text/uri-list。
-    m_filesTree->setDragEnabled(true);
-    m_filesTree->setDragDropMode(QAbstractItemView::DragDrop);
+    // 拖出由本类自己处理（见 eventFilter → startFilesDrag）：视图内建拖拽在多选时
+    // 只会带走"按下那一行"，支持不了多文件。这里只保留"能接收拖入"。
+    m_filesTree->setDragEnabled(false);
+    m_filesTree->setDragDropMode(QAbstractItemView::DropOnly);
     m_filesTree->viewport()->installEventFilter(this);
     m_filesTree->setModel(m_modelFiles);
     // 第 0~3 列装"拒绝编辑"代理，禁止 F2/双击把文件名改到磁盘上。
@@ -411,9 +412,9 @@ void FormPageFiles::initThumbnailFileList()
     // 同样接受从【标签库】拖过来的标签
     m_filesList->setAcceptDrops(true);
     m_filesList->viewport()->setAcceptDrops(true);
-    // 缩略图视图同样可以把文件拖出去（拖到标签上打标签）
-    m_filesList->setDragEnabled(true);
-    m_filesList->setDragDropMode(QAbstractItemView::DragDrop);
+    // 缩略图视图同样：拖出由自己处理，这里只接收拖入
+    m_filesList->setDragEnabled(false);
+    m_filesList->setDragDropMode(QAbstractItemView::DropOnly);
     // eventFilter 在下面（悬停高亮那里）已经装过，这里不重复装
 
     // 缩略图生成器：由 delegate 在 GUI 线程按需调用。
@@ -573,9 +574,35 @@ bool FormPageFiles::eventFilter(QObject *watched, QEvent *event)
         m_filesList->viewport()->update();
     }
 
-    // 从【标签库】把标签拖到文件列表 = 给文件打标签
     const bool bIsFileView = (m_filesTree != nullptr && watched == m_filesTree->viewport())
                              || (m_filesList != nullptr && watched == m_filesList->viewport());
+
+    // 把选中的文件拖出去（拖到标签库的某个标签上 = 打标签）
+    if (bIsFileView) {
+        if (event->type() == QEvent::MouseButtonPress) {
+            auto *mouseEvent = static_cast<QMouseEvent *>(event);
+            if (mouseEvent->button() == Qt::LeftButton) {
+                m_ptDragStart = mouseEvent->pos();
+                m_mayStartDrag = true;
+                // 立刻记住选择：紧接着视图自己处理按下事件时会把多选收窄成一行
+                m_pendingDragFiles = getSelFilePath();
+            }
+        } else if (event->type() == QEvent::MouseMove && m_mayStartDrag) {
+            auto *mouseEvent = static_cast<QMouseEvent *>(event);
+            if ((mouseEvent->buttons() & Qt::LeftButton)
+                && (mouseEvent->pos() - m_ptDragStart).manhattanLength()
+                       >= QApplication::startDragDistance()) {
+                m_mayStartDrag = false;
+                startFilesDrag();
+                return true;
+            }
+        } else if (event->type() == QEvent::MouseButtonRelease) {
+            m_mayStartDrag = false;
+            m_pendingDragFiles.clear();
+        }
+    }
+
+    // 从【标签库】把标签拖到文件列表 = 给文件打标签
     if (bIsFileView && (event->type() == QEvent::DragEnter || event->type() == QEvent::DragMove)) {
         auto *dragEvent = static_cast<QDragMoveEvent *>(event);
         if (dragEvent->mimeData() != nullptr
@@ -614,6 +641,34 @@ bool FormPageFiles::eventFilter(QObject *watched, QEvent *event)
 }
 
 /**
+ * 把选中的文件打包成拖拽数据（拖到标签库的标签上 = 给这些文件加这个标签）。
+ *
+ * 不用视图内建的拖拽：QAbstractItemView 在多选时按下某一行会把选择收窄成那一行，
+ * 真正拖起来时就只剩一个文件了。这里在按下时就把文件列表记下来，自己发 QDrag。
+ */
+void FormPageFiles::startFilesDrag()
+{
+    QStringList qLFiles = m_pendingDragFiles;
+    if (qLFiles.isEmpty())
+        qLFiles = getSelFilePath();
+    m_pendingDragFiles.clear();
+    if (qLFiles.isEmpty())
+        return;
+
+    auto *mime = new QMimeData;
+    mime->setData(QString::fromLatin1(MIME_FILEMARKER_FILES), qLFiles.join("\n").toUtf8());
+    // 同时给出标准 uri-list，方便拖到资源管理器/其它程序
+    QList<QUrl> qLUrls;
+    for (const QString &sFile : qLFiles)
+        qLUrls << QUrl::fromLocalFile(sFile);
+    mime->setUrls(qLUrls);
+
+    auto *drag = new QDrag(this);
+    drag->setMimeData(mime);
+    drag->exec(Qt::CopyAction);
+}
+
+/**
  * 把从标签库拖过来的标签写到文件上。
  * 拖到某个文件上 → 只作用于这个文件；拖到空白处/文件夹上 → 作用于当前选中的文件。
  */
@@ -624,7 +679,14 @@ void FormPageFiles::applyDroppedLabels(const QStringList &qLLabels, const QModel
 
     QStringList qLTargets;
     if (dropIndex.isValid() && !m_modelFiles->isDir(dropIndex)) {
-        qLTargets << m_modelFiles->filePath(dropIndex);
+        // 拖到某个文件上时：如果这一行本来就在多选里，就作用于整个选择
+        // （资源管理器同款行为）；否则只作用于这一行。
+        const QString sDropped = QDir::cleanPath(m_modelFiles->filePath(dropIndex));
+        const QStringList qLSelFiles = getSelFilePath();
+        if (qLSelFiles.size() > 1 && qLSelFiles.contains(sDropped))
+            qLTargets = qLSelFiles;
+        else
+            qLTargets << sDropped;
     } else {
         qLTargets = getSelFilePath();
     }
@@ -689,12 +751,18 @@ void FormPageFiles::applyLabelsToFiles(const QStringList &qLLabels, const QStrin
 }
 
 
-/** 由 FormLabels 转发过来：用户把文件拖到了某个标签上。 */
-void FormPageFiles::onFilesDroppedOnLabel(const QStringList &qLFiles, const QString &sLabel)
+/** 由 FormLabels 转发过来：用户把文件拖到了某个标签上（可以同时拖到多选标签上）。 */
+void FormPageFiles::onFilesDroppedOnLabel(const QStringList &qLFiles, const QStringList &qLLabels)
 {
-    if (sLabel.trimmed().isEmpty())
+    QStringList qLCleanLabels;
+    for (const QString &sLabel : qLLabels) {
+        const QString sTrimmed = sLabel.trimmed();
+        if (!sTrimmed.isEmpty() && !qLCleanLabels.contains(sTrimmed))
+            qLCleanLabels << sTrimmed;
+    }
+    if (qLCleanLabels.isEmpty())
         return;
-    applyLabelsToFiles(QStringList() << sLabel.trimmed(), qLFiles);
+    applyLabelsToFiles(qLCleanLabels, qLFiles);
 }
 
 QModelIndex FormPageFiles::currentIndexInActiveView() const
