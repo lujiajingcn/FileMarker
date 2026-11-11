@@ -5,6 +5,7 @@
 #include <QGuiApplication>
 #include <QImage>
 #include <QKeyEvent>
+#include <QFont>
 #include <QLabel>
 #include <QHBoxLayout>
 #include <QLayout>
@@ -52,6 +53,7 @@ private:
     QWidget *m_textWidget;
     QLabel *m_stepText;
     QLabel *m_continueLabel;
+    QFont   m_bodyFont;   // 正文字体（系统字号再放大一档），h1/li 都以它为基准
     QHBoxLayout *m_buttonLayout;
     QPushButton *m_btnSkip;
     QPushButton *m_btnPrev;

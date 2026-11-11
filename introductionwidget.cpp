@@ -70,6 +70,7 @@ IntroductionWidget::IntroductionWidget(QWidget *parent)
     m_continueLabel->setAlignment(Qt::AlignCenter);
     m_continueLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     m_continueLabel->setWordWrap(true);
+    // 页码字号稍大于正文；此处先用系统字号占位，等正文字号算好后在构造末尾再调一次
     auto fnt = font();
     fnt.setPointSizeF(fnt.pointSizeF() * 1.5);
     m_continueLabel->setFont(fnt);
@@ -105,11 +106,22 @@ IntroductionWidget::IntroductionWidget(QWidget *parent)
     });
     connect(m_btnNext, &QPushButton::clicked, this, &IntroductionWidget::step);
 
-    // 正文字号跟随系统字号（而不是写死 16px）：高分屏或用户在系统里放大字号时，
-    // 文字跟着一起变，排版不用重新调。pointSize 无效（用像素字号）时退回 16px。
+    // 正文字号跟随系统字号，并且在系统字号基础上再放大一档：
+    // 向导是"读一遍就关掉"的界面，字太小会让人费力。
+    // 用 pt 而不是 px，高分屏/系统放大字号时会一起变；pointSize 无效（像素字号）时按 12pt 算。
     const qreal basePointSize = font().pointSizeF() > 0 ? font().pointSizeF() : 12.0;
-    m_bodyCss = QStringLiteral("font-size: %1pt; line-height: 150%;")
-                    .arg(basePointSize * 1.15, 0, 'f', 1);
+    const qreal bodyPointSize = qMax<qreal>(14.0, basePointSize * 1.45);
+    m_bodyCss = QStringLiteral("font-size: %1pt; line-height: 155%;")
+                    .arg(bodyPointSize, 0, 'f', 1);
+    m_bodyFont = font();
+    m_bodyFont.setPointSizeF(bodyPointSize);
+    m_stepText->setFont(m_bodyFont);
+
+    // 页码跟着正文字号一起放大（比正文再大一点），否则会出现"正文比页码还大"的怪样子
+    QFont pageFont = m_bodyFont;
+    pageFont.setPointSizeF(bodyPointSize * 1.25);
+    pageFont.setBold(true);
+    m_continueLabel->setFont(pageFont);
     m_items = {
         {QLatin1String("dwLabels"),
          tr("标签管理"),
