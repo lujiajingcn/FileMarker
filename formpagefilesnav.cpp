@@ -206,6 +206,12 @@ void FormPageFiles::onLookInComboReturnPressed()
 
 void FormPageFiles::updateToolButtons()
 {
+    // 后退 / 前进 / 上一级 / 历史跳转都会走到这里，统一在末尾同步一次面包屑，
+    // 以后再加新的导航路径就不必每处都记得调 refreshAddressBar() 了。
+    // setPath() 内部对相同路径会直接返回，重复调用没有开销。
+    if (m_breadcrumb != nullptr)
+        m_breadcrumb->setPath(m_curDir);
+
     if (m_skBackward.count() == 0)
         ui->backButton->setEnabled(false);
     else
@@ -327,7 +333,9 @@ void FormPageFiles::onToParentButtonClicked()
     if (!sFilePath.isEmpty())
         m_skBackward.push_back(sFilePath);
     m_curDir = sNewDirectory;
-    // 地址栏同步：之前这里漏了更新，导致点上移后地址栏还停留在旧路径。
+    // 地址栏同步：前进/后退走的是 refreshAddressBar()，上移这条路径原来只更新了
+    // 下拉历史，面包屑会停在旧路径上。
+    refreshAddressBar();
     rememberPath(sNewDirectory);
     updateToolButtons();  // 导航栈变化后直接更新按钮
     updateDirLabelsPanel(sNewDirectory);
