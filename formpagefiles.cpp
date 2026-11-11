@@ -162,6 +162,23 @@ FormPageFiles::FormPageFiles(QWidget *parent) :
     });
     connect(ui->toParentButton, &QToolButton::clicked, this, &FormPageFiles::onToParentButtonClicked);
     connect(ui->btnRefresh, &QToolButton::clicked, this, &FormPageFiles::onBtnRefreshClicked);
+    // 「详情显示 / 缩略图显示」收进右键菜单的【查看】子菜单（见 fillViewMenu），
+    // 工具条上这两个按钮不再显示，把它所在的那一行整行隐藏掉。
+    if (ui->widget_3 != nullptr)
+        ui->widget_3->hide();
+
+    // 按钮没了，补两个快捷键，切换视图不用每次都去右键
+    auto *actionDetail = new QAction(this);
+    actionDetail->setShortcut(QKeySequence(Qt::CTRL + Qt::SHIFT + Qt::Key_D));
+    actionDetail->setShortcutContext(Qt::WindowShortcut);
+    connect(actionDetail, &QAction::triggered, this, &FormPageFiles::onTbDetailClicked);
+    addAction(actionDetail);
+
+    auto *actionThumb = new QAction(this);
+    actionThumb->setShortcut(QKeySequence(Qt::CTRL + Qt::SHIFT + Qt::Key_T));
+    actionThumb->setShortcutContext(Qt::WindowShortcut);
+    connect(actionThumb, &QAction::triggered, this, &FormPageFiles::onTbThumbnailClicked);
+    addAction(actionThumb);
     connect(ui->tbDetail, &QToolButton::clicked, this, &FormPageFiles::onTbDetailClicked);
     connect(ui->tbThumbnail, &QToolButton::clicked, this, &FormPageFiles::onTbThumbnailClicked);
     connect(ui->tvFiles, &QTreeView::doubleClicked, this, &FormPageFiles::onTvFilesDoubleClicked);

@@ -142,12 +142,12 @@ void FormPageFiles::addFileActions(QMenu *menu, const QString &targetFile,
     });
 }
 
-/** 右键菜单里的【查看】子菜单：详细信息 / 缩略图，以及缩略图尺寸档位。 */
+/** 右键菜单里的【查看】子菜单：详情显示 / 缩略图显示，以及缩略图尺寸档位。 */
 void FormPageFiles::fillViewMenu(QMenu *menu)
 {
     // 查看方式
-    QAction *actionDetail = menu->addAction(tr("详细信息"));
-    QAction *actionThumbnail = menu->addAction(tr("缩略图"));
+    QAction *actionDetail = menu->addAction(tr("详情显示"));
+    QAction *actionThumbnail = menu->addAction(tr("缩略图显示"));
     actionDetail->setCheckable(true);
     actionThumbnail->setCheckable(true);
     actionDetail->setChecked(ui->stackedWidget->currentIndex() == FILEPAGE::DETAIL);
