@@ -663,9 +663,36 @@ void FormPageFiles::startFilesDrag()
         qLUrls << QUrl::fromLocalFile(sFile);
     mime->setUrls(qLUrls);
 
+    // 拖拽开始前把多选恢复回来：按下鼠标时 QAbstractItemView 已经把选择收窄成一行，
+    // 不恢复的话拖拽过程中界面上只亮着一个文件，看起来像"只拖了一个"。
+    restoreFileSelection(qLFiles);
+
     auto *drag = new QDrag(this);
     drag->setMimeData(mime);
     drag->exec(Qt::CopyAction);
+}
+
+/** 按给定文件列表恢复两个视图的选择状态（拖拽过程中用）。 */
+void FormPageFiles::restoreFileSelection(const QStringList &qLFiles)
+{
+    QAbstractItemView *view = nullptr;
+    if (m_filesList != nullptr && m_filesList->isVisible())
+        view = m_filesList;
+    else
+        view = m_filesTree;
+    if (view == nullptr || view->selectionModel() == nullptr)
+        return;
+
+    QItemSelection selection;
+    for (const QString &sFile : qLFiles) {
+        const QModelIndex index = m_modelFiles->index(sFile);
+        if (index.isValid())
+            selection.select(index, index);
+    }
+    if (selection.isEmpty())
+        return;
+    view->selectionModel()->select(selection,
+                                   QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
 }
 
 /**

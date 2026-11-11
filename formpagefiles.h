@@ -202,6 +202,7 @@ private:
     /** 自己起 QDrag 把选中的文件拖出去（拖到标签上 = 打标签）。
      *  不用视图内建拖拽：多选时 QTreeView 会把选择收窄成按下那一行，只能拖走一个文件。 */
     void startFilesDrag();
+    void restoreFileSelection(const QStringList &qLFiles);
     QStringList  m_pendingDragFiles;     // 按下时记住的文件选择
     QPoint       m_ptDragStart;
     bool         m_mayStartDrag = false;

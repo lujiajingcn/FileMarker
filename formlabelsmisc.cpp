@@ -69,16 +69,19 @@ bool FormLabels::eventFilter(QObject *watched, QEvent *event)
             if (mime != nullptr
                 && (mime->hasUrls() || mime->hasFormat(QString::fromLatin1(MIME_FILEMARKER_FILES)))
                 && !mime->hasFormat(QString::fromLatin1(MIME_FILEMARKER_LABEL))) {
+                // 只要拖的是文件就接受，不要求鼠标当下正压在某个标签行上 ——
+                // 否则从树的空白处进入时 Qt 会判定"不接受"，之后光标一直是禁止的样子。
+                // 真正落到哪一行由 Drop 时再判断；悬停到某一行时顺手高亮它做提示。
+                if (event->type() == QEvent::DragEnter)
+                    m_dragEnterLabels = getSelLabels();
+
                 const QModelIndex index = m_labelsTree->indexAt(dragEvent->pos());
-                if (index.isValid()) {
-                    // 趁选择还在，先把"拖入时选中的标签"记下来：
-                    // 鼠标一松开，Qt 会把树的选择收窄成按下那一行，drop 时再取就只剩一个了。
-                    if (event->type() == QEvent::DragEnter)
-                        m_dragEnterLabels = getSelLabels();
-                    dragEvent->setDropAction(Qt::CopyAction);
-                    dragEvent->accept();
-                    return true;
-                }
+                if (index.isValid() && index != m_labelsTree->currentIndex())
+                    m_labelsTree->setCurrentIndex(index);
+
+                dragEvent->setDropAction(Qt::CopyAction);
+                dragEvent->accept();
+                return true;
             }
         } else if (event->type() == QEvent::Drop) {
             auto *dropEvent = static_cast<QDropEvent *>(event);
@@ -86,7 +89,9 @@ bool FormLabels::eventFilter(QObject *watched, QEvent *event)
             if (mime != nullptr
                 && (mime->hasUrls() || mime->hasFormat(QString::fromLatin1(MIME_FILEMARKER_FILES)))
                 && !mime->hasFormat(QString::fromLatin1(MIME_FILEMARKER_LABEL))) {
-                const QModelIndex index = m_labelsTree->indexAt(dropEvent->pos());
+                QModelIndex index = m_labelsTree->indexAt(dropEvent->pos());
+                if (!index.isValid())
+                    index = m_labelsTree->currentIndex();   // 落在空白处时，用拖拽过程中高亮的那一行
                 if (!index.isValid())
                     return false;
                 QStringList qLFiles;
