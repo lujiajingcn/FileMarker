@@ -91,6 +91,7 @@ protected:
 
     bool                     m_shuttingDown = false;      // 析构期间不弹模态框
     QStringList              m_dragEnterLabels;            // 文件拖入时记住的标签选择（松开鼠标后会被 Qt 收窄）
+    int                      m_dropHoverRow = -1;         // 拖拽时鼠标经过的标签行（落点提示用）
     QStringList              m_pendingDragLabels;          // 按下时记住的标签选择（QTreeView 会立刻把它收窄成一行）
     bool                     m_saveFailureWarned = false; // 失败提示只弹一次
 

@@ -75,9 +75,15 @@ bool FormLabels::eventFilter(QObject *watched, QEvent *event)
                 if (event->type() == QEvent::DragEnter)
                     m_dragEnterLabels = getSelLabels();
 
+                // 只更新"当前行"用来做落点提示，且必须带 NoUpdate：
+                // setCurrentIndex() 默认会顺手选中该行，把用户多选的标签全部顶掉 ——
+                // 这就是"鼠标滑过标签时选中状态消失"的原因。
                 const QModelIndex index = m_labelsTree->indexAt(dragEvent->pos());
-                if (index.isValid() && index != m_labelsTree->currentIndex())
-                    m_labelsTree->setCurrentIndex(index);
+                m_dropHoverRow = index.row();
+                if (index.isValid() && index != m_labelsTree->currentIndex()) {
+                    m_labelsTree->selectionModel()->setCurrentIndex(
+                        index, QItemSelectionModel::NoUpdate);
+                }
 
                 dragEvent->setDropAction(Qt::CopyAction);
                 dragEvent->accept();
@@ -90,10 +96,16 @@ bool FormLabels::eventFilter(QObject *watched, QEvent *event)
                 && (mime->hasUrls() || mime->hasFormat(QString::fromLatin1(MIME_FILEMARKER_FILES)))
                 && !mime->hasFormat(QString::fromLatin1(MIME_FILEMARKER_LABEL))) {
                 QModelIndex index = m_labelsTree->indexAt(dropEvent->pos());
-                if (!index.isValid())
-                    index = m_labelsTree->currentIndex();   // 落在空白处时，用拖拽过程中高亮的那一行
-                if (!index.isValid())
+                if (!index.isValid() && m_dropHoverRow >= 0) {
+                    // 落在空白处：用拖拽过程中鼠标经过的最后一行
+                    index = m_labelsTree->model()->index(m_dropHoverRow, 0,
+                                                         m_labelsTree->rootIndex());
+                }
+                if (!index.isValid()) {
+                    m_dropHoverRow = -1;
                     return false;
+                }
+                m_dropHoverRow = -1;
                 QStringList qLFiles;
                 if (mime->hasFormat(QString::fromLatin1(MIME_FILEMARKER_FILES))) {
                     // 本程序自己拖的文件列表（多选时也完整）
