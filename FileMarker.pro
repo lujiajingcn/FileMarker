@@ -68,7 +68,8 @@ SOURCES += \
         threadtraversedirs.cpp \
         thumbnailiconprovider.cpp \
         traversedirectory.cpp \
-        utility.cpp \
+        toolicons.cpp \
+    utility.cpp \
         xmloperation.cpp
 
 HEADERS += \
@@ -98,7 +99,8 @@ HEADERS += \
         threadtraversedirs.h \
         thumbnailiconprovider.h \
         traversedirectory.h \
-        utility.h \
+        toolicons.h \
+    utility.h \
         xmloperation.h
 
 FORMS += \

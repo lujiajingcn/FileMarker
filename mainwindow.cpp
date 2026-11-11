@@ -1,4 +1,6 @@
 #include "mainwindow.h"
+
+#include "toolicons.h"
 #include "ui_mainwindow.h"
 
 #include "dlgauthor.h"
@@ -30,6 +32,9 @@ MainWindow::MainWindow(QWidget *parent) :
     initLogMessageHanlder();
 
     ui->setupUi(this);
+
+    // 命令条图标改成代码绘制（原来的 16x16 PNG 在高分屏上放大后全是锯齿）
+    applyVectorIcons();
 
     // 窗口移动/缩放后防抖保存，避免崩溃或强杀时丢失窗口状态
     m_geometryTimer = new QTimer(this);
@@ -236,6 +241,16 @@ void MainWindow::resizeEvent(QResizeEvent *event)
     QMainWindow::resizeEvent(event);
     if (m_geometryTimer != nullptr)
         m_geometryTimer->start();
+}
+
+/** 把命令条上的按钮图标换成代码绘制的版本：按实际像素尺寸渲染，高分屏下也清晰。 */
+void MainWindow::applyVectorIcons()
+{
+    ui->actionAddLabelbyAI->setIcon(ToolIcons::make(ToolIcons::Ai));
+    ui->actionAddLabels->setIcon(ToolIcons::make(ToolIcons::AddTag));
+    ui->actionDelLabels->setIcon(ToolIcons::make(ToolIcons::ClearTags));
+    ui->actionSearchFilesbyLabels->setIcon(ToolIcons::make(ToolIcons::Search));
+    ui->actionTraverseSelDirs->setIcon(ToolIcons::make(ToolIcons::Traverse));
 }
 
 void MainWindow::initLogMessageHanlder()

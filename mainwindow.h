@@ -24,6 +24,7 @@ public:
 
 protected:
     void initLogMessageHanlder();
+    void applyVectorIcons();   // 命令条图标改代码绘制
     void moveEvent(QMoveEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
 

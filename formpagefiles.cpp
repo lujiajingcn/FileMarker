@@ -1,4 +1,6 @@
 #include "formpagefiles.h"
+
+#include "toolicons.h"
 #include "formpagefilesutil.h"
 #include "ui_formpagefiles.h"
 
@@ -59,6 +61,12 @@ FormPageFiles::FormPageFiles(QWidget *parent) :
     ui(new Ui::FormPageFiles)
 {
     ui->setupUi(this);
+
+    // 导航行（后退/前进/上一级/刷新）的图标同样改成代码绘制，高分屏下不糊
+    ui->backButton->setIcon(ToolIcons::make(ToolIcons::Back));
+    ui->forwardButton->setIcon(ToolIcons::make(ToolIcons::Forward));
+    ui->toParentButton->setIcon(ToolIcons::make(ToolIcons::Up));
+    ui->btnRefresh->setIcon(ToolIcons::make(ToolIcons::Refresh));
 
     m_delegate = nullptr;
     m_iconProvider = nullptr;
