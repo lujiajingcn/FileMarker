@@ -248,6 +248,7 @@ private:
 
     // 方案A：页面顶部的命令条（承载 AI/添加/清空/查找/遍历/查找条件）
     QToolBar               *m_commandBar = nullptr;
+    QWidget                *m_commandRow = nullptr;   // 命令条 + 右侧视图切换按钮所在的行
     TagChipDelegate        *m_tagChipDelegate = nullptr;  // 标签列的 chip 代理（带 ✕ 删除）
     QAction                *m_actionRename = nullptr;    // F2 重命名（作用于当前视图的选中项）
     QAction                *m_actionSelectAll = nullptr; // Ctrl+A 全选当前目录的文件
