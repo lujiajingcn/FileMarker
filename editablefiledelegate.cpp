@@ -259,8 +259,9 @@ QSize EditableDelegate::sizeHint(const QStyleOptionViewItem &option, const QMode
     Q_UNUSED(option);
     Q_UNUSED(index);
 
-    const int side = m_iconSize + THUMB_GRID_MARGIN;
-    return QSize(side, side);
+    // 横向窄、纵向高：文件名和标签都在图标下方，横向不该留 88 的空白
+    return QSize(m_iconSize + THUMB_GRID_HMARGIN, m_iconSize + THUMB_GRID_VMARGIN);
+
 }
 
 void EditableDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const

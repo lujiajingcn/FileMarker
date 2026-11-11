@@ -426,8 +426,9 @@ void FormPageFiles::initThumbnailFileList()
     // 设置视图属性以显示缩略图
     m_filesList->setViewMode(QListView::IconMode);    // 图标模式
     m_filesList->setIconSize(QSize(m_iconSize, m_iconSize));    // 设置图标大小
-    m_filesList->setGridSize(QSize(m_iconSize + THUMB_GRID_MARGIN,
-                                  m_iconSize + THUMB_GRID_MARGIN)); // 设置网格大小，为图标和两行文字留出空间
+    // 横向只稍微比图标宽一点（和资源管理器一样贴着图标排），纵向才留出文字空间
+    m_filesList->setGridSize(QSize(m_iconSize + THUMB_GRID_HMARGIN,
+                                    m_iconSize + THUMB_GRID_VMARGIN));
     m_filesList->setResizeMode(QListView::Adjust);    // 自动调整布局
     m_filesList->setMovement(QListView::Static);      // 禁止拖动
     m_filesList->setSelectionMode(QAbstractItemView::ExtendedSelection);

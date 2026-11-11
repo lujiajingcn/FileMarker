@@ -313,8 +313,8 @@ void FormPageFiles::setThumbnailSize(int iconSize)
 
     if (m_filesList) {
         m_filesList->setIconSize(QSize(iconSize, iconSize));
-        m_filesList->setGridSize(QSize(iconSize + THUMB_GRID_MARGIN,
-                                      iconSize + THUMB_GRID_MARGIN));
+        m_filesList->setGridSize(QSize(iconSize + THUMB_GRID_HMARGIN,
+                                      iconSize + THUMB_GRID_VMARGIN));
         m_filesList->viewport()->update();
     }
 }
