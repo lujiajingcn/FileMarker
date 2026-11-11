@@ -31,9 +31,10 @@ extern QString g_sAppDir;
 
 #define LABEL_NAME_AI "AI自动生成的标签"
 
-// 「当前目录标签」面板一次最多统计多少个文件：再多耗时会明显变长，
-// 超过这个数就只统计前 N 个，并在状态栏提示用户
-#define LABEL_SCAN_MAX_FILES 2000
+// 「当前目录标签」面板一次最多统计多少个文件：超过这个数只统计前 N 个，
+// 并在状态栏提示用户。扫描是分片跑的（每片 15ms），所以这个值只影响
+// "面板数据多久齐全/多完整"，不影响界面响应 —— 可以放心调大。
+#define LABEL_SCAN_MAX_FILES 20000
 
 // 缩略图模式的尺寸档位（图标边长，逻辑像素）
 #define ICON_SIZE_SMALL 96

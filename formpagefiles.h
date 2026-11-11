@@ -227,6 +227,7 @@ private:
     MyQFileSystemModel      *m_modelFiles;
     EditableDelegate        *m_delegate;            // 缩略图模式的自绘代理
     ThumbnailIconProvider   *m_iconProvider;        // 缩略图生成器
+    QTimer                 *m_thumbRepaintTimer = nullptr;   // 缩略图陆续就绪时合并重绘
     QAction                 *m_actionDeleteLabels;
     QStack<QString>         m_skBackward;           // 访问过的路径，用于后退功能
     QStack<QString>         m_skForward;            // 访问过的路径，用于前进功能

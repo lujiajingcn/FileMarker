@@ -466,6 +466,21 @@ void FormPageFiles::initThumbnailFileList()
     // 而 QPixmap / Shell COM 只能在 GUI 线程安全使用。
     m_iconProvider = new ThumbnailIconProvider(m_iconSize);
 
+    // 缩略图改为后台线程生成：provider 只查缓存，未命中先给类型图标占位，
+    // 算完回调到这里，合并成一次重绘（否则每个缩略图回来都刷新一次会抖）。
+    m_iconProvider->setCallbackContext(this);
+    m_thumbRepaintTimer = new QTimer(this);
+    m_thumbRepaintTimer->setSingleShot(true);
+    m_thumbRepaintTimer->setInterval(40);
+    connect(m_thumbRepaintTimer, &QTimer::timeout, this, [this]() {
+        if (m_filesList != nullptr)
+            m_filesList->viewport()->update();
+    });
+    m_iconProvider->setReadyCallback([this](const QString &) {
+        if (m_thumbRepaintTimer != nullptr)
+            m_thumbRepaintTimer->start();
+    });
+
     m_modelFiles->setReadOnly(false);
 
     // 创建列表视图

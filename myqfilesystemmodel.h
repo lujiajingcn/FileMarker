@@ -6,6 +6,8 @@
 #include <QHash>
 #include <QPair>
 #include <QFileInfo>
+#include <QSet>
+#include <QThreadPool>
 
 class MyQFileSystemModel :public QFileSystemModel
 {
@@ -38,8 +40,12 @@ public:
     Qt::ItemFlags flags(const QModelIndex &index) const override;
 
 private:
-    /** 取文件的标签（按录入顺序），带 mtime 缓存 */
-    QStringList tagListForFile(const QString &sFilePath) const;
+    /** 只查缓存；未命中就排队异步读，立即返回空串（绘制时绝不碰磁盘） */
+    QStringList cachedTagsOnly(const QString &sFilePath) const;
+    /** 把一次标签读取排进线程池（同一文件不重复排） */
+    void scheduleTagLoad(const QString &sFilePath) const;
+    /** 后台读完回到 UI 线程：写缓存 + 通知视图刷新那一格 */
+    void onTagLoaded(const QString &sFilePath, const QStringList &tags);
 
     // 缓存“文件路径 -> (文件修改时间, 标签列表)”，避免标签列每次重绘都枚举 NTFS 流。
     // 标签缓存：键 = 文件路径。用 QCache 做 LRU 淘汰，
@@ -50,6 +56,8 @@ private:
         QStringList tags;
     };
     mutable QCache<QString, TagCacheEntry> m_tagCache;
+    mutable QSet<QString> m_pendingTagLoads;    // 已排队、还没读完的路径
+    mutable QThreadPool *m_tagPool = nullptr;   // 懒创建，最多 2 个后台线程
 };
 
 #endif // MYQFILESYSTEMMODEL_H

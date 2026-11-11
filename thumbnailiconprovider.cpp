@@ -1,6 +1,9 @@
 #include "thumbnailiconprovider.h"
 
 #include <QDateTime>
+#include <functional>
+#include <QRunnable>
+#include <QMetaObject>
 #include <QGuiApplication>
 #include <QImage>
 #include <QImageReader>
@@ -23,14 +26,16 @@
 static const GUID FM_IID_IShellItemImageFactory =
     { 0xbcc18b79, 0xba16, 0x442f, { 0x80, 0xc4, 0x8a, 0x59, 0xc3, 0x0c, 0x46, 0x3b } };
 
-// Qt 通常已经初始化过 COM；这里只做兜底，失败（例如已处于 MTA）时后续会回退到文件类型图标。
+// 每个线程初始化一次 COM。注意不能用函数内的 static —— 那只会在"第一个调用它的线程"
+// 里初始化，后台线程拿到 static 的 true 就跳过了，Shell 调用会失败。
 static void ensureComInitialized()
 {
-    static const bool s_initialized = []() {
+    thread_local bool s_initialized = false;
+    if (!s_initialized) {
         const HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
-        return SUCCEEDED(hr) || hr == RPC_E_CHANGED_MODE;
-    }();
-    Q_UNUSED(s_initialized);
+        s_initialized = true;   // 失败（例如已处于 MTA）也不再重试，后续自动回退到类型图标
+        Q_UNUSED(hr);
+    }
 }
 
 // 把 Shell 返回的 HBITMAP 转成 QImage（Qt5 没有 QImage::fromHBITMAP）。
@@ -116,6 +121,46 @@ void ThumbnailIconProvider::setIconSize(int iconSize)
     m_failureTime.clear();
 }
 
+
+#ifdef Q_OS_WIN
+/** 通过 Shell 取一张位图（缩略图或大图标），返回 QImage；失败返回空。
+ *  注意：可以在后台线程调用，内部按线程初始化 COM。 */
+static QImage loadShellImage(const QString &filePath, int targetPx, DWORD flags)
+{
+    ensureComInitialized();
+
+    IShellItemImageFactory *factory = nullptr;
+    const HRESULT hrCreate = SHCreateItemFromParsingName(
+        filePath.toStdWString().c_str(), nullptr,
+        FM_IID_IShellItemImageFactory, reinterpret_cast<void **>(&factory));
+    if (FAILED(hrCreate) || factory == nullptr)
+        return QImage();
+
+    SIZE size;
+    size.cx = targetPx;
+    size.cy = targetPx;
+
+    HBITMAP hBitmap = nullptr;
+    const HRESULT hrImage = factory->GetImage(size, flags, &hBitmap);
+    factory->Release();
+
+    if (FAILED(hrImage) || hBitmap == nullptr)
+        return QImage();
+
+    const QImage image = imageFromHBITMAP(hBitmap);
+    DeleteObject(hBitmap);
+    if (image.isNull())
+        return QImage();
+
+    return image.scaled(targetPx, targetPx, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+}
+#else
+static QImage loadShellImage(const QString &, int, unsigned long)
+{
+    return QImage();
+}
+#endif
+
 QIcon ThumbnailIconProvider::icon(const QFileInfo &info) const
 {
     const qreal dpr = effectiveDpr();
@@ -125,10 +170,6 @@ QIcon ThumbnailIconProvider::icon(const QFileInfo &info) const
     auto failureIsFresh = [this, nNow, nFailureTtlMs](const QString &key) {
         const auto it = m_failureTime.constFind(key);
         return it != m_failureTime.constEnd() && (nNow - it.value()) < nFailureTtlMs;
-    };
-    auto dropFailure = [this](const QString &key) {
-        m_cache.remove(key);
-        m_failureTime.remove(key);
     };
 
     if (info.isDir()) {
@@ -141,8 +182,9 @@ QIcon ThumbnailIconProvider::icon(const QFileInfo &info) const
             if (!cached->isNull())
                 return QIcon(*cached);
             if (failureIsFresh(key))
-                return QFileIconProvider::icon(info);
-            dropFailure(key);
+                return typeIconFor(info);
+            m_cache.remove(key);
+            m_failureTime.remove(key);
         }
 
         const QIcon dirIcon = QFileIconProvider::icon(info);
@@ -165,139 +207,145 @@ QIcon ThumbnailIconProvider::icon(const QFileInfo &info) const
     if (const QPixmap *cached = m_cache.object(key)) {
         if (!cached->isNull())
             return QIcon(*cached);
-        // 失败结果只缓存一小段时间，过后重新尝试（例如文件不再被占用）
-        if (failureIsFresh(key))
-            return QFileIconProvider::icon(info);
-        dropFailure(key);
-    }
-
-    QPixmap thumbnail = loadImageThumbnail(info);
-    if (thumbnail.isNull())
-        thumbnail = loadShellThumbnail(info);
-    // 缩略图不可用时用 Shell 大图标兜底，保证图标能铺满图标区域
-    if (thumbnail.isNull())
-        thumbnail = loadShellIcon(info);
-    // 最后回退到文件类型图标，并把这个回退结果缓存起来
-    if (thumbnail.isNull()) {
-        const QIcon fallback = QFileIconProvider::icon(info);
-        thumbnail = fallback.pixmap(QSize(m_iconSize, m_iconSize));
-    }
-
-    if (thumbnail.isNull()) {
-        // 连文件类型图标都取不到：短 TTL 缓存失败结果，避免每帧重复 QImageReader + Shell 调用
-        m_cache.insert(key, new QPixmap(), 1);
-        m_failureTime.insert(key, nNow);
-        return QFileIconProvider::icon(info);
-    }
-
-    m_cache.insert(key, new QPixmap(thumbnail), 1);
-    m_failureTime.remove(key);
-    return QIcon(thumbnail);
-}
-
-QPixmap ThumbnailIconProvider::loadImageThumbnail(const QFileInfo &info) const
-{
-    static const QStringList imageSuffixes = { "jpg", "jpeg", "png", "bmp", "gif", "svg" };
-    if (!imageSuffixes.contains(info.suffix().toLower()))
-        return QPixmap();
-
-    QImageReader reader(info.filePath());
-    reader.setAutoTransform(true);
-    if (!reader.canRead())
-        return QPixmap();
-
-    const qreal dpr = effectiveDpr();
-    const int targetPx = qMax(1, qRound(m_iconSize * dpr));
-
-    // 以目标尺寸直接解码，避免先把整张大图载入内存再缩放
-    const QSize size = reader.size();
-    if (size.isValid() && !size.isNull()) {
-        const int maxDim = qMax(size.width(), size.height());
-        if (maxDim > targetPx) {
-            const qreal scale = qreal(targetPx) / maxDim;
-            reader.setScaledSize(QSize(qRound(size.width() * scale), qRound(size.height() * scale)));
+        if (!failureIsFresh(key)) {   // 失败缓存过期：允许再试一次
+            m_cache.remove(key);
+            m_failureTime.remove(key);
         }
     }
 
-    const QImage image = reader.read();
-    if (image.isNull())
-        return QPixmap();
-
-    QPixmap pixmap = QPixmap::fromImage(
-        image.scaled(targetPx, targetPx, Qt::KeepAspectRatio, Qt::SmoothTransformation));
-    if (pixmap.isNull())
-        return QPixmap();
-
-    pixmap.setDevicePixelRatio(dpr);
-    return pixmap;
+    // 缓存没有就排队去后台算，本次先给"文件类型图标"占位，界面不会被卡住。
+    requestAsyncThumbnail(info, key, m_iconSize, dpr);
+    return typeIconFor(info);
 }
+
+/** 占位图标：按后缀缓存，每种类型最多同步查一次 Shell。 */
+QIcon ThumbnailIconProvider::typeIconFor(const QFileInfo &info) const
+{
+    const QString sKey = info.isDir() ? QStringLiteral("<dir>") : info.suffix().toLower();
+    const auto it = m_typeIcons.constFind(sKey);
+    if (it != m_typeIcons.constEnd())
+        return it.value();
+
+    const QIcon icon = QFileIconProvider::icon(info);
+    m_typeIcons.insert(sKey, icon);
+    return icon;
+}
+
+/** 后台线程里算一张缩略图：只产出 QImage，不创建任何 QPixmap / GUI 对象。 */
+QImage ThumbnailIconProvider::computeThumbnail(const QString &sFilePath, int iconSize,
+                                               qreal dpr) const
+{
+    const int targetPx = qMax(1, qRound(iconSize * dpr));
+
+    // 1) 图片文件：直接按目标尺寸解码（QImageReader 是线程安全的，各线程读各自的文件）
+    static const QStringList imageSuffixes = {"jpg", "jpeg", "png", "bmp", "gif", "svg"};
+    const QString sSuffix = QFileInfo(sFilePath).suffix().toLower();
+    if (imageSuffixes.contains(sSuffix)) {
+        QImageReader reader(sFilePath);
+        reader.setAutoTransform(true);
+        if (reader.canRead()) {
+            const QSize size = reader.size();
+            if (size.isValid() && !size.isNull()) {
+                const int maxDim = qMax(size.width(), size.height());
+                if (maxDim > targetPx) {
+                    const qreal scale = qreal(targetPx) / maxDim;
+                    reader.setScaledSize(QSize(qRound(size.width() * scale),
+                                               qRound(size.height() * scale)));
+                }
+            }
+            const QImage image = reader.read();
+            if (!image.isNull()) {
+                return image.scaled(targetPx, targetPx, Qt::KeepAspectRatio,
+                                    Qt::SmoothTransformation);
+            }
+        }
+    }
 
 #ifdef Q_OS_WIN
-// 通过 Shell 取位图（缩略图或大图标），失败返回空
-static QPixmap loadShellImage(const QString &filePath, int targetPx, DWORD flags)
-{
-    ensureComInitialized();
+    // 2) 其他类型：Windows Shell 缩略图（视频、PDF、Office…）
+    QImage image = loadShellImage(sFilePath, targetPx,
+                                  SIIGBF_THUMBNAILONLY | SIIGBF_RESIZETOFIT);
+    if (!image.isNull())
+        return image;
 
-    IShellItemImageFactory *factory = nullptr;
-    const HRESULT hrCreate = SHCreateItemFromParsingName(
-        filePath.toStdWString().c_str(), nullptr,
-        FM_IID_IShellItemImageFactory, reinterpret_cast<void **>(&factory));
-    if (FAILED(hrCreate) || factory == nullptr)
-        return QPixmap();
-
-    SIZE size;
-    size.cx = targetPx;
-    size.cy = targetPx;
-
-    HBITMAP hBitmap = nullptr;
-    const HRESULT hrImage = factory->GetImage(size, flags, &hBitmap);
-    factory->Release();
-
-    if (FAILED(hrImage) || hBitmap == nullptr)
-        return QPixmap();
-
-    const QImage image = imageFromHBITMAP(hBitmap);
-    DeleteObject(hBitmap);
-    if (image.isNull())
-        return QPixmap();
-
-    return QPixmap::fromImage(
-        image.scaled(targetPx, targetPx, Qt::KeepAspectRatio, Qt::SmoothTransformation));
-}
-
-QPixmap ThumbnailIconProvider::loadShellThumbnail(const QFileInfo &info) const
-{
-    const qreal dpr = effectiveDpr();
-    const int targetPx = qMax(1, qRound(m_iconSize * dpr));
-
-    // 只要真正的缩略图（没有就失败），不要系统图标放大图
-    QPixmap pixmap = loadShellImage(info.filePath(), targetPx,
-                                    SIIGBF_THUMBNAILONLY | SIIGBF_RESIZETOFIT);
-    if (!pixmap.isNull())
-        pixmap.setDevicePixelRatio(dpr);
-    return pixmap;
-}
-
-// 缩略图不可用时取 Shell 大图标：ICONONLY 能拿到 128/256 级别的大图标，
-// 比 QFileIconProvider 默认的小图标清晰，也能让图标铺满缩略图区域。
-QPixmap ThumbnailIconProvider::loadShellIcon(const QFileInfo &info) const
-{
-    const qreal dpr = effectiveDpr();
-    const int targetPx = qMax(1, qRound(m_iconSize * dpr));
-
-    QPixmap pixmap = loadShellImage(info.filePath(), targetPx, SIIGBF_ICONONLY);
-    if (!pixmap.isNull())
-        pixmap.setDevicePixelRatio(dpr);
-    return pixmap;
-}
+    // 3) 再不行就取 Shell 大图标（比类型小图标清晰，能铺满缩略图区域）
+    return loadShellImage(sFilePath, targetPx, SIIGBF_ICONONLY);
 #else
-QPixmap ThumbnailIconProvider::loadShellThumbnail(const QFileInfo &) const
-{
-    return QPixmap();
+    Q_UNUSED(dpr);
+    return QImage();
+#endif
 }
 
-QPixmap ThumbnailIconProvider::loadShellIcon(const QFileInfo &) const
+void ThumbnailIconProvider::requestAsyncThumbnail(const QFileInfo &info, const QString &key,
+                                                  int iconSize, qreal dpr) const
 {
-    return QPixmap();
+    if (m_pending.contains(key))
+        return;   // 已经在算
+    m_pending.insert(key);
+
+    if (m_pool == nullptr) {
+        m_pool = new QThreadPool;
+        m_pool->setMaxThreadCount(2);   // 解码是 CPU/IO 型，2 个后台线程足够
+    }
+
+    const QString sFilePath = info.filePath();
+    QObject *context = m_context;
+    const ThumbnailIconProvider *self = this;
+
+    class ThumbnailTask : public QRunnable
+    {
+    public:
+        ThumbnailTask(const ThumbnailIconProvider *provider, QObject *context,
+                      const QString &filePath, const QString &key, int iconSize, qreal dpr)
+            : m_provider(provider), m_context(context), m_filePath(filePath),
+              m_key(key), m_iconSize(iconSize), m_dpr(dpr) {}
+
+        void run() override
+        {
+            const QImage image = m_provider->computeThumbnail(m_filePath, m_iconSize, m_dpr);
+            if (m_context == nullptr)
+                return;
+            // 回到 UI 线程再做 QPixmap / 缓存 / 通知；context 先销毁时这个调用会被丢弃
+            const ThumbnailIconProvider *provider = m_provider;
+            const QString sFilePath = m_filePath;
+            const QString sKey = m_key;
+            QMetaObject::invokeMethod(m_context, [provider, sFilePath, sKey, image]() {
+                provider->applyAsyncResult(sFilePath, sKey, image);
+            }, Qt::QueuedConnection);
+        }
+
+    private:
+        const ThumbnailIconProvider *m_provider;
+        QObject *m_context;
+        QString m_filePath;
+        QString m_key;
+        int m_iconSize;
+        qreal m_dpr;
+    };
+
+    m_pool->start(new ThumbnailTask(self, context, sFilePath, key, iconSize, dpr));
 }
-#endif
+
+/** UI 线程：把后台算好的图转成 QPixmap 放进缓存，并通知视图重绘。 */
+void ThumbnailIconProvider::applyAsyncResult(const QString &sFilePath, const QString &key,
+                                             const QImage &image) const
+{
+    m_pending.remove(key);
+
+    if (image.isNull()) {
+        m_cache.insert(key, new QPixmap(), 1);   // 失败也记一笔，TTL 内不再重复请求
+        m_failureTime.insert(key, QDateTime::currentMSecsSinceEpoch());
+        return;
+    }
+
+    const int nBar = key.lastIndexOf(QLatin1Char('|'));
+    const qreal dpr = nBar >= 0 ? key.mid(nBar + 1).toDouble() : 1.0;
+
+    auto *pixmap = new QPixmap(QPixmap::fromImage(image));
+    pixmap->setDevicePixelRatio(dpr > 0.0 ? dpr : 1.0);
+    m_cache.insert(key, pixmap, 1);
+    m_failureTime.remove(key);
+
+    if (m_readyCallback)
+        m_readyCallback(sFilePath);
+}

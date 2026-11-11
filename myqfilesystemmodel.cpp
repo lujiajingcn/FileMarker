@@ -3,7 +3,32 @@
 #include "adsoperation.h"
 #include <QStack>
 #include <QDateTime>
+#include <functional>
+
 #include <QFileInfo>
+#include <QMetaObject>
+#include <QRunnable>
+#include <QThreadPool>
+
+
+namespace {
+
+/** 把一段后台任务包成 QRunnable（Qt5.13 还没有 QRunnable::create）。 */
+class LambdaRunnable : public QRunnable
+{
+public:
+    explicit LambdaRunnable(std::function<void()> fn) : m_fn(std::move(fn)) {}
+    void run() override
+    {
+        if (m_fn)
+            m_fn();
+    }
+
+private:
+    std::function<void()> m_fn;
+};
+
+}   // namespace
 
 MyQFileSystemModel::MyQFileSystemModel(QObject *parent) :
     QFileSystemModel(parent)
@@ -82,7 +107,7 @@ QVariant MyQFileSystemModel::data(const QModelIndex & index, int role) const
     if (role == Qt::ToolTipRole && index.column() == 0
         && !sFilePath.isEmpty() && !sFilePath.endsWith(":/") && !sName.isEmpty())
     {
-        const QStringList tags = tagListForFile(sFilePath);
+        const QStringList tags = cachedTagsOnly(sFilePath);
         return QString("%1\n%2").arg(sName,
                                      tags.isEmpty() ? QStringLiteral("（无标签）")
                                                     : tags.join(QStringLiteral(", ")));
@@ -99,7 +124,7 @@ QVariant MyQFileSystemModel::data(const QModelIndex & index, int role) const
         if (sName.isEmpty() || sFilePath.isEmpty() || sFilePath.endsWith(":/"))
             return QVariant();
 
-        const QStringList tags = tagListForFile(sFilePath);
+        const QStringList tags = cachedTagsOnly(sFilePath);
         if (tags.isEmpty())
             return role == Qt::DisplayRole && QFileSystemModel::isDir(nameIndex)
                        ? QVariant(QStringLiteral("—"))   // 目录没有标签，给个占位符而不是空格子
@@ -112,27 +137,60 @@ QVariant MyQFileSystemModel::data(const QModelIndex & index, int role) const
     return QFileSystemModel::data(index, role);
 }
 
-QStringList MyQFileSystemModel::tagListForFile(const QString &sFilePath) const
+/**
+ * 绘制时取标签：**只查缓存，绝不碰磁盘**。
+ *
+ * 以前这里会同步 QFileInfo + 枚举 NTFS 流，大目录里滚动/重绘时每行都要读盘，
+ * 界面直接卡死。现在缓存未命中就先返回空，同时把这次读取排进线程池，
+ * 读完后由 onTagLoaded() 写回缓存并通知视图刷新那一格。
+ */
+QStringList MyQFileSystemModel::cachedTagsOnly(const QString &sFilePath) const
 {
-    // 用文件修改时间做缓存键：标签是通过写 NTFS 流添加的，会更新文件 mtime，
-    // 因此 mtime 不变即可认为标签集合未变，避免每次重绘都枚举流。
-    // 注：QFileSystemModel 在 Qt5.13 无 ModifiedRole 角色，故仍需 QFileInfo。
-    const qint64 mtime = QFileInfo(sFilePath).lastModified().toMSecsSinceEpoch();
-    if (const TagCacheEntry *cached = m_tagCache.object(sFilePath)) {
-        if (cached->mtime == mtime)
-            return cached->tags;
+    if (const TagCacheEntry *cached = m_tagCache.object(sFilePath))
+        return cached->tags;   // 命中（命中路径不 stat，省一次系统调用）
+
+    scheduleTagLoad(sFilePath);
+    return QStringList();
+}
+
+/** 把一次标签读取排进线程池；同一个文件在队列里只保留一个请求。 */
+void MyQFileSystemModel::scheduleTagLoad(const QString &sFilePath) const
+{
+    if (sFilePath.isEmpty() || m_pendingTagLoads.contains(sFilePath))
+        return;
+    m_pendingTagLoads.insert(sFilePath);
+
+    if (m_tagPool == nullptr) {
+        m_tagPool = new QThreadPool;
+        m_tagPool->setMaxThreadCount(2);   // 读 ADS 是 IO 型，2 个线程足够又不抢占 UI
     }
 
-    // 按用户录入顺序取标签：流内容里存了顺序号，可还原录入顺序
-    const QStringList tags = ADSOperation::listADSTagsInOrder(sFilePath);
+    // 用本模型对象做回调上下文：模型销毁后排队中的回调会被丢弃，不会访问野指针
+    QObject *context = const_cast<MyQFileSystemModel *>(this);
+    m_tagPool->start(new LambdaRunnable([this, context, sFilePath]() {
+        // 线程里只做纯 Win32/IO 操作，不碰任何 GUI 对象
+        const QStringList tags = ADSOperation::listADSTagsInOrder(sFilePath);
+        const qint64 mtime = QFileInfo(sFilePath).lastModified().toMSecsSinceEpoch();
+        QMetaObject::invokeMethod(context, [this, sFilePath, tags, mtime]() {
+            auto *entry = new TagCacheEntry;
+            entry->mtime = mtime;
+            entry->tags = tags;
+            m_tagCache.insert(sFilePath, entry, 1);
+            m_pendingTagLoads.remove(sFilePath);
+            const_cast<MyQFileSystemModel *>(this)->onTagLoaded(sFilePath, tags);
+        }, Qt::QueuedConnection);
+    }));
+}
 
-    // QCache 自带 LRU 淘汰：超过容量由 QCache 丢掉最久没用的那条，
-    // 不再整体清空（整体清空会让大目录里每行都反复读盘）。
-    auto *entry = new TagCacheEntry;
-    entry->mtime = mtime;
-    entry->tags = tags;
-    m_tagCache.insert(sFilePath, entry, 1);
-    return tags;
+/** 后台读完：通知视图刷新这个文件的标签列。 */
+void MyQFileSystemModel::onTagLoaded(const QString &sFilePath, const QStringList &)
+{
+    const QModelIndex base = index(sFilePath);
+    if (!base.isValid())
+        return;
+    const QModelIndex tagIndex = index(base.row(), 4, base.parent());
+    if (tagIndex.isValid())
+        emit dataChanged(tagIndex, tagIndex, QVector<int>() << Qt::DisplayRole << Qt::ToolTipRole);
 }
 
 bool MyQFileSystemModel::setData(const QModelIndex &index, const QVariant &value, int role)
