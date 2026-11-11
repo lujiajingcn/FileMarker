@@ -26,10 +26,12 @@ QString makeStyleSheet()
 {
     // 扁平样式，和资源管理器一致：白底、无边框、悬停变灰
     return QStringLiteral(
-        "QToolButton { border: none; background: transparent; padding: 2px 4px;"
-        "              color: #1a1a1a; }"
-        "QToolButton:hover { background: #e8e8e8; border-radius: 3px; }"
-        "QToolButton:pressed { background: #dcdcdc; border-radius: 3px; }"
+        "QToolButton { border: 1px solid transparent; background: transparent;"
+        "              padding: 1px 4px; color: #1a1a1a; }"
+        "QToolButton:hover { background: #e9e9e9; border: 1px solid #dcdcdc;"
+        "                   border-radius: 3px; }"
+        "QToolButton:pressed { background: #dcdcdc; border: 1px solid #c8c8c8;"
+        "                     border-radius: 3px; }"
         "QToolButton#bcSeparator { color: #8a8a8a; padding: 2px 0px; min-width: 10px; }"
         "QToolButton#bcSeparator:hover { background: transparent; }"
         "QLineEdit { border: 1px solid #c8c8c8; border-radius: 3px; padding: 2px 4px; }");
@@ -42,7 +44,6 @@ PathBreadcrumb::PathBreadcrumb(QWidget *parent)
       m_layout(new QHBoxLayout(this)),
       m_edit(new QLineEdit(this)),
       m_overflowButton(nullptr),
-      m_menuButton(nullptr),
       m_editing(false)
 {
     setObjectName(QStringLiteral("pathBreadcrumb"));
@@ -50,7 +51,8 @@ PathBreadcrumb::PathBreadcrumb(QWidget *parent)
     m_layout->setSpacing(0);
     // 让面包屑能随窗口收缩：内容超宽时由 relayoutSegments() 折叠中段
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    setMinimumWidth(80);
+    setMinimumWidth(200);
+    setMinimumHeight(24);
 
     m_edit->setVisible(false);
     m_edit->installEventFilter(this);
@@ -58,6 +60,8 @@ PathBreadcrumb::PathBreadcrumb(QWidget *parent)
 
     setStyleSheet(makeStyleSheet());
     setContextMenuPolicy(Qt::DefaultContextMenu);
+    setCursor(Qt::ArrowCursor);
+    setToolTip(tr("点击空白处可直接输入路径；右键查看最近访问过的目录"));
 }
 
 QString PathBreadcrumb::elided(const QString &text, int maxWidth, const QFont &font)
@@ -100,21 +104,17 @@ void PathBreadcrumb::setPath(const QString &path)
 
 void PathBreadcrumb::rebuild()
 {
-    // 清掉旧的段与分隔符
-    for (QToolButton *button : m_segmentButtons)
-        button->deleteLater();
-    for (QToolButton *button : m_separators)
-        button->deleteLater();
+    // 清空整个布局：段、分隔符、以及 addStretch() 插入的弹簧都要拿走。
+    // 只 deleteLater 按钮是不够的 —— 弹簧会一直累积，第二次 rebuild 之后
+    // 弹簧就夹在段与段之间了，路径会被推到中间去。
+    while (QLayoutItem *item = m_layout->takeAt(0)) {
+        if (QWidget *widget = item->widget())
+            widget->deleteLater();
+        delete item;
+    }
     m_segmentButtons.clear();
     m_separators.clear();
-    if (m_overflowButton != nullptr) {
-        m_overflowButton->deleteLater();
-        m_overflowButton = nullptr;
-    }
-    if (m_menuButton != nullptr) {
-        m_menuButton->deleteLater();
-        m_menuButton = nullptr;
-    }
+    m_overflowButton = nullptr;
 
     // 组装新的段：我的电脑 › 盘符 › 目录1 › 目录2 ...
     struct Segment
@@ -188,20 +188,9 @@ void PathBreadcrumb::rebuild()
         ++index;
     }
 
-    // 末尾留白 + 一个"最近访问"箭头按钮（沿用原来的历史下拉）
-    m_menuButton = new QToolButton(this);
-    m_menuButton->setObjectName(QStringLiteral("bcSeparator"));
-    m_menuButton->setText(QStringLiteral("▾"));
-    m_menuButton->setToolTip(tr("最近访问过的目录"));
-    m_menuButton->setFocusPolicy(Qt::NoFocus);
-    m_menuButton->setAutoRaise(true);
-    connect(m_menuButton, &QToolButton::clicked, this, [this]() {
-        emit recentDirsRequested(mapToGlobal(QPoint(0, height())));
-    });
-    m_layout->addWidget(m_menuButton);
+    // 后面留白：点这里进入输入模式（资源管理器就是点地址栏空白处变可编辑）
     m_layout->addStretch(1);
 
-    m_layout->addWidget(m_edit);
     relayoutSegments();
     if (m_editing) {
         m_edit->setVisible(true);
@@ -216,7 +205,7 @@ void PathBreadcrumb::relayoutSegments()
         return;
 
     const int nAvailable = width() - 20;
-    int nTotal = m_menuButton != nullptr ? m_menuButton->sizeHint().width() : 0;
+    int nTotal = 0;
     for (QToolButton *button : m_segmentButtons)
         nTotal += button->sizeHint().width();
     for (QToolButton *separator : m_separators)
@@ -290,6 +279,8 @@ void PathBreadcrumb::relayoutSegments()
 void PathBreadcrumb::resizeEvent(QResizeEvent *event)
 {
     QWidget::resizeEvent(event);
+    if (m_editing)
+        m_edit->setGeometry(rect().adjusted(0, 1, 0, -1));
     relayoutSegments();
 }
 
@@ -309,11 +300,11 @@ void PathBreadcrumb::enterEditMode()
         separator->setVisible(false);
     if (m_overflowButton != nullptr)
         m_overflowButton->setVisible(false);
-    if (m_menuButton != nullptr)
-        m_menuButton->setVisible(false);
 
     m_edit->setText(m_path);
+    m_edit->setGeometry(rect().adjusted(0, 1, 0, -1));   // 铺满整个地址栏
     m_edit->setVisible(true);
+    m_edit->raise();
     m_edit->setFocus(Qt::OtherFocusReason);
     m_edit->selectAll();
 }
@@ -328,6 +319,14 @@ void PathBreadcrumb::leaveEditMode(bool commit)
     rebuild();
     if (commit && !sText.isEmpty())
         emit editCommitted(sText);
+}
+
+void PathBreadcrumb::mousePressEvent(QMouseEvent *event)
+{
+    // 点在段按钮上时，事件被子控件吃掉，走不到这里；能到这里的都是空白处
+    if (!m_editing && event->button() == Qt::LeftButton)
+        enterEditMode();
+    QWidget::mousePressEvent(event);
 }
 
 void PathBreadcrumb::mouseDoubleClickEvent(QMouseEvent *event)

@@ -143,6 +143,22 @@ FormPageFiles::FormPageFiles(QWidget *parent) :
     // 显式连接工具栏按钮与文件列表信号（此前依赖 on_<对象名>_<信号名> 的自动连接）
     connect(ui->backButton, &QToolButton::clicked, this, &FormPageFiles::onBackButtonClicked);
     connect(ui->forwardButton, &QToolButton::clicked, this, &FormPageFiles::onForwardButtonClicked);
+
+    // 后退/前进按钮带历史下拉：点按钮右侧的小箭头（或按住不放）能看到走过的目录，
+    // 直接点某一项就跳过去（资源管理器同款）。菜单在弹出前按当前栈重建。
+    auto *backHistoryMenu = new QMenu(ui->backButton);
+    ui->backButton->setMenu(backHistoryMenu);
+    ui->backButton->setPopupMode(QToolButton::MenuButtonPopup);
+    connect(backHistoryMenu, &QMenu::aboutToShow, this, [this, backHistoryMenu]() {
+        rebuildHistoryMenu(backHistoryMenu, true);
+    });
+
+    auto *forwardHistoryMenu = new QMenu(ui->forwardButton);
+    ui->forwardButton->setMenu(forwardHistoryMenu);
+    ui->forwardButton->setPopupMode(QToolButton::MenuButtonPopup);
+    connect(forwardHistoryMenu, &QMenu::aboutToShow, this, [this, forwardHistoryMenu]() {
+        rebuildHistoryMenu(forwardHistoryMenu, false);
+    });
     connect(ui->toParentButton, &QToolButton::clicked, this, &FormPageFiles::onToParentButtonClicked);
     connect(ui->btnRefresh, &QToolButton::clicked, this, &FormPageFiles::onBtnRefreshClicked);
     connect(ui->tbDetail, &QToolButton::clicked, this, &FormPageFiles::onTbDetailClicked);
@@ -223,18 +239,34 @@ FormPageFiles::FormPageFiles(QWidget *parent) :
     // 原来的 QComboBox 换成 PathBreadcrumb；历史记录仍然由 rememberPath() 维护，
     // 通过面包屑末尾的 ▾ 按钮或右键弹出。
     m_breadcrumb = new PathBreadcrumb(this);
-    QLayout *navLayout = ui->lookInCombo->parentWidget() != nullptr
-                             ? ui->lookInCombo->parentWidget()->layout()
-                             : nullptr;
+
+    // 找出真正装着 lookInCombo 的那个布局（它就在导航行的 QGridLayout 里，
+    // 而 lookInCombo->parentWidget()->layout() 拿到的是外层布局，不一定是它）。
+    QLayout *navLayout = nullptr;
+    for (QLayout *layout : findChildren<QLayout *>()) {
+        if (layout->indexOf(ui->lookInCombo) >= 0) {
+            navLayout = layout;
+            break;
+        }
+    }
     if (navLayout != nullptr) {
+        // 原来那一格靠 QComboBox 的 hsizetype=Ignored 撑满；换成面包屑后要按它
+        // 实际所在的列设置拉伸，否则只占 sizeHint 宽度、并且被挤成几十像素宽。
+        if (auto *grid = qobject_cast<QGridLayout *>(navLayout)) {
+            int row = 0;
+            int column = 0;
+            int rowSpan = 1;
+            int columnSpan = 1;
+            grid->getItemPosition(grid->indexOf(ui->lookInCombo), &row, &column,
+                                  &rowSpan, &columnSpan);
+            // gridLayout_2 原来给第 0 列（后退按钮所在列）设了 stretch=2，
+            // 只加不减的话多出来的宽度会被它吃掉，面包屑仍然被挤成一小条。
+            for (int i = 0; i < grid->columnCount(); ++i)
+                grid->setColumnStretch(i, 0);
+            grid->setColumnStretch(column, 1);
+        }
         navLayout->replaceWidget(ui->lookInCombo, m_breadcrumb);
         ui->lookInCombo->hide();   // 只留下当历史数据的壳，不再显示
-        // 原来靠 QComboBox 的 hsizetype=Ignored 撑满那一格；换成面包屑后要显式
-        // 给所在列加拉伸，否则它只占 sizeHint 的宽度、缩在行的中间。
-        if (auto *grid = qobject_cast<QGridLayout *>(navLayout)) {
-            grid->setColumnStretch(5, 1);
-            grid->setColumnStretch(0, 0);
-        }
     }
     connect(m_breadcrumb, &PathBreadcrumb::pathActivated, this, [this](const QString &sPath) {
         navigateToDir(sPath.isEmpty() ? FmPageUtil::myComputerName() : sPath);

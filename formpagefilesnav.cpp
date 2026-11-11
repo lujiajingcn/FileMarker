@@ -259,6 +259,52 @@ void FormPageFiles::onForwardButtonClicked()
     updateDirLabelsPanel(sDir);
 }
 
+/** 弹出前重建"后退/前进"的历史菜单：最近的排在最上面。 */
+void FormPageFiles::rebuildHistoryMenu(QMenu *menu, bool back)
+{
+    menu->clear();
+    const QStack<QString> &stack = back ? m_skBackward : m_skForward;
+    if (stack.isEmpty()) {
+        menu->addAction(tr("（暂无历史）"))->setEnabled(false);
+        return;
+    }
+
+    // 栈底是最早的，菜单里要从最近往最早排，所以倒着遍历
+    for (int i = stack.count() - 1; i >= 0; --i) {
+        const QString sPath = stack.at(i).isEmpty() ? FmPageUtil::myComputerName() : stack.at(i);
+        QAction *action = menu->addAction(QDir::toNativeSeparators(sPath));
+        connect(action, &QAction::triggered, this, [this, back, i]() { jumpInHistory(back, i); });
+    }
+}
+
+/** 在历史里一次退/进多步：targetIndex 是目标项在栈里的下标（0 = 栈底）。 */
+void FormPageFiles::jumpInHistory(bool back, int targetIndex)
+{
+    QStack<QString> &from = back ? m_skBackward : m_skForward;
+    QStack<QString> &to = back ? m_skForward : m_skBackward;
+    if (targetIndex < 0 || targetIndex >= from.count())
+        return;
+
+    QString sTarget;
+    while (!from.isEmpty()) {
+        const int topIndex = from.count() - 1;
+        sTarget = from.pop();
+        if (topIndex == targetIndex)
+            break;
+        // 中间略过的层级按顺序放进另一侧，便于再走回来
+        to.push_back(sTarget);
+    }
+    to.push_back(m_curDir);
+
+    if (sTarget.isEmpty())
+        sTarget = FmPageUtil::myComputerName();
+    bothSetRootIndex(m_modelFiles->index(sTarget));
+    m_curDir = sTarget;
+    refreshAddressBar();
+    updateToolButtons();
+    updateDirLabelsPanel(sTarget);
+}
+
 void FormPageFiles::onToParentButtonClicked()
 {
     QModelIndex rootIndex = m_filesTree->rootIndex();

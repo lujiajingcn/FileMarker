@@ -41,6 +41,7 @@ signals:
 protected:
     void resizeEvent(QResizeEvent *event) override;
     void contextMenuEvent(QContextMenuEvent *event) override;
+    void mousePressEvent(QMouseEvent *event) override;
     void mouseDoubleClickEvent(QMouseEvent *event) override;
     bool eventFilter(QObject *watched, QEvent *event) override;
 
@@ -58,7 +59,6 @@ private:
     QList<QToolButton *> m_segmentButtons;
     QList<QToolButton *> m_separators;
     QToolButton *m_overflowButton;
-    QToolButton *m_menuButton;
     bool m_editing;
 };
 

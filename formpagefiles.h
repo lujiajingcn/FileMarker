@@ -132,6 +132,9 @@ private:
     void fillSortMenu(QMenu *menu);
 
     void onBackButtonClicked();
+    // 后退/前进按钮的历史下拉
+    void rebuildHistoryMenu(QMenu *menu, bool back);
+    void jumpInHistory(bool back, int targetIndex);
 
     void onForwardButtonClicked();
 
