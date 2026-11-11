@@ -1,6 +1,8 @@
 #include "mainwindow.h"
 
 #include <QApplication>
+#include <QFileInfo>
+#include <QSettings>
 #include <QByteArray>
 #include <QDir>
 #include <QFile>
@@ -46,6 +48,23 @@ int main(int argc, char *argv[])
     QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
     QCoreApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
 #endif
+
+    // 手动缩放的存在意义：程序已经按 Windows 每块显示器的缩放比自动放大，
+    // 但如果某台显示器上还是嫌字小，可以在 exe 旁边放一个 FileMarker.ini：
+    //     [General]
+    //     uiScale=1.25
+    // 整个界面会再乘上这个比例（0 或没写 = 完全跟随系统）。
+    // 必须在 QApplication 之前设置 QT_SCALE_FACTOR，Qt 只在启动时读一次。
+    {
+        // 注意：这里 QApplication 还没建出来，applicationDirPath() 会返回空，
+        // 只能从 argv[0] 推 exe 所在目录。
+        const QString exeDir = QFileInfo(QString::fromLocal8Bit(argv[0])).absolutePath();
+        QSettings uiIni(exeDir + QStringLiteral("/FileMarker.ini"), QSettings::IniFormat);
+        const double uiScale = uiIni.value(QStringLiteral("uiScale"), 0.0).toDouble();
+        if (uiScale > 0.5 && uiScale < 4.0) {
+            qputenv("QT_SCALE_FACTOR", QByteArray::number(uiScale, 'f', 2));
+        }
+    }
 
     // 在创建 QApplication 之前接管消息：Qt 初始化阶段就可能解码图片
     qInstallMessageHandler(earlyMessageHandler);

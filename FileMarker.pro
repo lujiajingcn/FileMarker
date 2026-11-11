@@ -119,6 +119,10 @@ LIBS += -L$$PWD/lib/ -lsqlite3
 # COM 初始化需要 ole32
 win32: LIBS += -lshell32 -lgdi32 -lole32
 
+# 程序图标 + 版本信息 + 高 DPI 清单（PerMonitorV2）：清单必须编进 exe，
+# 否则换显示器后按 96 DPI 画，字会显得很小
+win32: RC_FILE = FileMarker.rc
+
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin
 else: unix:!android: target.path = /opt/$${TARGET}/bin

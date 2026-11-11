@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <assemblyIdentity type="win32" name="FileMarker" version="1.0.0.0" processorArchitecture="*"/>
+
+  <!--
+    高 DPI 声明。没有这一段时，Windows 会把本程序当成"不认识 DPI"的老程序：
+    在 150%/200% 缩放的显示器上要么被系统拉伸成模糊画面，要么干脆按 96 DPI 画出来，
+    结果就是换一台显示器后界面里的字突然变很小。
+
+    PerMonitorV2：每块显示器各自的缩放比，窗口从 100% 的屏拖到 150% 的屏时会重新按新比例渲染。
+    true/pm + PerMonitorV2,PerMonitor：给老系统留的兼容写法。
+  -->
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true/pm</dpiAware>
+      <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2,PerMonitor</dpiAwareness>
+    </windowsSettings>
+  </application>
+
+  <!-- 声明支持的系统版本（Windows 10/11），否则 Windows 会用兼容模式对待本程序 -->
+  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+    <application>
+      <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}"/>
+    </application>
+  </compatibility>
+</assembly>
