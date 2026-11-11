@@ -24,17 +24,21 @@ const int kMaxSegmentWidth = 190;
 
 QString makeStyleSheet()
 {
-    // 扁平样式，和资源管理器一致：白底、无边框、悬停变灰
+    // 整条地址栏自带白底 + 圆角描边，和灰色工具条背景区分开（资源管理器就是这样）；
+    // 里面的按钮保持透明，悬停/按下时各自变灰。
     return QStringLiteral(
+        "QWidget#pathBreadcrumb { background: #ffffff; border: 1px solid #d8d8d8;"
+        "                        border-radius: 4px; }"
         "QToolButton { border: 1px solid transparent; background: transparent;"
         "              padding: 1px 4px; color: #1a1a1a; }"
-        "QToolButton:hover { background: #e9e9e9; border: 1px solid #dcdcdc;"
+        "QToolButton:hover { background: #ececec; border: 1px solid #dcdcdc;"
         "                   border-radius: 3px; }"
-        "QToolButton:pressed { background: #dcdcdc; border: 1px solid #c8c8c8;"
+        "QToolButton:pressed { background: #dedede; border: 1px solid #c8c8c8;"
         "                     border-radius: 3px; }"
         "QToolButton#bcSeparator { color: #8a8a8a; padding: 2px 0px; min-width: 10px; }"
         "QToolButton#bcSeparator:hover { background: transparent; }"
-        "QLineEdit { border: 1px solid #c8c8c8; border-radius: 3px; padding: 2px 4px; }");
+        // 输入模式由外层白底负责边框，这里的输入框不要再画一层
+        "QLineEdit { border: none; background: transparent; padding: 0px 4px; }");
 }
 
 }   // namespace
@@ -47,17 +51,17 @@ PathBreadcrumb::PathBreadcrumb(QWidget *parent)
       m_editing(false)
 {
     setObjectName(QStringLiteral("pathBreadcrumb"));
-    m_layout->setContentsMargins(2, 0, 2, 0);
+    m_layout->setContentsMargins(4, 2, 4, 2);
     m_layout->setSpacing(0);
     // 让面包屑能随窗口收缩：内容超宽时由 relayoutSegments() 折叠中段
-    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     setMinimumWidth(200);
-    setMinimumHeight(24);
 
     m_edit->setVisible(false);
     m_edit->installEventFilter(this);
     connect(m_edit, &QLineEdit::returnPressed, this, [this]() { leaveEditMode(true); });
 
+    setAttribute(Qt::WA_StyledBackground, true);   // 自定义 QWidget 要显式打开才会画样式表背景
     setStyleSheet(makeStyleSheet());
     setContextMenuPolicy(Qt::DefaultContextMenu);
     setCursor(Qt::ArrowCursor);
