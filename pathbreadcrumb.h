@@ -60,6 +60,7 @@ private:
     QList<QToolButton *> m_separators;
     QToolButton *m_overflowButton;
     bool m_editing;
+    int m_minHeightBackup;   // 进入输入模式前的最小高度，退出时还原
 };
 
 #endif   // PATHBREADCRUMB_H

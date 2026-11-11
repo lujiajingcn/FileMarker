@@ -48,7 +48,8 @@ PathBreadcrumb::PathBreadcrumb(QWidget *parent)
       m_layout(new QHBoxLayout(this)),
       m_edit(new QLineEdit(this)),
       m_overflowButton(nullptr),
-      m_editing(false)
+      m_editing(false),
+      m_minHeightBackup(0)
 {
     setObjectName(QStringLiteral("pathBreadcrumb"));
     m_layout->setContentsMargins(4, 2, 4, 2);
@@ -297,6 +298,12 @@ void PathBreadcrumb::enterEditMode()
 {
     if (m_editing)
         return;
+
+    // 进入输入模式时所有段按钮都会隐藏，控件的 sizeHint 高度会跟着变小，
+    // 整行就"塌"下去一截。这里先把当前高度记成最小高度，退出时再还原。
+    m_minHeightBackup = minimumHeight();
+    setMinimumHeight(qMax(height(), sizeHint().height()));
+
     m_editing = true;
     for (QToolButton *button : m_segmentButtons)
         button->setVisible(false);
@@ -321,6 +328,7 @@ void PathBreadcrumb::leaveEditMode(bool commit)
     const QString sText = m_edit->text().trimmed();
     m_edit->setVisible(false);
     rebuild();
+    setMinimumHeight(m_minHeightBackup);
     if (commit && !sText.isEmpty())
         emit editCommitted(sText);
 }
