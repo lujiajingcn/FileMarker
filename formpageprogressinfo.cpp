@@ -47,13 +47,14 @@ QString actionText(DirNodeState state)
 {
     switch (state) {
     case DirNodeState::Searching:
-        return QObject::tr("停止");
+        return QObject::tr("停止");     // 正在扫：只停这一棵子树
     case DirNodeState::Waiting:
-    case DirNodeState::Complete:
     case DirNodeState::Incomplete:
-        return QObject::tr("跳过");
+        return QObject::tr("跳过");     // 还没轮到 / 只扫了一部分：可以跳过剩下的
+    case DirNodeState::Complete:
     case DirNodeState::Stopped:
     case DirNodeState::Skipped:
+        // 已经扫完的目录再"跳过"没有任何意义（徒增误解），已经停/跳过的也没有操作可做
         return QString();
     }
     return QString();
@@ -401,8 +402,7 @@ void FormPageProgressInfo::onActionClicked(const QString &sPath)
         actionItem->setText(tr("已停止"));
         actionItem->setData(int(DirNodeState::Stopped), kRoleState);
         updateActionButton(actionItem, DirNodeState::Stopped, sPath);
-    } else if (state == DirNodeState::Waiting || state == DirNodeState::Complete
-               || state == DirNodeState::Incomplete) {
+    } else if (state == DirNodeState::Waiting || state == DirNodeState::Incomplete) {
         emit sendSkipDir(sPath);
         actionItem->setText(tr("已跳过"));
         actionItem->setData(int(DirNodeState::Skipped), kRoleState);
