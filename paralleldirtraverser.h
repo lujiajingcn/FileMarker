@@ -50,6 +50,12 @@ public:
      */
     static int defaultThreadCount(const QString &sSamplePath = QString());
 
+    /**
+     * 按"路径所在卷"决定线程数，并按盘符缓存判定结果。
+     * 搜索时每个根目录各问一次：C:(SSD) 用 4 线程，E:(机械盘) 用 1 线程。
+     */
+    static int threadCountForPath(const QString &sPath);
+
     /** 该路径所在的卷是否是"需要寻道"的机械盘（判定失败返回 false） */
     static bool incursSeekPenalty(const QString &sPath);
 };

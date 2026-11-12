@@ -85,7 +85,7 @@ void ThreadTraverseDirs::run()
             return TraverseDirectory::isDefaultExcludedDirName(QFileInfo(sDirPath).fileName());
         };
 
-        const int nThreads = ParallelDirTraverser::defaultThreadCount(selDir);
+        const int nThreads = ParallelDirTraverser::threadCountForPath(selDir);
         qInfo("[遍历] 并行线程数=%d dir=%s", nThreads, qPrintable(selDir));
         const bool bCompleted = ParallelDirTraverser::run(QStringList() << selDir, nThreads, hooks);
 

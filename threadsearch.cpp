@@ -51,9 +51,16 @@ void ThreadSearch::run()
     m_dirTracker.prepopulate([this]() { emitDirSnapshot(); });
     emitDirSnapshot();
     m_progressTimer.start();
-    const int nThreads = ParallelDirTraverser::defaultThreadCount(m_selDirs.value(0));
-    qInfo("[搜索] 并行遍历线程数=%d（机械盘为 1，SSD 为 4）", nThreads);
-    ParallelDirTraverser::run(m_selDirs, nThreads, hooks);
+    // 每个搜索根**各自**判断所在磁盘类型：SSD 用多线程，机械盘用单线程。
+    // （同一根目录下的子目录都在同一个卷上，所以按根判定就等于按"当前目录"判定）
+    for (const QString &sRoot : m_selDirs) {
+        if (TraverseDirectory::isStopped())
+            break;
+        const int nThreads = ParallelDirTraverser::threadCountForPath(sRoot);
+        qInfo("[搜索] 根=%s 线程数=%d（机械盘=1，SSD=多线程）", qPrintable(sRoot), nThreads);
+        ParallelDirTraverser::run(QStringList() << sRoot, nThreads, hooks);
+        emitDirSnapshot();
+    }
 
     emitDirSnapshot();
     emit sendProcessInfo(QString("扫描结束：共扫描 %1 个文件，命中 %2 个（跳过 %3 个目录）")

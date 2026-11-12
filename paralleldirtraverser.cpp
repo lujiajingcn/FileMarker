@@ -2,6 +2,7 @@
 
 #include <QAtomicInt>
 #include <QDir>
+#include <QHash>
 #include <QMutex>
 #include <QMutexLocker>
 #include <QRunnable>
@@ -19,21 +20,6 @@
 #include <winioctl.h>
 #endif
 
-namespace {
-
-/** 符号链接 / junction 不进入（和单线程版同一套判断） */
-bool isReparsePoint(const QString &sPath)
-{
-#ifdef Q_OS_WIN
-    const DWORD attrs = GetFileAttributesW(reinterpret_cast<const wchar_t *>(sPath.utf16()));
-    if (attrs == INVALID_FILE_ATTRIBUTES)
-        return false;
-    return (attrs & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
-#else
-    return QFileInfo(sPath).isSymLink();
-#endif
-}
-
 // ---- MinGW 7.x 的 winioctl.h 不全：缺的定义在这里补齐 ----
 #ifndef IOCTL_STORAGE_QUERY_PROPERTY
 #define IOCTL_STORAGE_QUERY_PROPERTY \
@@ -47,6 +33,8 @@ typedef struct _FM_DEVICE_SEEK_PENALTY_DESCRIPTOR
     BOOLEAN IncursSeekPenalty;
 } DEVICE_SEEK_PENALTY_DESCRIPTOR;
 #endif
+
+namespace {
 
 
 /** 各工作线程共享的状态 */
@@ -207,6 +195,34 @@ bool ParallelDirTraverser::incursSeekPenalty(const QString &sPath)
     Q_UNUSED(sPath);
     return false;
 #endif
+}
+
+int ParallelDirTraverser::threadCountForPath(const QString &sPath)
+{
+    // 同一个卷反复查 DeviceIoControl 没必要，按盘符缓存判定结果。
+    // （同一根目录下的子目录都在同一个卷上，所以按根判定就等价于按"当前目录"判定；
+    //   跨卷的 junction 我们本来就整棵跳过，不会扫到别的盘。）
+    QString sVolumeKey = QDir::toNativeSeparators(sPath);
+    if (sVolumeKey.size() >= 2 && sVolumeKey.at(1) == QLatin1Char(':'))
+        sVolumeKey = sVolumeKey.left(2).toUpper();
+    if (sVolumeKey.isEmpty())
+        sVolumeKey = QStringLiteral("<unknown>");
+
+    static QMutex s_mutex;
+    static QHash<QString, int> s_cache;
+    {
+        QMutexLocker locker(&s_mutex);
+        const auto it = s_cache.constFind(sVolumeKey);
+        if (it != s_cache.constEnd())
+            return it.value();
+    }
+
+    const int nThreads = defaultThreadCount(sPath);
+    {
+        QMutexLocker locker(&s_mutex);
+        s_cache.insert(sVolumeKey, nThreads);
+    }
+    return nThreads;
 }
 
 int ParallelDirTraverser::defaultThreadCount(const QString &sSamplePath)
