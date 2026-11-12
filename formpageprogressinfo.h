@@ -45,6 +45,9 @@ public slots:
     void onRecvProgress(const QString &sProcessedFilePath);
     void onRecvDirSnapshot(const DirProgressSnapshot &snapshot);
 
+protected:
+    void resizeEvent(QResizeEvent *event) override;
+
 private:
     void initTree();
     /** 按路径找到/创建节点；返回 nullptr 表示层级超出显示范围 */

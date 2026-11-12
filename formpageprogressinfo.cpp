@@ -4,6 +4,8 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QFont>
+#include <QFontMetrics>
+#include <QResizeEvent>
 #include <QHeaderView>
 #include <QLabel>
 #include <QPushButton>
@@ -94,6 +96,12 @@ FormPageProgressInfo::FormPageProgressInfo(QWidget *parent) :
 
     m_statusLabel = new QLabel(this);
     m_statusLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    m_statusLabel->setTextFormat(Qt::PlainText);
+    // 关键：横向尺寸策略设成 Ignored。
+    // 否则标签会按"最长的那条路径"撑出最小宽度，搜索过程中路径一变长变短，
+    // 整个页面（乃至窗口）就跟着来回变大小 —— 就是用户看到的"窗口快速变化大小"。
+    m_statusLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    m_statusLabel->setMinimumWidth(0);
     ui->gridLayout->addWidget(m_statusLabel, 1, 0);
 
     initTree();
@@ -387,10 +395,35 @@ void FormPageProgressInfo::updateStatusLabel()
     if (m_statusLabel == nullptr)
         return;
 
-    QString sText = tr("已扫描 %1 个文件 · 命中 %2 个").arg(m_nScanned).arg(m_nMatched);
-    if (!m_sCurrentFile.isEmpty())
-        sText += tr("    当前：%1").arg(QDir::toNativeSeparators(m_sCurrentFile));
+    const QString sCounter = tr("已扫描 %1 个文件 · 命中 %2 个").arg(m_nScanned).arg(m_nMatched);
+    QString sText = sCounter;
+    QString sFullText = sCounter;
+
+    if (!m_sCurrentFile.isEmpty()) {
+        const QString sPath = QDir::toNativeSeparators(m_sCurrentFile);
+        const QString sPrefix = tr("    当前：");
+        const QFontMetrics metrics(m_statusLabel->font());
+
+        // 路径最多占 600px（约 50~60 个字符），再长就从中间省略：
+        // 保留盘符和文件名，隐藏中间的目录（和资源管理器一致）。
+        int nPathWidth = m_statusLabel->width();
+        if (nPathWidth > 40)
+            nPathWidth = nPathWidth - metrics.boundingRect(sPrefix).width() - metrics.boundingRect(sCounter).width() - 16;
+        nPathWidth = qBound(120, nPathWidth, 600);
+
+        sText = sCounter + sPrefix + metrics.elidedText(sPath, Qt::ElideMiddle, nPathWidth);
+        sFullText = sCounter + sPrefix + sPath;
+    }
+
     m_statusLabel->setText(sText);
+    // 省略掉的完整内容放 tooltip，鼠标悬停能看到
+    m_statusLabel->setToolTip(sFullText);
+}
+
+void FormPageProgressInfo::resizeEvent(QResizeEvent *event)
+{
+    QWidget::resizeEvent(event);
+    updateStatusLabel();   // 宽度变了要重新算省略位置
 }
 
 void FormPageProgressInfo::onTreeClicked(const QModelIndex &index)
