@@ -47,6 +47,11 @@ FormPageFilterdFiles::FormPageFilterdFiles(QWidget *parent) :
     m_copyFilePath = new QAction(tr("复制路径"), this);
 
     // 标签列分片读取：搜索结果可能上千条，一次性枚举 ADS 会卡住界面
+    // 结果行分片填充定时器（和标签扫描定时器各管一件事）
+    m_rowFillTimer = new QTimer(this);
+    m_rowFillTimer->setInterval(0);
+    connect(m_rowFillTimer, &QTimer::timeout, this, &FormPageFilterdFiles::continueAddRows);
+
     m_tagScanTimer = new QTimer(this);
     m_tagScanTimer->setInterval(0);
     m_tagScanRow = 0;
@@ -88,29 +93,68 @@ void FormPageFilterdFiles::onShowFilteredFiles(const QStringList &qLFilteredFile
 {
     if (m_tagScanTimer != nullptr)
         m_tagScanTimer->stop();
+    if (m_rowFillTimer != nullptr)
+        m_rowFillTimer->stop();
 
     m_modelFilteredFiles->removeRows(0, m_modelFilteredFiles->rowCount());
 
-    // 先只填名称/路径（很快），标签列交给定时器分片补齐
+    // 结果行分片填充：整盘查找一次可能上万条，原来一次性 appendRow 会卡住界面
+    // （而且名称列是 ResizeToContents，每插一行都要重算列宽，越填越慢）。
+    m_rowSourcePaths = qLFilteredFiles;
+    m_rowSourceRow = 0;
     m_tagScanPaths = qLFilteredFiles;
     m_tagScanRow = 0;
-    for (const QString &sFilePath : qLFilteredFiles) {
+
+    // 路径列显示完整路径，避免同名文件难区分
+    m_resultCountText = tr("搜索结果 %1 项").arg(qLFilteredFiles.size());
+    if (!m_searchCondition.isEmpty())
+        m_resultCountText += QStringLiteral("（") + m_searchCondition + QStringLiteral("）");
+    // 把结果来源写出来：缓存可能过期，用户至少要能看到这次是从哪查的
+    if (!m_searchSource.isEmpty())
+        m_resultCountText += QStringLiteral("  ") + m_searchSource;
+
+    if (qLFilteredFiles.isEmpty()) {
+        ui->lblResultCount->setText(m_resultCountText);
+        return;
+    }
+
+    // 填充期间先关掉"按内容自适应列宽"，否则每插入一行都要重算一次列宽
+    m_filteredFilesTree->header()->setSectionResizeMode(0, QHeaderView::Interactive);
+    ui->lblResultCount->setText(tr("正在准备结果…（共 %1 项）").arg(qLFilteredFiles.size()));
+
+    if (m_rowFillTimer != nullptr)
+        m_rowFillTimer->start();
+    else
+        continueAddRows();   // 定时器没建好时（理论上不会）退化为一次性填充
+}
+
+/** 分片把结果行插进模型：每片约 15ms，界面全程可操作。 */
+void FormPageFilterdFiles::continueAddRows()
+{
+    QElapsedTimer budget;
+    budget.start();
+
+    while (m_rowSourceRow < m_rowSourcePaths.size() && budget.elapsed() < 15) {
+        const QString &sFilePath = m_rowSourcePaths.at(m_rowSourceRow);
+        // QFileInfo 只做字符串解析，不会 stat 磁盘
         const QFileInfo fileInfo(sFilePath);
         QList<QStandardItem *> items;
         items << new QStandardItem(fileInfo.fileName())
               << new QStandardItem(QDir::toNativeSeparators(sFilePath))
               << new QStandardItem(QString());
         m_modelFilteredFiles->appendRow(items);
+        ++m_rowSourceRow;
     }
 
-    // 路径列显示完整路径，避免同名文件难区分
-    QString sCountText = tr("搜索结果 %1 项").arg(qLFilteredFiles.size());
-    if (!m_searchCondition.isEmpty())
-        sCountText += QStringLiteral("（") + m_searchCondition + QStringLiteral("）");
-    // 把结果来源写出来：缓存可能过期，用户至少要能看到这次是从哪查的
-    if (!m_searchSource.isEmpty())
-        sCountText += QStringLiteral("  ") + m_searchSource;
-    ui->lblResultCount->setText(sCountText);
+    if (m_rowSourceRow < m_rowSourcePaths.size())
+        return;
+
+    if (m_rowFillTimer != nullptr)
+        m_rowFillTimer->stop();
+
+    // 填完了：恢复"按内容自适应列宽"（只算一次），再补上计数文案
+    m_filteredFilesTree->header()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+    ui->lblResultCount->setText(m_resultCountText);
 
     if (m_tagScanTimer != nullptr && !m_tagScanPaths.isEmpty())
         m_tagScanTimer->start();

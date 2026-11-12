@@ -73,6 +73,13 @@ private:
 
     // 标签列分片填充状态
     QTimer                  *m_tagScanTimer;
+    // 结果行分片填充：几万条结果一次性 appendRow 会把 UI 线程堵住（列宽还是
+    // ResizeToContents，每插一行都要重算），所以分批插入、填完再恢复列宽策略。
+    QTimer                  *m_rowFillTimer = nullptr;
+    QStringList              m_rowSourcePaths;
+    int                      m_rowSourceRow = 0;
+    QString                  m_resultCountText;   // 填完后再显示"搜索结果 N 项（…）"
+    void continueAddRows();
     QStringList              m_tagScanPaths;
     QString                  m_searchSource;
     int                      m_tagScanRow;
