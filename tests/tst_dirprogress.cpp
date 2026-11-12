@@ -9,6 +9,7 @@
 #include <QStringList>
 
 #include "dirprogresstracker.h"
+#include "paralleldirtraverser.h"
 #include "traversedirectory.h"
 
 void TstDirProgress::initTestCase()
@@ -251,5 +252,74 @@ void TstDirProgress::traversalReturnsFalseWhenStopped()
     QCOMPARE(nFileCalls, 1);   // 停下之后不再继续扫
 
     TraverseDirectory::resetStop();
+    TraverseDirectory::resetPathControls();
+}
+
+namespace {
+
+/** 用给定的线程数跑一遍遍历，收集访问到的文件（排序后便于比较） */
+QStringList runTraversal(const QString &sRoot, int nThreads,
+                         const std::function<bool(const QString &)> &shouldSkip)
+{
+    QStringList qLFiles;
+    QMutex mutex;
+
+    ParallelTraverseCallbacks cb;
+    cb.onFile = [&](const QFileInfo &info) -> bool {
+        const QString sPath = QDir::fromNativeSeparators(info.absoluteFilePath());
+        QMutexLocker locker(&mutex);
+        qLFiles << sPath;
+        return true;
+    };
+    cb.shouldSkipDir = shouldSkip;
+
+    ParallelDirTraverser::run(QStringList() << sRoot, nThreads, cb);
+    qLFiles.sort();
+    return qLFiles;
+}
+
+}   // namespace
+
+/** 并行和串行扫出来的文件集合必须完全一致（顺序不保证，所以排序后比较）。 */
+void TstDirProgress::parallelTraversalVisitsSameFiles()
+{
+    TraverseDirectory::resetStop();
+    TraverseDirectory::resetPathControls();
+
+    const QStringList qLSerial = runTraversal(m_sRoot, 1, nullptr);
+    const QStringList qLParallel = runTraversal(m_sRoot, 4, nullptr);
+
+    QCOMPARE(qLSerial.size(), 6);           // a/f1, a/b/f2, keep/f3, stopme/f4, stopme/f5, node_modules/f6
+    QCOMPARE(qLParallel, qLSerial);
+}
+
+void TstDirProgress::parallelTraversalHonoursSkip()
+{
+    TraverseDirectory::resetStop();
+    TraverseDirectory::resetPathControls();
+
+    const QStringList qLFiles = runTraversal(m_sRoot, 4, [](const QString &sPath) -> bool {
+        return TraverseDirectory::isDefaultExcludedDirName(QFileInfo(sPath).fileName());
+    });
+
+    for (const QString &sFile : qLFiles)
+        QVERIFY2(!sFile.contains(QStringLiteral("node_modules")), qPrintable(sFile));
+    QCOMPARE(qLFiles.size(), 5);
+}
+
+void TstDirProgress::parallelTraversalHonoursStopSubtree()
+{
+    TraverseDirectory::resetStop();
+    TraverseDirectory::resetPathControls();
+
+    const QString sStopDir = QDir::fromNativeSeparators(m_sRoot + QStringLiteral("/stopme"));
+    TraverseDirectory::requestStopPath(sStopDir);
+
+    const QStringList qLFiles = runTraversal(m_sRoot, 4, nullptr);
+
+    for (const QString &sFile : qLFiles)
+        QVERIFY2(!sFile.contains(QStringLiteral("stopme")), qPrintable(sFile));
+    QVERIFY(qLFiles.contains(QDir::fromNativeSeparators(m_sRoot + QStringLiteral("/keep/f3.txt"))));
+
     TraverseDirectory::resetPathControls();
 }

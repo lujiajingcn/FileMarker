@@ -2,6 +2,7 @@
 #include "adsoperation.h"
 #include <QDebug>
 
+#include "paralleldirtraverser.h"
 #include "traversedirectory.h"
 
 ThreadSearch::ThreadSearch(QObject *parent) : QThread(parent)
@@ -23,11 +24,16 @@ void ThreadSearch::setPara(const QStringList &selDirs, const QList<QSet<QString>
 
 void ThreadSearch::run()
 {
-    // 目录级遍历：文件交给 searchFile，目录进出事件这一步先不接 UI（步骤 2 再接目录进度树）。
-    TraverseHooks hooks;
+    // 并行遍历：多个目录同时扫。整盘搜索是纯 IO，串行时时间几乎全花在
+    // 单个文件的 ADS 枚举上，4 个线程能把等待摊开。
+    ParallelTraverseCallbacks hooks;
     hooks.onFile = [this](const QFileInfo &info) -> bool { return searchFile(info); };
-    hooks.onDirEnter = [this](const QString &sPath) { m_dirTracker.enterDir(sPath); };
+    hooks.onDirEnter = [this](const QString &sPath) {
+        QMutexLocker locker(&m_mutex);
+        m_dirTracker.enterDir(sPath);
+    };
     hooks.onDirLeave = [this](const QString &sPath, DirOutcome outcome) {
+        QMutexLocker locker(&m_mutex);
         m_dirTracker.leaveDir(sPath, outcome);
     };
     // 默认跳过 node_modules / .git 这类目录：整盘搜索时它们几乎不可能带标签，
@@ -44,8 +50,9 @@ void ThreadSearch::run()
     m_dirTracker.reset(m_selDirs);
     emitDirSnapshot();
     m_progressTimer.start();
-    for (const QString &selDir : m_selDirs)
-        TraverseDirectory::traverseDirectory(selDir, hooks, true);
+    const int nThreads = ParallelDirTraverser::defaultThreadCount(m_selDirs.value(0));
+    qInfo("[搜索] 并行遍历线程数=%d（机械盘为 1，SSD 为 4）", nThreads);
+    ParallelDirTraverser::run(m_selDirs, nThreads, hooks);
 
     emitDirSnapshot();
     emit sendProcessInfo(QString("扫描结束：共扫描 %1 个文件，命中 %2 个（跳过 %3 个目录）")
@@ -65,8 +72,11 @@ void ThreadSearch::emitDirSnapshot()
 bool ThreadSearch::searchFile(const QFileInfo& fileInfo)
 {
     QString sFilePath = fileInfo.absoluteFilePath();
-    ++m_scanned;
+    // ADS 枚举（最耗时的一步）放到锁外面，锁只保护共享容器
     const bool bMatched = ADSOperation::isHostFile(sFilePath, m_labelGroups, m_tagLogic);
+
+    QMutexLocker locker(&m_mutex);
+    ++m_scanned;
     if (bMatched)
         m_filePaths << sFilePath;
     m_dirTracker.addFile(bMatched);

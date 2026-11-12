@@ -10,6 +10,7 @@
 #define THREADTRAVERSEDIRS_H
 
 #include <QElapsedTimer>
+#include <QMutex>
 #include <QThread>
 #include <QMap>
 #include <QSet>
@@ -17,6 +18,7 @@
 
 #include "common.h"
 #include "dirprogresstracker.h"
+#include "paralleldirtraverser.h"
 
 Q_DECLARE_METATYPE(FILE_TAGS);// sendResult传递的参数中有FILE_TAGS类型数据，不声明则槽函数不响应
 
@@ -51,6 +53,7 @@ private:
     FILE_TAGS          m_fileTags;
     QSet<QString>      m_tags;
     DirProgressTracker m_dirTracker;     // 目录进度统计（和搜索共用逻辑）
+    QMutex             m_mutex;          // 并行遍历时保护上面的容器
     QElapsedTimer      m_snapshotTimer;  // 快照节流：最多每 150ms 发一次
     /** 节流发一次目录进度快照 */
     void emitSnapshotIfDue();

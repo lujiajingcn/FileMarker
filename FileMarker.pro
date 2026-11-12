@@ -35,6 +35,7 @@ CONFIG += c++11
 
 SOURCES += \
     dirprogresstracker.cpp \
+    paralleldirtraverser.cpp \
         adsoperation.cpp \
         common.cpp \
         configoperation.cpp \
@@ -76,6 +77,7 @@ SOURCES += \
 
 HEADERS += \
     dirprogresstracker.h \
+    paralleldirtraverser.h \
         adsoperation.h \
         common.h \
         configoperation.h \

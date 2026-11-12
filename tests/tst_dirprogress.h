@@ -28,6 +28,11 @@ private slots:
     void traversalStopSubtree();
     void traversalReturnsFalseWhenStopped();
 
+    // 并行遍历（ParallelDirTraverser）
+    void parallelTraversalVisitsSameFiles();
+    void parallelTraversalHonoursSkip();
+    void parallelTraversalHonoursStopSubtree();
+
 private:
     QString makeDir(const QString &sRelPath);
     QString makeFile(const QString &sRelPath);

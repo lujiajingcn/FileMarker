@@ -2,11 +2,13 @@
 #define THREADSEARCH_H
 
 #include <QElapsedTimer>
+#include <QMutex>
 #include <QThread>
 #include <QDir>
 
 #include "common.h"
 #include "dirprogresstracker.h"
+#include "paralleldirtraverser.h"
 #include "traversedirectory.h"
 #include <QHash>
 #include <QSet>
@@ -49,6 +51,8 @@ private:
     void emitDirSnapshot();
 
     DirProgressTracker m_dirTracker;
+    // 并行遍历：多个工作线程会同时回调 searchFile，共享数据都要加锁
+    QMutex             m_mutex;
 };
 
 #endif // THREADSEARCH_H

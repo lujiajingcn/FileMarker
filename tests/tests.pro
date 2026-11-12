@@ -41,7 +41,8 @@ SOURCES += \
     ../utility.cpp \
     ../common.cpp \
     ../traversedirectory.cpp \
-    ../dirprogresstracker.cpp
+    ../dirprogresstracker.cpp \
+    ../paralleldirtraverser.cpp
 
 HEADERS += \
     tst_adsoperation.h \

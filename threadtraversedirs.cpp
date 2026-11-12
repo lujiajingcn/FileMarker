@@ -2,6 +2,7 @@
 
 #include "adsoperation.h"
 #include "utility.h"
+#include "paralleldirtraverser.h"
 #include "traversedirectory.h"
 
 ThreadTraverseDirs::ThreadTraverseDirs(QObject *parent) : QThread(parent)
@@ -46,17 +47,17 @@ void ThreadTraverseDirs::run()
         m_tags.clear();
         m_fileTags.clear();
 
-        // 目录级钩子：把每个目录的结局收集起来，写缓存时据此打 complete / excluded 标记
-        TraverseHooks hooks;
+        // 目录级钩子：把每个目录的结局收集起来，写缓存时据此打 complete / excluded 标记。
+        // 并行遍历时这些回调来自多个线程，容器和进度统计统一用 m_mutex 保护。
+        ParallelTraverseCallbacks hooks;
         hooks.onFile = [this](const QFileInfo &info) -> bool { return traverseDir(info); };
-        hooks.onDirEnter = [this, &selDir](const QString &sPath) {
-            Q_UNUSED(selDir);
+        hooks.onDirEnter = [this](const QString &sPath) {
+            QMutexLocker locker(&m_mutex);
             m_dirTracker.enterDir(sPath);
-            emitSnapshotIfDue();
         };
         hooks.onDirLeave = [&](const QString &sPath, DirOutcome outcome) {
+            QMutexLocker locker(&m_mutex);
             m_dirTracker.leaveDir(sPath, outcome);
-            emitSnapshotIfDue();
             switch (outcome) {
             case DirOutcome::Complete:
                 qLCompletedDirs << sPath;
@@ -76,7 +77,9 @@ void ThreadTraverseDirs::run()
             return TraverseDirectory::isDefaultExcludedDirName(QFileInfo(sDirPath).fileName());
         };
 
-        const bool bCompleted = TraverseDirectory::traverseDirectory(selDir, hooks, true);
+        const int nThreads = ParallelDirTraverser::defaultThreadCount(selDir);
+        qInfo("[遍历] 并行线程数=%d dir=%s", nThreads, qPrintable(selDir));
+        const bool bCompleted = ParallelDirTraverser::run(QStringList() << selDir, nThreads, hooks);
         if (bCompleted && !m_fileTags.isEmpty()) {
             dirAndFileTags[selDir] = m_fileTags;
             if (m_tags.count() != 0)
@@ -103,12 +106,13 @@ bool ThreadTraverseDirs::traverseDir(const QFileInfo& fileInfo)
 {
     QString filePath = fileInfo.absoluteFilePath();
 
+    const QStringList adsFileNames = ADSOperation::listADSFileName(filePath);
+
+    QMutexLocker locker(&m_mutex);
     // 先计数再判断有没有标签：进度树上的"已扫"应该是**扫过的文件数**，
     // 而不是"有标签的文件数"，否则没有标签的目录会一直显示 0，看着像卡住。
     m_dirTracker.addFile(false);   // 遍历不按标签匹配，"命中"一栏留空
-    emitSnapshotIfDue();
 
-    QStringList adsFileNames = ADSOperation::listADSFileName(filePath);
     if (adsFileNames.isEmpty())
         return true;
 
