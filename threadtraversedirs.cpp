@@ -103,6 +103,11 @@ bool ThreadTraverseDirs::traverseDir(const QFileInfo& fileInfo)
 {
     QString filePath = fileInfo.absoluteFilePath();
 
+    // 先计数再判断有没有标签：进度树上的"已扫"应该是**扫过的文件数**，
+    // 而不是"有标签的文件数"，否则没有标签的目录会一直显示 0，看着像卡住。
+    m_dirTracker.addFile(false);   // 遍历不按标签匹配，"命中"一栏留空
+    emitSnapshotIfDue();
+
     QStringList adsFileNames = ADSOperation::listADSFileName(filePath);
     if (adsFileNames.isEmpty())
         return true;
@@ -111,8 +116,6 @@ bool ThreadTraverseDirs::traverseDir(const QFileInfo& fileInfo)
 
     QSet<QString> setAdsNames = Utility::toSet(adsFileNames);
     m_tags.unite(setAdsNames);
-    m_dirTracker.addFile(false);   // 遍历不按标签匹配，"命中"一栏留空
-    emitSnapshotIfDue();
 
     emit sendProcessInfo(filePath);
 
