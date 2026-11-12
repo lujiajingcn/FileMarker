@@ -219,6 +219,17 @@ void FormFileBrowser::onActionTraverseSelDirsTriggered()
     m_threadTraverseDirs = new ThreadTraverseDirs(this);
     m_threadTraverseDirs->setSelDirs(selDirs);
     qRegisterMetaType<QMap<QString, QMap<QString, QStringList>>>("QMap<QString, QMap<QString, QStringList>>");
+
+    // 遍历也用同一套"目录进度树"：先清空并建根节点，然后接快照
+    ui->pageProgressInfo->clear();
+    ui->pageProgressInfo->resetProgress(selDirs);
+    connect(m_threadTraverseDirs, &ThreadTraverseDirs::sendDirSnapshot, ui->pageProgressInfo,
+            &FormPageProgressInfo::onRecvDirSnapshot);
+    connect(ui->pageProgressInfo, &FormPageProgressInfo::sendStopDir, this,
+            [](const QString &sPath) { TraverseDirectory::requestStopPath(sPath); });
+    connect(ui->pageProgressInfo, &FormPageProgressInfo::sendSkipDir, this,
+            [](const QString &sPath) { TraverseDirectory::requestSkipPath(sPath); });
+
     connect(m_threadTraverseDirs, &ThreadTraverseDirs::sendResult, this, &FormFileBrowser::onRecvTraverseResult);
     connect(this, &FormFileBrowser::sendStop, m_threadTraverseDirs, &ThreadTraverseDirs::stopThread);
 

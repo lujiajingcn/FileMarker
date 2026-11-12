@@ -6,6 +6,7 @@
 #include "tst_searchmatch.h"
 #include "tst_utility.h"
 #include "tst_tagexport.h"
+#include "tst_dirprogress.h"
 
 /**
  * 一个可执行文件里跑三组测试。
@@ -34,6 +35,10 @@ int main(int argc, char *argv[])
     }
     {
         TstTagExport tc;
+        nFailed += QTest::qExec(&tc, argc, argv);
+    }
+    {
+        TstDirProgress tc;
         nFailed += QTest::qExec(&tc, argc, argv);
     }
     return nFailed;

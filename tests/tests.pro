@@ -33,12 +33,15 @@ SOURCES += \
     tst_searchmatch.cpp \
     tst_utility.cpp \
     tst_tagexport.cpp \
+    tst_dirprogress.cpp \
     ../adsoperation.cpp \
     ../xmloperation.cpp \
     ../searchmatch.cpp \
     ../tagexport.cpp \
     ../utility.cpp \
-    ../common.cpp
+    ../common.cpp \
+    ../traversedirectory.cpp \
+    ../dirprogresstracker.cpp
 
 HEADERS += \
     tst_adsoperation.h \
@@ -46,4 +49,5 @@ HEADERS += \
     tst_searchmatch.h \
     tst_utility.h \
     tst_tagexport.h \
+    tst_dirprogress.h \
     ../adsoperation.h

@@ -34,6 +34,7 @@ DEFINES += QT_DEPRECATED_WARNINGS
 CONFIG += c++11
 
 SOURCES += \
+    dirprogresstracker.cpp \
         adsoperation.cpp \
         common.cpp \
         configoperation.cpp \
@@ -74,6 +75,7 @@ SOURCES += \
         xmloperation.cpp
 
 HEADERS += \
+    dirprogresstracker.h \
         adsoperation.h \
         common.h \
         configoperation.h \

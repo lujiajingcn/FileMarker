@@ -9,12 +9,14 @@
 #ifndef THREADTRAVERSEDIRS_H
 #define THREADTRAVERSEDIRS_H
 
+#include <QElapsedTimer>
 #include <QThread>
 #include <QMap>
 #include <QSet>
 #include <QDir>
 
 #include "common.h"
+#include "dirprogresstracker.h"
 
 Q_DECLARE_METATYPE(FILE_TAGS);// sendResult传递的参数中有FILE_TAGS类型数据，不声明则槽函数不响应
 
@@ -34,6 +36,8 @@ protected:
 signals:
     // 结果里只包含"完整扫完"的目录；qLCompletedDirs 供上层登记 dirs 表（空目录也要登记），
     // bAborted 为 true 表示用户中途点了停止，此时未扫完的目录不会出现在任何结果里。
+    // 目录进度树快照（遍历也用同一套进度组件）
+    void sendDirSnapshot(const DirProgressSnapshot &snapshot);
     void sendResult(const QMap<QString, FILE_TAGS> &dirAndFileTags,
                     QMap<QString, QSet<QString>> dirAndTags,
                     const QStringList &qLCompletedDirs,
@@ -43,9 +47,13 @@ signals:
     void sendProcessInfo(const QString &sProcessedFilePath);
 
 private:
-    QStringList     m_selDirs;
-    FILE_TAGS       m_fileTags;
-    QSet<QString>   m_tags;
+    QStringList        m_selDirs;
+    FILE_TAGS          m_fileTags;
+    QSet<QString>      m_tags;
+    DirProgressTracker m_dirTracker;     // 目录进度统计（和搜索共用逻辑）
+    QElapsedTimer      m_snapshotTimer;  // 快照节流：最多每 150ms 发一次
+    /** 节流发一次目录进度快照 */
+    void emitSnapshotIfDue();
 };
 
 #endif // THREADTRAVERSEDIRS_H
