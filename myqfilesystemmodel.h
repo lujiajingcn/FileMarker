@@ -15,6 +15,7 @@ class MyQFileSystemModel :public QFileSystemModel
 
 public:
     explicit MyQFileSystemModel(QObject *parent = nullptr);
+    ~MyQFileSystemModel() override;
 
 signals:
     void sendLabels(const QString &sFilePath, const QString &sLabels);

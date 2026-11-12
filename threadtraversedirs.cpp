@@ -27,9 +27,13 @@ void ThreadTraverseDirs::run()
 {
     QMap<QString, FILE_TAGS> dirAndFileTags;
     QMap<QString, QSet<QString>> dirAndTags;
-    QStringList qLCompletedDirs;      // 完整扫完的目录
-    QStringList qLSkippedDirs;        // 用户主动跳过 / 默认排除的目录（记为"已排除"）
-    QStringList qLIncompleteDirs;     // 被停止、读不了、或子目录没扫完的目录（缓存不可信）
+    // 注意：缓存是按"遍历根"存的（filewithlabels.dir = 根目录）。
+    // 所以 dirs 表里只登记**根目录**的完整/不完整状态；
+    // 如果连子目录也登记成 complete=1，用户选中子目录时会"命中缓存但查不到文件"，
+    // 结果是静默漏结果。子目录只有一种情况要登记：被跳过（excluded，明确表示不扫）。
+    QStringList qLCompletedDirs;
+    QStringList qLSkippedDirs;
+    QStringList qLIncompleteDirs;
 
     TraverseDirectory::resetStop();          // 每个遍历任务开头复位全局停止标志
     TraverseDirectory::resetPathControls();  // 清空上一轮遗留的跳过/停止请求
@@ -55,20 +59,22 @@ void ThreadTraverseDirs::run()
             QMutexLocker locker(&m_mutex);
             m_dirTracker.enterDir(sPath);
         };
+        QStringList qLSkippedThisRoot;        // 本轮被跳过的目录（记 excluded 行）
+        bool bThisRootIncomplete = false;     // 有子树被停止/读不了 → 整个根的数据不完整
+
         hooks.onDirLeave = [&](const QString &sPath, DirOutcome outcome) {
             QMutexLocker locker(&m_mutex);
             m_dirTracker.leaveDir(sPath, outcome);
             switch (outcome) {
-            case DirOutcome::Complete:
-                qLCompletedDirs << sPath;
-                break;
             case DirOutcome::Skipped:
-                qLSkippedDirs << sPath;
+                qLSkippedThisRoot << sPath;
                 break;
             case DirOutcome::Stopped:
             case DirOutcome::Incomplete:
             case DirOutcome::Failed:
-                qLIncompleteDirs << sPath;
+                bThisRootIncomplete = true;
+                break;
+            case DirOutcome::Complete:
                 break;
             }
         };
@@ -80,12 +86,21 @@ void ThreadTraverseDirs::run()
         const int nThreads = ParallelDirTraverser::defaultThreadCount(selDir);
         qInfo("[遍历] 并行线程数=%d dir=%s", nThreads, qPrintable(selDir));
         const bool bCompleted = ParallelDirTraverser::run(QStringList() << selDir, nThreads, hooks);
-        if (bCompleted && !m_fileTags.isEmpty()) {
-            dirAndFileTags[selDir] = m_fileTags;
-            if (m_tags.count() != 0)
-                dirAndTags[selDir] = m_tags;
+
+        qLSkippedDirs << qLSkippedThisRoot;
+
+        if (bCompleted && !bThisRootIncomplete) {
+            qLCompletedDirs << selDir;
+            if (!m_fileTags.isEmpty()) {
+                dirAndFileTags[selDir] = m_fileTags;
+                if (m_tags.count() != 0)
+                    dirAndTags[selDir] = m_tags;
+            }
+        } else {
+            // 根没扫完（被全局停止，或有子树被停止/读不了）：
+            // 本地结果直接丢弃，只把根标记为"不完整"，让下次搜索回退磁盘重扫。
+            qLIncompleteDirs << selDir;
         }
-        // 未扫完的目录：本地结果直接丢弃，绝不进入缓存（否则缓存里只剩残缺数据）
     }
 
     emit sendDirSnapshot(m_dirTracker.snapshot());

@@ -48,7 +48,6 @@ typedef struct _FM_DEVICE_SEEK_PENALTY_DESCRIPTOR
 } DEVICE_SEEK_PENALTY_DESCRIPTOR;
 #endif
 
-DirOutcome processOneDir(const QString &sDirPath, const ParallelTraverseCallbacks &cb);
 
 /** 各工作线程共享的状态 */
 struct TraverseState
@@ -94,6 +93,7 @@ public:
         }
         if (TraverseDirectory::isPathSkipped(sKey)
             || (cb.shouldSkipDir && cb.shouldSkipDir(sKey))) {
+            TraverseDirectory::noteSkippedPath();   // 供日志统计"跳过了多少个目录"
             if (cb.onDirLeave)
                 cb.onDirLeave(sKey, DirOutcome::Skipped);
             finish();

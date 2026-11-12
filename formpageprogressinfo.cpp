@@ -74,6 +74,7 @@ QString normalizedDirKey(const QString &sPath)
 
 const int kRolePath = Qt::UserRole;
 const int kRoleState = Qt::UserRole + 1;
+const int kRoleSubDirs = Qt::UserRole + 2;   // 已聚合的深层子目录数（避免每次刷新都改 tooltip）
 
 }   // namespace
 
@@ -240,17 +241,28 @@ void FormPageProgressInfo::applyNode(const DirProgressNode &node)
     if (stateItem == nullptr || filesItem == nullptr || matchItem == nullptr || actionItem == nullptr)
         return;
 
-    stateItem->setText(stateText(node.state));
-    stateItem->setForeground(stateColor(node.state));
-    QFont font = stateItem->font();
-    font.setBold(node.state == DirNodeState::Searching);
-    stateItem->setFont(font);
+    // 每 150ms 会把整棵树的快照刷一遍（最多几百个节点），这里逐项比较再赋值：
+    // 值没变就不 setText/setData，避免无谓的 dataChanged → 视图重绘。
+    const QString sStateText = stateText(node.state);
+    if (stateItem->text() != sStateText) {
+        stateItem->setText(sStateText);
+        stateItem->setForeground(stateColor(node.state));
+        QFont font = stateItem->font();
+        font.setBold(node.state == DirNodeState::Searching);
+        stateItem->setFont(font);
+    }
 
-    filesItem->setText(node.files > 0 ? QString::number(node.files) : QString());
-    matchItem->setText(node.matches > 0 ? QString::number(node.matches) : QString());
+    const QString sFiles = node.files > 0 ? QString::number(node.files) : QString();
+    if (filesItem->text() != sFiles)
+        filesItem->setText(sFiles);
+
+    const QString sMatches = node.matches > 0 ? QString::number(node.matches) : QString();
+    if (matchItem->text() != sMatches)
+        matchItem->setText(sMatches);
 
     // 第 3 层节点下面还有更深目录时，提示被聚合的数量
-    if (node.subDirs > 0) {
+    if (node.subDirs > 0 && nameItem->data(kRoleSubDirs).toInt() != node.subDirs) {
+        nameItem->setData(node.subDirs, kRoleSubDirs);
         nameItem->setToolTip(tr("%1\n（含 %2 个子目录，已聚合计入本行）")
                                  .arg(QDir::toNativeSeparators(node.path))
                                  .arg(node.subDirs));
@@ -258,7 +270,6 @@ void FormPageProgressInfo::applyNode(const DirProgressNode &node)
 
     actionItem->setText(QString());   // 文字交给按钮显示，避免格子里"停止"出现两次
     actionItem->setData(int(node.state), kRoleState);
-    actionItem->setForeground(QColor(0x1a, 0x73, 0xe8));
 
     // 操作列放真正的按钮（不是靠点单元格文字）：更直观，也方便自动化点它
     updateActionButton(actionItem, node.state, node.path);
@@ -284,12 +295,17 @@ void FormPageProgressInfo::updateActionButton(QStandardItem *actionItem, DirNode
         return;
     }
 
+    if (button != nullptr && button->text() == sText && button->property("fmPath").toString() == sPath)
+        return;   // 状态和路径都没变：不用重建连接（每 150ms 重建一次太浪费）
+
     if (button == nullptr) {
         button = new QToolButton(m_tree);
         button->setAutoRaise(true);
         button->setCursor(Qt::PointingHandCursor);
+        button->setProperty("fmPath", sPath);
         m_tree->setIndexWidget(index, button);
     }
+    button->setProperty("fmPath", sPath);
     button->setText(sText);
     button->setToolTip(state == DirNodeState::Searching
                            ? tr("停止搜索这个文件夹（它下面的子目录也一起停）")

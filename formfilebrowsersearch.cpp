@@ -129,6 +129,10 @@ void FormFileBrowser::onActionSearchFilesbyLabelsTriggered()
 
     SearchConfig sc = ConfigOperation::readSearchConfig(g_sAppDir + "/" + SEARCH_CONFIG_FILE);
 
+    // 上一轮可能留下了"已排除 N 个目录"，本轮若不走缓存就把它清掉，
+    // 否则会把上次的提示挂到这次结果上（实测会出现莫名其妙的"已排除"）。
+    m_excludedDirNote.clear();
+
     if (sc.bFromCache && !bForceDisk) {
         QStringList qLFilePaths, qLNotHitedDirs;
         int nExcludedDirs = 0;
@@ -188,11 +192,6 @@ void FormFileBrowser::onActionSearchFilesbyLabelsTriggered()
     connect(m_threadSearch, &ThreadSearch::sendProcessInfo, ui->pageProgressInfo, &FormPageProgressInfo::onRecvProgress);
     connect(m_threadSearch, &ThreadSearch::sendDirSnapshot, ui->pageProgressInfo,
             &FormPageProgressInfo::onRecvDirSnapshot);
-    // 单个目录的停止/跳过：直接写进遍历器的控制集合（线程安全），遍历线程下一层就会响应
-    connect(ui->pageProgressInfo, &FormPageProgressInfo::sendStopDir, this,
-            [](const QString &sPath) { TraverseDirectory::requestStopPath(sPath); });
-    connect(ui->pageProgressInfo, &FormPageProgressInfo::sendSkipDir, this,
-            [](const QString &sPath) { TraverseDirectory::requestSkipPath(sPath); });
     // 注意：ThreadSearch 构造函数里已连接 finished->deleteLater，这里只需在线程结束后把指针置空，避免悬空指针。
     connect(m_threadSearch, &QThread::finished, this, [this](){ m_threadSearch = nullptr; });
     m_threadSearch->start();
@@ -225,11 +224,6 @@ void FormFileBrowser::onActionTraverseSelDirsTriggered()
     ui->pageProgressInfo->resetProgress(selDirs);
     connect(m_threadTraverseDirs, &ThreadTraverseDirs::sendDirSnapshot, ui->pageProgressInfo,
             &FormPageProgressInfo::onRecvDirSnapshot);
-    connect(ui->pageProgressInfo, &FormPageProgressInfo::sendStopDir, this,
-            [](const QString &sPath) { TraverseDirectory::requestStopPath(sPath); });
-    connect(ui->pageProgressInfo, &FormPageProgressInfo::sendSkipDir, this,
-            [](const QString &sPath) { TraverseDirectory::requestSkipPath(sPath); });
-
     connect(m_threadTraverseDirs, &ThreadTraverseDirs::sendResult, this, &FormFileBrowser::onRecvTraverseResult);
     connect(this, &FormFileBrowser::sendStop, m_threadTraverseDirs, &ThreadTraverseDirs::stopThread);
 

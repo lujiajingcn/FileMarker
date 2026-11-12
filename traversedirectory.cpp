@@ -8,7 +8,7 @@
 #include <QSet>
 
 std::atomic<bool> TraverseDirectory::m_isStop{false};
-int TraverseDirectory::m_skippedCount = 0;
+std::atomic<int> TraverseDirectory::m_skippedCount{0};
 
 namespace {
 
@@ -120,7 +120,7 @@ bool TraverseDirectory::traverseRecursive(const QString &sDirPath, const Travers
     // 用户把这棵子树整个跳过：不进入、不扫，向调用方报"已跳过"
     if (isPathSkipped(sDirPath) || (hooks.shouldSkipDir && hooks.shouldSkipDir(sDirPath))) {
         outcome = DirOutcome::Skipped;
-        ++m_skippedCount;
+        m_skippedCount.fetch_add(1);
         if (hooks.onDirLeave)
             hooks.onDirLeave(sDirPath, DirOutcome::Skipped);
         return true;
@@ -240,12 +240,12 @@ void TraverseDirectory::resetPathControls()
     QWriteLocker locker(&g_pathLock);
     g_skippedPaths.clear();
     g_stoppedPaths.clear();
-    m_skippedCount = 0;
+    m_skippedCount.store(0);
 }
 
 int TraverseDirectory::skippedPathCount()
 {
-    return m_skippedCount;
+    return m_skippedCount.load();
 }
 
 bool TraverseDirectory::isDefaultExcludedDirName(const QString &sDirName)

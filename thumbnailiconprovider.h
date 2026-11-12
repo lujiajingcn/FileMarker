@@ -34,6 +34,7 @@ public:
     using ReadyCallback = std::function<void(const QString &)>;
 
     explicit ThumbnailIconProvider(int iconSize = ICON_SIZE);
+    ~ThumbnailIconProvider() override;
 
     /** 调整缩略图边长（逻辑像素），会清空缓存 */
     void setIconSize(int iconSize);

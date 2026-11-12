@@ -105,6 +105,8 @@ public:
     static void resetPathControls();
     /** 本轮被跳过的目录数（写日志/结果提示用） */
     static int skippedPathCount();
+    /** 并行遍历里每跳过一个目录就记一笔（单线程版在 traverseRecursive 内部自己记） */
+    static void noteSkippedPath() { m_skippedCount.fetch_add(1); }
 
     /**
      * 常见的"没有意义"目录名：整盘搜索默认跳过，避免把时间花在
@@ -120,7 +122,7 @@ private:
 
     // 使用原子变量，避免多线程并发读写导致未定义行为。
     static std::atomic<bool>    m_isStop;
-    static int                  m_skippedCount;
+    static std::atomic<int>     m_skippedCount;   // 并行遍历时多个线程都会累加
 };
 
 #endif // TRAVERSEDIRECTORY_H

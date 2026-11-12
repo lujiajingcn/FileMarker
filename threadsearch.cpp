@@ -43,7 +43,6 @@ void ThreadSearch::run()
         return TraverseDirectory::isDefaultExcludedDirName(sName);
     };
 
-    QStringList hostFiles;
     TraverseDirectory::resetStop();          // 每个搜索任务开头复位全局停止标志
     TraverseDirectory::resetPathControls();  // 同时清空上一轮遗留的跳过/停止请求
     // 每个搜索根先建一个节点（状态"等待"），界面上能立刻看到要扫哪些目录

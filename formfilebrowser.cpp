@@ -110,6 +110,13 @@ FormFileBrowser::FormFileBrowser(QWidget *parent) :
     connect(this, &FormFileBrowser::sendRefresh, ui->pageFiles, &FormPageFiles::onBtnRefreshClicked);
     connect(ui->pageProgressInfo, &FormPageProgressInfo::sendStop, this, &FormFileBrowser::onRecvStopSearch);
 
+    // 目录进度树里"停止/跳过"某一行的动作：只连一次。
+    // 以前是在每次搜索/遍历开始时连，连着跑几轮就会挂上好几份同样的处理器。
+    connect(ui->pageProgressInfo, &FormPageProgressInfo::sendStopDir, this,
+            [](const QString &sPath) { TraverseDirectory::requestStopPath(sPath); });
+    connect(ui->pageProgressInfo, &FormPageProgressInfo::sendSkipDir, this,
+            [](const QString &sPath) { TraverseDirectory::requestSkipPath(sPath); });
+
     connect(ui->pageFiles, &FormPageFiles::sendLabels, this, &FormFileBrowser::onRecvLabels);
 
     // 进入目录后立即把该目录的标签送到【当前目录标签】面板（不再依赖先执行“遍历文件”）。

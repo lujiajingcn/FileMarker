@@ -38,6 +38,17 @@ MyQFileSystemModel::MyQFileSystemModel(QObject *parent) :
     m_tagCache.setMaxCost(4000);
 }
 
+MyQFileSystemModel::~MyQFileSystemModel()
+{
+    // 标签是后台线程读的：析构前先让线程池跑完再释放，避免任务里还引用本对象
+    if (m_tagPool != nullptr) {
+        m_tagPool->clear();
+        m_tagPool->waitForDone();
+        delete m_tagPool;
+        m_tagPool = nullptr;
+    }
+}
+
 int MyQFileSystemModel::columnCount( const QModelIndex & index ) const
 {
     return QFileSystemModel::columnCount( index ) + 1;

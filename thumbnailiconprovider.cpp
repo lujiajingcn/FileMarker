@@ -100,6 +100,18 @@ ThumbnailIconProvider::ThumbnailIconProvider(int iconSize)
     m_cache.setMaxCost(256);
 }
 
+ThumbnailIconProvider::~ThumbnailIconProvider()
+{
+    // 后台线程里还在用 this 算缩略图：必须等它们退出再删线程池，
+    // 否则就是典型的退出时偶发崩溃（还在跑的任务访问已析构的对象）。
+    if (m_pool != nullptr) {
+        m_pool->clear();
+        m_pool->waitForDone();
+        delete m_pool;
+        m_pool = nullptr;
+    }
+}
+
 void ThumbnailIconProvider::setPaintDevicePixelRatio(qreal dpr) const
 {
     if (dpr > 0.0)
