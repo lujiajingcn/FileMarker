@@ -7,7 +7,11 @@
 #include <QDesktopServices>
 #include <QDir>
 #include <QFileInfo>
+#include <QFile>
 #include <QHeaderView>
+#include <QInputDialog>
+#include <QLineEdit>
+#include <QMessageBox>
 #include <QMenu>
 #include <QProcess>
 #include <QTimer>
@@ -45,6 +49,11 @@ FormPageFilterdFiles::FormPageFilterdFiles(QWidget *parent) :
     m_revealInExplorer = new QAction(tr("在资源管理器中显示"), this);
     m_openFile = new QAction(tr("打开"), this);
     m_copyFilePath = new QAction(tr("复制路径"), this);
+    m_editTags = new QAction(tr("编辑标签…"), this);
+    m_editTags->setShortcut(QKeySequence(Qt::Key_F4));
+    m_clearTags = new QAction(tr("清除标签"), this);
+    m_renameFile = new QAction(tr("重命名…"), this);
+    m_renameFile->setShortcut(QKeySequence(Qt::Key_F2));
 
     // 标签列分片读取：搜索结果可能上千条，一次性枚举 ADS 会卡住界面
     // 结果行分片填充定时器（和标签扫描定时器各管一件事）
@@ -71,6 +80,20 @@ FormPageFilterdFiles::FormPageFilterdFiles(QWidget *parent) :
             QDesktopServices::openUrl(QUrl::fromLocalFile(sFilePath));
     });
     connect(m_copyFilePath, &QAction::triggered, this, &FormPageFilterdFiles::onCopyFilePath);
+    connect(m_editTags, &QAction::triggered, this, [this]() {
+        const QString sFilePath = currentFilePath();
+        if (!sFilePath.isEmpty())
+            emit sendEditTagsRequested(QStringList() << sFilePath);
+    });
+    connect(m_clearTags, &QAction::triggered, this, [this]() {
+        emit sendClearTagsRequested(selectedFilePaths());
+    });
+    connect(m_renameFile, &QAction::triggered, this, [this]() { renameCurrentFileInteractive(); });
+    // 结果页也支持 F2/F4：动作挂到结果树上（WidgetWithChildrenShortcut 才能生效）
+    addAction(m_renameFile);
+    addAction(m_editTags);
+    m_renameFile->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+    m_editTags->setShortcutContext(Qt::WidgetWithChildrenShortcut);
 
     // “返回目录”：由外层 FormFileBrowser 切回文件列表页面
     connect(ui->btnBack, &QToolButton::clicked, this, &FormPageFilterdFiles::sendBackRequested);
@@ -107,6 +130,11 @@ void FormPageFilterdFiles::onShowFilteredFiles(const QStringList &qLFilteredFile
 
     // 路径列显示完整路径，避免同名文件难区分
     m_resultCountText = tr("搜索结果 %1 项").arg(qLFilteredFiles.size());
+    if (m_bInterrupted) {
+        // 用户中途按了停止：结果只是"扫到的部分"，必须让人知道，
+        // 否则很容易误判成"这些文件没有该标签"。
+        m_resultCountText += tr("（搜索已中断：结果不完整，可点【重新扫描】重搜）");
+    }
     if (!m_searchCondition.isEmpty())
         m_resultCountText += QStringLiteral("（") + m_searchCondition + QStringLiteral("）");
     // 把结果来源写出来：缓存可能过期，用户至少要能看到这次是从哪查的
@@ -261,9 +289,83 @@ void FormPageFilterdFiles::onTvFilteredFilesCustomContextMenuRequested(const QPo
     menu.addAction(m_revealInExplorer);
     menu.addAction(m_gotoFilePath);
     menu.addAction(m_copyFilePath);
+    menu.addSeparator();
+    menu.addAction(m_editTags);
+    menu.addAction(m_clearTags);
+    menu.addAction(m_renameFile);
     m_openFile->setEnabled(hasSelection);
     m_revealInExplorer->setEnabled(hasSelection);
     m_gotoFilePath->setEnabled(hasSelection);
     m_copyFilePath->setEnabled(hasSelection);
+    m_editTags->setEnabled(hasSelection);
+    m_clearTags->setEnabled(hasSelection);
+    m_renameFile->setEnabled(hasSelection);
     menu.exec(m_filteredFilesTree->viewport()->mapToGlobal(pos));
+}
+
+void FormPageFilterdFiles::setSearchInterrupted(bool bInterrupted)
+{
+    m_bInterrupted = bInterrupted;
+}
+
+/** 当前选中的全部结果路径（去重、保持顺序）。 */
+QStringList FormPageFilterdFiles::selectedFilePaths() const
+{
+    QStringList qLPaths;
+    if (m_filteredFilesTree == nullptr || m_filteredFilesTree->selectionModel() == nullptr)
+        return qLPaths;
+    const QModelIndexList qLRows = m_filteredFilesTree->selectionModel()->selectedRows(1);
+    for (const QModelIndex &index : qLRows) {
+        const QString sPath = index.data().toString();
+        if (!sPath.isEmpty() && !qLPaths.contains(sPath))
+            qLPaths << sPath;
+    }
+    return qLPaths;
+}
+
+/** 结果页里按 F2 重命名：改名成功后把新名字回写到结果行，并通知外层同步缓存。 */
+void FormPageFilterdFiles::renameCurrentFileInteractive()
+{
+    if (m_filteredFilesTree == nullptr)
+        return;
+    const QModelIndex current = m_filteredFilesTree->currentIndex();
+    if (!current.isValid())
+        return;
+
+    const QModelIndex pathIndex =
+        m_modelFilteredFiles->index(current.row(), 1);
+    QStandardItem *pathItem = m_modelFilteredFiles->itemFromIndex(pathIndex);
+    QStandardItem *nameItem = m_modelFilteredFiles->item(current.row(), 0);
+    if (pathItem == nullptr || nameItem == nullptr)
+        return;
+
+    const QString sOldPath = pathItem->text();
+    const QFileInfo fileInfo(sOldPath);
+    if (!fileInfo.exists())
+        return;
+
+    bool bOk = false;
+    const QString sNewName = QInputDialog::getText(this, tr("重命名"),
+                                                   tr("新名称（含扩展名）："),
+                                                   QLineEdit::Normal, fileInfo.fileName(), &bOk)
+                                 .trimmed();
+    if (!bOk || sNewName.isEmpty() || sNewName == fileInfo.fileName())
+        return;
+
+    const QString sNewPath = fileInfo.absolutePath() + QLatin1Char('/') + sNewName;
+    if (QFileInfo::exists(sNewPath)) {
+        QMessageBox::warning(this, tr("重命名失败"),
+                             tr("【%1】已经存在，请换一个名字。").arg(sNewName));
+        return;
+    }
+    if (!QFile::rename(sOldPath, sNewPath)) {
+        QMessageBox::warning(this, tr("重命名失败"),
+                             tr("无法把【%1】改成【%2】。\n可能是名称不合法或文件正被占用。")
+                                 .arg(fileInfo.fileName(), sNewName));
+        return;
+    }
+
+    nameItem->setText(sNewName);
+    pathItem->setText(sNewPath);
+    emit sendRenameRequested(sOldPath, sNewName);
 }

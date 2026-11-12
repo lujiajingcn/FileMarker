@@ -54,7 +54,7 @@ public:
 
     QStringList getSelFilePath();
 
-    QStringList getSelDirs();
+    QStringList getSelDirs(bool bFallbackToCurrent = true);
 
     /** 【标签库】的改名/删除需要查询"哪些文件在用这个标签"，由主窗口把它传给 FormLabels */
     SqliteOperation *sqlOperation() const { return m_sqlOperation; }
@@ -91,7 +91,10 @@ public slots:
     /** 标签库把文件拖到标签上时，转给文件页去写盘（打在哪个文件上由文件页决定） */
     void onFilesDroppedOnLabel(const QStringList &qLFiles, const QStringList &qLLabels);
 
-    void showFilteredFile(QStringList qLFilteredFiles);
+    void showFilteredFile(QStringList qLFilteredFiles, bool bCompleted = true);
+
+    /** 文件被重命名：把缓存里对应的行一起改名，避免"改名后搜不到" */
+    void onFileRenamedInCache(const QString &sOldPath, const QString &sNewPath);
 
     void onGotoFilePath(const QString &sFilePath);
 

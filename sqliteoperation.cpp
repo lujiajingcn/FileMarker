@@ -421,29 +421,47 @@ void SqliteOperation::searchFilesByLabels(const QStringList &qLSelDirs,
     stNotHitedDirs.subtract(stSearchedDirs);
 
     // 用户主动排除的目录：既不算命中（不去查它的文件），也不算未命中（不回退磁盘），
-    // 只统计数量，结果页上提示"已排除 N 个目录"，让用户知道结果为什么可能偏少。
+    // 只统计数量，结果页上提示"已跳过的目录"，让用户知道结果为什么可能偏少。
     const QSet<QString> stExcludedDirs = Utility::toSet(qLExcludedDirs);
 
-    // 统计"选中目录下被主动排除的目录数"（含子目录）：
-    // 选择的是整盘/大目录时，被排除的往往是它下面的 node_modules 之类，
-    // 只按"选中的目录本身是否被排除"统计会永远是 0，用户看不到提示。
     auto normDir = [](const QString &sPath) {
         QString sKey = QDir::cleanPath(sPath);
         while (sKey.size() > 1 && sKey.endsWith(QLatin1Char('/')))
             sKey.chop(1);
         return sKey;
     };
-    for (QSet<QString>::const_iterator cItr = stExcludedDirs.begin(); cItr != stExcludedDirs.end(); cItr++) {
-        const QString sExcluded = normDir(*cItr);
-        for (QSet<QString>::const_iterator sItr = stSelDirs.begin(); sItr != stSelDirs.end(); sItr++) {
-            const QString sSel = normDir(*sItr);
-            if (sExcluded == sSel || sExcluded.startsWith(sSel + QLatin1Char('/'))) {
+
+    // 【重要】选中的目录**自己**如果被标记为"已排除"，必须回退磁盘重扫：
+    // 用户明确说"就搜这个目录"时，不能因为它上次被自动跳过就静默返回空。
+    // 只有"选中目录下面的子目录"才继续沿用跳过。
+    const QStringList qLSelectedKeys = [&]() {
+        QStringList qLKeys;
+        for (const QString &sSel : stSelDirs)
+            qLKeys << normDir(sSel);
+        return qLKeys;
+    }();
+    QSet<QString> stExcludedUnderSelection;   // 选中范围内仍要跳过的
+    for (const QString &sExcluded : stExcludedDirs) {
+        const QString sExcludedKey = normDir(sExcluded);
+        if (qLSelectedKeys.contains(sExcludedKey)) {
+            stNotHitedDirs.insert(sExcludedKey);   // 选中它本身 → 真的去扫
+            continue;
+        }
+        stExcludedUnderSelection.insert(sExcludedKey);
+    }
+
+    // 统计"选中目录下被主动排除的目录数"（含子目录）：
+    // 选择的是整盘/大目录时，被排除的往往是它下面的 node_modules 之类，
+    // 只按"选中的目录本身是否被排除"统计会永远是 0，用户看不到提示。
+    for (const QString &sExcluded : stExcludedUnderSelection) {
+        for (const QString &sSel : qLSelectedKeys) {
+            if (sExcluded.startsWith(sSel + QLatin1Char('/'))) {
                 ++nExcludedDirs;
                 break;
             }
         }
     }
-    stNotHitedDirs.subtract(stExcludedDirs);
+    stNotHitedDirs.subtract(stExcludedUnderSelection);
 
     // 被中断过的目录：缓存不可信 → 当作未命中，回退磁盘重扫
     const QSet<QString> stIncompleteDirs = Utility::toSet(qLIncompleteDirs);
@@ -481,4 +499,17 @@ void SqliteOperation::searchFilesByLabels(const QStringList &qLSelDirs,
         }
         hitQuery.finish();
     }
+}
+
+void SqliteOperation::renameCachedFile(const QString &sOldPath, const QString &sNewPath)
+{
+    if (sOldPath.isEmpty() || sNewPath.isEmpty() || sOldPath == sNewPath)
+        return;
+
+    QSqlQuery query(m_sqlDB);
+    query.prepare(QString("UPDATE %1 SET filepath = :newPath WHERE filepath = :oldPath").arg(TABLE_NAME_FILEPATH_TAG));
+    query.bindValue(":newPath", sNewPath);
+    query.bindValue(":oldPath", sOldPath);
+    if (!query.exec())
+        qWarning() << "重命名后更新缓存失败:" << query.lastError().text();
 }

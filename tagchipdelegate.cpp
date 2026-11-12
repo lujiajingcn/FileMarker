@@ -21,7 +21,7 @@ const int CHIP_MARGIN_LEFT = 6;   // 单元格左内边距
 const int CHIP_MARGIN_RIGHT = 4;  // 右内边距
 const int CHIP_GAP = 6;           // chip 之间
 const int CHIP_PADDING_LEFT = 8;  // chip 内文字左内边距
-const int CHIP_CLOSE_SIZE = 12;   // ✕ 的可点区域边长
+const int CHIP_CLOSE_SIZE = 14;   // ✕ 的可点区域边长（12 在高 DPI 下太难点中）
 const int CHIP_PADDING_RIGHT = 6;
 
 }   // namespace

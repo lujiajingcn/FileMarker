@@ -56,6 +56,9 @@ public:
      */
     void invalidateCacheForFile(const QString &sFilePath);
 
+    /** 文件重命名后把缓存里的路径改掉（标签不变），避免"改名后搜不到" */
+    void renameCachedFile(const QString &sOldPath, const QString &sNewPath);
+
     /**
      * 列出缓存中"带这个标签"的文件（按标签全名精确匹配，大小写不敏感）。
      * 用于【标签库】改名/删除时告诉用户"有多少文件在用"，以及可选地同步到文件。

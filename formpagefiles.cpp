@@ -271,9 +271,10 @@ FormPageFiles::FormPageFiles(QWidget *parent) :
     addToFileViews(m_actionOpen);
 
     // Delete：清空选中文件的全部标签（等同命令条的"清空文件标签"，会先确认）
-    m_actionClearTags = new QAction(tr("清空选中文件的标签"), this);
-    m_actionClearTags->setShortcut(QKeySequence(Qt::Key_Delete));
-    m_actionClearTags->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+    m_actionClearTags = new QAction(tr("清除选中文件的标签"), this);
+    // 不再把 Delete 键绑成"清空标签"：用户按 Delete 多半想删文件，
+    // 这个隐藏绑定既反直觉，也和菜单里标注的 Ctrl+Shift+C 不一致。
+    // 该动作仍在文件列表右键菜单里可用。
     connect(m_actionClearTags, &QAction::triggered, this, &FormPageFiles::onDeleteLabels);
     addToFileViews(m_actionClearTags);
 
@@ -621,7 +622,7 @@ QStringList FormPageFiles::getSelFilePath()
     return selFilePath;
 }
 
-QStringList FormPageFiles::getSelDirs()
+QStringList FormPageFiles::getSelDirs(bool bFallbackToCurrent)
 {
     QStringList qLSelDirs;
     QItemSelectionModel *selModel = m_filesTree->selectionModel();
@@ -639,7 +640,7 @@ QStringList FormPageFiles::getSelDirs()
             qLSelDirs << sFilePath;
         }
     }
-    if (qLSelDirs.isEmpty())
+    if (qLSelDirs.isEmpty() && bFallbackToCurrent)
     {
         qLSelDirs << m_curDir;
     }

@@ -180,7 +180,7 @@ IntroductionWidget::IntroductionWidget(QWidget *parent)
             "<li>双击文件夹可进入该目录，双击文件会使用默认程序打开；重命名按 F2 或右键。</li>"
             "<li>右侧的标签列是一行行带 ✕ 的小药丸（chip），多了会自动换行。</li>"
                          "<li>常用快捷键：Ctrl+F 查找、F3 查找条件、Ctrl+A 全选、Enter 打开、F2 重命名、"
-                         "Delete / Ctrl+Shift+C 清空标签、Ctrl+Z 撤销。</li>"
+                         "右键菜单「清除选中文件的标签」或 Ctrl+Shift+C，Ctrl+Z 撤销（Delete 键不再绑定清空标签）。</li>"
             "</ul>")},
         {QLatin1String("fileCommandBar"),
          tr("工具栏"),
@@ -196,8 +196,8 @@ IntroductionWidget::IntroductionWidget(QWidget *parent)
              + QStringLiteral("<td>根据标签区选中的标签为文件查看区选中的文件添加标签。</td></tr>")
              + QStringLiteral("<tr><td><img src=\"") + ToolIcons::whiteImageUrl(ToolIcons::ClearTags)
              + QStringLiteral("\" width=\"16\" height=\"16\"></td>")
-             + QStringLiteral("<td style=\"padding-right: 14px\">&nbsp;清空标签:</td>")
-             + QStringLiteral("<td>清空选中文件的全部标签（会先确认，可用 Ctrl+Z 撤销）。</td></tr>")
+             + QStringLiteral("<td style=\"padding-right: 14px\">&nbsp;清除标签:</td>")
+             + QStringLiteral("<td>清除选中文件的全部标签（会先确认，可用 Ctrl+Z 撤销）。</td></tr>")
              + QStringLiteral("<tr><td><img src=\"") + ToolIcons::whiteImageUrl(ToolIcons::Search)
              + QStringLiteral("\" width=\"16\" height=\"16\"></td>")
              + QStringLiteral("<td style=\"padding-right: 14px\">&nbsp;查找文件:</td>")

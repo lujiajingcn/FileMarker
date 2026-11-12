@@ -41,7 +41,13 @@ void FormPageFiles::setAction(QAction *actionDeleteLabels)
 
 void FormPageFiles::onDeleteLabels()
 {
-    QStringList qLSelFilePaths = getSelFilePath();
+    clearTagsForPaths(getSelFilePath());
+}
+
+/** 清除指定文件的全部标签（带确认 + 可撤销）。 */
+void FormPageFiles::clearTagsForPaths(const QStringList &qLPaths)
+{
+    QStringList qLSelFilePaths = qLPaths;
     if (qLSelFilePaths.isEmpty()) {
         // 没选文件时原来直接 return，点了按钮像没反应，这里给一句提示
         emit sendHintMessage(tr("请先在文件列表里选中要清空标签的文件。"));
@@ -51,16 +57,16 @@ void FormPageFiles::onDeleteLabels()
     // 清空标签是破坏性操作：先让用户确认，避免误点工具栏就清空全部标签。
     // 删除前的标签会被记录，可再用 Ctrl+Z 撤销（撤销入口见【撤销上一次标签操作】）。
     QMessageBox box(this);
-    box.setWindowTitle(tr("删除标签"));
+    box.setWindowTitle(tr("清除标签"));
     box.setIcon(QMessageBox::Warning);
     // 确认框里列出具体文件（最多 5 个），避免"选中的文件已经不在当前视图里"时
     // 用户不知道到底要删哪些文件的标签。
     QString sFileList = qLSelFilePaths.mid(0, 5).join(QStringLiteral("\n"));
     if (qLSelFilePaths.size() > 5)
         sFileList += tr("\n…另有 %1 个文件").arg(qLSelFilePaths.size() - 5);
-    box.setText(tr("将删除以下 %1 个文件的全部标签（删除后可用 Ctrl+Z 撤销）：\n\n%2\n\n是否继续？")
+    box.setText(tr("将清除以下 %1 个文件的全部标签（可用 Ctrl+Z 撤销）：\n\n%2\n\n是否继续？")
                     .arg(qLSelFilePaths.size()).arg(sFileList));
-    QPushButton *btnDelete = box.addButton(tr("删除"), QMessageBox::DestructiveRole);
+    QPushButton *btnDelete = box.addButton(tr("清除"), QMessageBox::DestructiveRole);
     QPushButton *btnCancel = box.addButton(tr("取消"), QMessageBox::RejectRole);
     box.setDefaultButton(btnCancel);
     box.exec();
@@ -86,10 +92,53 @@ void FormPageFiles::onDeleteLabels()
         const QString sMore = qLFailedFiles.size() > 5
                                   ? tr("\n…另有 %1 个文件").arg(qLFailedFiles.size() - 5)
                                   : QString();
-        QMessageBox::warning(this, tr("删除标签失败"),
+        QMessageBox::warning(this, tr("清除标签失败"),
                              tr("以下 %1 个文件的标签未能删除（可能是文件被占用、只读或权限不足）：\n\n%2%3")
                                  .arg(qLFailedFiles.size()).arg(sList).arg(sMore));
     }
+}
+
+/**
+ * 编辑指定文件的标签：复用"列表 + 添加/移除"的 TagEditDialog。
+ * 多选时逐个弹，避免一次把多个文件的标签合并成一个对话框改错。
+ */
+void FormPageFiles::editTagsForPaths(const QStringList &qLFilePaths)
+{
+    QStringList qLPaths;
+    for (const QString &sPath : qLFilePaths) {
+        if (!sPath.isEmpty() && QFileInfo(sPath).isFile() && !qLPaths.contains(sPath))
+            qLPaths << sPath;
+    }
+    if (qLPaths.isEmpty())
+        return;
+
+    QStringList qLChanged;
+    for (const QString &sFilePath : qLPaths) {
+        const QStringList adsNames = ADSOperation::listADSTagsInOrder(sFilePath);
+        TagEditDialog dlg(adsNames, QFileInfo(sFilePath).fileName(), this);
+        if (dlg.exec() != QDialog::Accepted)
+            continue;
+        const QStringList qLLabels = dlg.tags();
+        if (qLLabels == adsNames)
+            continue;
+
+        emit sendBeforeTagsChanged(QStringList() << sFilePath);
+        const bool bOk = ADSOperation::replaceTags(sFilePath, qLLabels);
+        emit sendTagsChanged(QStringList() << sFilePath);
+        refreshAfterTagChange(QStringList() << sFilePath);
+        if (!bOk) {
+            QMessageBox::warning(this, tr("保存标签失败"),
+                                 tr("标签未能完整写入：%1\n"
+                                    "已尝试恢复操作前的标签，请检查文件是否被占用、只读或磁盘空间不足。")
+                                     .arg(sFilePath));
+            continue;
+        }
+        emit sendLabels(sFilePath, qLLabels.join(","));
+        qLChanged << sFilePath;
+    }
+
+    if (!qLChanged.isEmpty())
+        emit sendHintMessage(tr("已更新 %1 个文件的标签").arg(qLChanged.size()));
 }
 
 void FormPageFiles::updateDirLabelsPanel(const QString &sDir)
@@ -274,5 +323,12 @@ void FormPageFiles::renameFile(const QModelIndex &index)
                              tr("无法把【%1】改成【%2】。\n"
                                 "可能是名称不合法、已经存在同名文件，或文件正被占用。")
                                  .arg(sOldName, sNewName));
+        return;
     }
+
+    // 重命名成功后同步搜索缓存里的路径，否则新名字在缓存里查不到（搜索会漏掉它）
+    const QString sFilePath = m_modelFiles->filePath(nameIndex);
+    const QString sDirPath = QFileInfo(sFilePath).absolutePath();
+    emit sendFileRenamed(sDirPath + QLatin1Char('/') + sOldName,
+                         sDirPath + QLatin1Char('/') + sNewName);
 }

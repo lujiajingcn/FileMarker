@@ -38,7 +38,14 @@ void ThreadSearch::run()
     };
     // 默认跳过 node_modules / .git 这类目录：整盘搜索时它们几乎不可能带标签，
     // 却往往占了文件量的大头，跳过能省下大量 ADS 枚举。
-    hooks.shouldSkipDir = [](const QString &sDirPath) -> bool {
+    // 例外：用户**明确选中**的搜索根即使叫 node_modules 也要照扫 ——
+    // 否则"我就想搜这个目录"会永远返回空。
+    hooks.shouldSkipDir = [this](const QString &sDirPath) -> bool {
+        const QString sClean = QDir::cleanPath(sDirPath);
+        for (const QString &sRoot : m_selDirs) {
+            if (QDir::cleanPath(sRoot).compare(sClean, Qt::CaseInsensitive) == 0)
+                return false;
+        }
         const QString sName = QFileInfo(sDirPath).fileName();
         return TraverseDirectory::isDefaultExcludedDirName(sName);
     };
@@ -53,12 +60,16 @@ void ThreadSearch::run()
     m_progressTimer.start();
     // 每个搜索根**各自**判断所在磁盘类型：SSD 用多线程，机械盘用单线程。
     // （同一根目录下的子目录都在同一个卷上，所以按根判定就等于按"当前目录"判定）
+    bool bCompleted = true;   // 中途被停止时置 false，结果页要提示"不完整"
     for (const QString &sRoot : m_selDirs) {
-        if (TraverseDirectory::isStopped())
+        if (TraverseDirectory::isStopped()) {
+            bCompleted = false;
             break;
+        }
         const int nThreads = ParallelDirTraverser::threadCountForPath(sRoot);
         qInfo("[搜索] 根=%s 线程数=%d（机械盘=1，SSD=多线程）", qPrintable(sRoot), nThreads);
-        ParallelDirTraverser::run(QStringList() << sRoot, nThreads, hooks);
+        if (!ParallelDirTraverser::run(QStringList() << sRoot, nThreads, hooks))
+            bCompleted = false;
         emitDirSnapshot();
     }
 
@@ -69,7 +80,7 @@ void ThreadSearch::run()
 
     qInfo() << "磁盘查找结束: scanned=" << m_scanned << "matched=" << m_filePaths.size()
             << "logic=" << int(m_tagLogic) << "groups=" << m_labelGroups;
-    emit sigResult(m_filePaths);
+    emit sigResult(m_filePaths, bCompleted);
 }
 
 void ThreadSearch::emitDirSnapshot()

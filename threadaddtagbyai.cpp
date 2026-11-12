@@ -62,6 +62,11 @@ bool ThreadAddTagByAI::recordFailure(const QString &sFilePath, const QString &sR
     return !(m_succeeded == 0 && m_failed >= 3);
 }
 
+void ThreadAddTagByAI::setFiles(const QStringList &qLFiles)
+{
+    m_files = qLFiles;
+}
+
 void ThreadAddTagByAI::run()
 {
     m_succeeded = 0;
@@ -84,6 +89,21 @@ void ThreadAddTagByAI::run()
     // 静态 m_isStop 标志被所有遍历线程共享。若用户此前停止过搜索/遍历操作，
     // 不在此处复位则 m_isStop 仍为 true，AI 线程会立即跳过所有目录并结束。
     TraverseDirectory::resetStop();
+
+    // 用户明确选中了文件：只处理这些文件，不再顺手把整个文件夹扫一遍
+    if (!m_files.isEmpty()) {
+        for (const QString &sFile : m_files) {
+            if (TraverseDirectory::isStopped())
+                break;
+            emit sendProcessInfo(sFile);
+            if (!addTag(QFileInfo(sFile)))
+                break;
+            if (m_succeeded == 0 && m_failed >= 3)
+                break;
+        }
+        emit sendFinish(m_succeeded, m_failed, m_firstError);
+        return;
+    }
 
     for (QString selDir : m_dirs) {
         // 已请求停止时，不再继续遍历其余目录。

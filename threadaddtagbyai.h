@@ -14,6 +14,12 @@ public:
 
     void setDirs(const QStringList &dirs);
 
+    /**
+     * 直接处理指定的文件（用户在文件列表里选了若干文件时用）。
+     * 为空时仍按 setDirs() 的目录遍历处理。
+     */
+    void setFiles(const QStringList &qLFiles);
+
     void stopThread();
 
 signals:
@@ -36,6 +42,7 @@ private:
     bool recordFailure(const QString &sFilePath, const QString &sReason, const QString &sDetail = QString());
 
     QStringList     m_dirs;
+    QStringList     m_files;
     int             m_succeeded = 0;
     int             m_failed = 0;
     QString         m_firstError;

@@ -104,6 +104,23 @@ FormFileBrowser::FormFileBrowser(QWidget *parent) :
     // 结果页的【重新扫描】：不用缓存，直接走磁盘
     connect(ui->pageFilteredFiles, &FormPageFilterdFiles::sendRescanRequested,
             this, &FormFileBrowser::onRescanFromDiskRequested);
+
+    // 结果页里直接编辑/清除标签：转给文件页对应的实现（同一套确认与撤销）
+    connect(ui->pageFilteredFiles, &FormPageFilterdFiles::sendEditTagsRequested,
+            ui->pageFiles, &FormPageFiles::editTagsForPaths);
+    connect(ui->pageFilteredFiles, &FormPageFilterdFiles::sendClearTagsRequested,
+            ui->pageFiles, &FormPageFiles::clearTagsForPaths);
+    // 结果页里重命名成功 → 同步缓存路径
+    connect(ui->pageFilteredFiles, &FormPageFilterdFiles::sendRenameRequested,
+            this, [this](const QString &sOldPath, const QString &sNewName) {
+                const QString sNewPath = QFileInfo(sOldPath).absolutePath()
+                                         + QLatin1Char('/') + sNewName;
+                onFileRenamedInCache(sOldPath, sNewPath);
+                emit sendStatusMessage(tr("已重命名：%1 → %2；缓存已同步").arg(sOldPath, sNewPath));
+            });
+    // 文件页里重命名成功 → 同步缓存路径
+    connect(ui->pageFiles, &FormPageFiles::sendFileRenamed,
+            this, &FormFileBrowser::onFileRenamedInCache);
     connect(this, &FormFileBrowser::sendGotoFile, ui->pageFiles, &FormPageFiles::recvGotoFile);
 
     connect(this, &FormFileBrowser::sendShowFilteredFiles, ui->pageFilteredFiles, &FormPageFilterdFiles::onShowFilteredFiles);
@@ -344,9 +361,9 @@ QStringList FormFileBrowser::getSelFilePath()
     return ui->pageFiles->getSelFilePath();
 }
 
-QStringList FormFileBrowser::getSelDirs()
+QStringList FormFileBrowser::getSelDirs(bool bFallbackToCurrent)
 {
-    return ui->pageFiles->getSelDirs();
+    return ui->pageFiles->getSelDirs(bFallbackToCurrent);
 }
 
 void FormFileBrowser::restoreLastDir()
@@ -366,7 +383,7 @@ void FormFileBrowser::showFilesWidget()
     ui->stackedWidget->setCurrentWidget(ui->pageFiles);
 }
 
-void FormFileBrowser::showFilteredFile(QStringList qLFilteredFiles)
+void FormFileBrowser::showFilteredFile(QStringList qLFilteredFiles, bool bCompleted)
 {
     // 将命中缓存的部分与磁盘查找得到的部分合并，避免部分目录命中缓存时被整体丢弃。
     if (!m_cachedFilePaths.isEmpty())
@@ -376,11 +393,19 @@ void FormFileBrowser::showFilteredFile(QStringList qLFilteredFiles)
     }
     setActionState(SEARCH_FINISH);
     ui->stackedWidget->setCurrentWidget(ui->pageFilteredFiles);
+    ui->pageFilteredFiles->setSearchInterrupted(!bCompleted); // 被停止过 → 结果页要写明"不完整"
     ui->pageFilteredFiles->setSearchSource(m_searchSource);   // 结果来源
     emit sendShowFilteredFiles(qLFilteredFiles);
     ui->pageProgressInfo->clear();
 
-    qInfo() << "搜索完成: results=" << qLFilteredFiles.size();
+    qInfo() << "搜索完成: results=" << qLFilteredFiles.size() << "completed=" << bCompleted;
+}
+
+void FormFileBrowser::onFileRenamedInCache(const QString &sOldPath, const QString &sNewPath)
+{
+    if (m_sqlOperation == nullptr || sOldPath.isEmpty() || sNewPath.isEmpty())
+        return;
+    m_sqlOperation->renameCachedFile(sOldPath, sNewPath);
 }
 
 void FormFileBrowser::onGotoFilePath(const QString &sFilePath)

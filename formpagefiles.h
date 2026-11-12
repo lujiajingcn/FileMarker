@@ -60,7 +60,8 @@ public:
 
     QStringList getSelFilePath();
 
-    QStringList getSelDirs();
+    /** 取选中的目录；bFallbackToCurrent=true 时没有选中目录会回退到当前目录 */
+    QStringList getSelDirs(bool bFallbackToCurrent = true);
 
     void updateToolButtons();
 
@@ -87,7 +88,16 @@ signals:
     // 写标签之前广播一次，供外层记住"改之前的标签"用于撤销
     void sendBeforeTagsChanged(const QStringList &qLFilePaths);
 
+    // 文件被重命名：外层要用它同步搜索缓存里的路径
+    void sendFileRenamed(const QString &sOldPath, const QString &sNewPath);
+
 public:
+    /** 清除指定文件的全部标签（带确认，可撤销）。结果页的「清除标签」也走这里 */
+    void clearTagsForPaths(const QStringList &qLFilePaths);
+
+    /** 编辑指定文件的标签（弹增删式对话框）。结果页的「编辑标签…」也走这里 */
+    void editTagsForPaths(const QStringList &qLFilePaths);
+
     // 刷新当前目录：既响应【刷新】按钮，也作为 FormFileBrowser::sendRefresh 信号的接收者
     void onBtnRefreshClicked();
 

@@ -59,7 +59,18 @@ void FormFileBrowser::onActionAddLabelByAITriggered()
     setActionState(ADDTAGBYAI_START);
     showProcessPage(RUNNINGTHREAD::AIADDTAG);
 
-    QStringList qLSelDirs = getSelDirs();
+    // 选中的文件优先；没有选文件才按选中的目录（含子目录）处理。
+    // 注意这里用 getSelDirs(false)：不能用会回退"当前目录"的那个版本，
+    // 否则"我只选了一个文件"会变成"给整个文件夹打标签"。
+    const QStringList qLSelFiles = getSelFilePath();
+    const QStringList qLSelDirs = getSelDirs(false);
+    if (qLSelFiles.isEmpty() && qLSelDirs.isEmpty()) {
+        showFilesWidget();
+        setActionState(ADDTAGBYAI_FINISH);
+        QMessageBox::information(this, tr("AI 自动生成标签"),
+                                 tr("请先在文件列表里选中要处理的文件或文件夹。"));
+        return;
+    }
 
     m_threadAddLabelByAI = new ThreadAddTagByAI(this);
 
@@ -81,6 +92,7 @@ void FormFileBrowser::onActionAddLabelByAITriggered()
     connect(m_threadAddLabelByAI, &QThread::finished, this, [this](){ m_threadAddLabelByAI = nullptr; });
 
     m_threadAddLabelByAI->setDirs(qLSelDirs);
+    m_threadAddLabelByAI->setFiles(qLSelFiles);
 
     m_threadAddLabelByAI->start();
 }

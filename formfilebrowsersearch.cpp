@@ -140,7 +140,8 @@ void FormFileBrowser::onActionSearchFilesbyLabelsTriggered()
                                             qLNotHitedDirs, nExcludedDirs);
         if (nExcludedDirs > 0) {
             // 用户主动跳过的目录不会回退磁盘，所以结果可能偏少，明确告诉用户
-            m_excludedDirNote = tr("（已排除 %1 个目录）").arg(nExcludedDirs);
+            // 说清楚"跳过了"意味着什么，否则用户只会看到结果"少了几个"
+            m_excludedDirNote = tr("（已跳过 %1 个目录，其中的文件未参与本次搜索）").arg(nExcludedDirs);
         } else {
             m_excludedDirNote.clear();
         }
@@ -156,7 +157,7 @@ void FormFileBrowser::onActionSearchFilesbyLabelsTriggered()
                                              : tr("（结果来自缓存，%1）").arg(sAge);
             if (!m_excludedDirNote.isEmpty())
                 m_searchSource += m_excludedDirNote;
-            showFilteredFile(qLFilePaths);
+            showFilteredFile(qLFilePaths, true);   // 全部命中的缓存结果 = 完整
             return;
         } else { // 查找的文件夹有部分未在缓存数据库中，不在的文件夹从磁盘查找
             // 命中缓存的部分先保留，最后与磁盘查找结果合并，避免被整体丢弃。

@@ -29,8 +29,9 @@ protected:
     void run();
 
 signals:
-    // 扫描结束时的完整结果；处理完由 FormFileBrowser::onRecvSearchResult 接手
-    void sigResult(const QStringList &qLHostFiles);
+    // 扫描结束时的完整结果；处理完由 FormFileBrowser::onRecvSearchResult 接手。
+    // bCompleted=false 表示中途被用户停止（结果不完整，界面必须提示）。
+    void sigResult(const QStringList &qLHostFiles, bool bCompleted);
     void sendProcessInfo(const QString &sProcessedFilePath);
     // 目录进度树快照（每 150ms 一次，避免把 UI 线程灌满）
     void sendDirSnapshot(const DirProgressSnapshot &snapshot);

@@ -158,10 +158,10 @@
      <normaloff>:/Resources/breaklink.png</normaloff>:/Resources/breaklink.png</iconset>
    </property>
    <property name="text">
-    <string>清空文件标签</string>
+    <string>清除选中文件的标签</string>
    </property>
    <property name="toolTip">
-    <string>删除选中文件上的全部标签（可用 Ctrl+Z 撤销；只影响文件，不动【标签库】）</string>
+    <string>清除选中文件上的全部标签（可用 Ctrl+Z 撤销；只影响文件，不动【标签库】）</string>
    </property>
    <property name="shortcut">
     <string>Ctrl+Shift+C</string>
@@ -189,7 +189,7 @@
     <string>AI自动生成标签</string>
    </property>
    <property name="toolTip">
-    <string>调用 AI 分析选中的文件并自动生成标签（需要 python 与程序目录下的 extract_and_tag.py）</string>
+    <string>对选中的文件夹（含子文件夹）里的文件调用 AI 生成标签（需要 python 与程序目录下的 extract_and_tag.py）</string>
    </property>
   </action>
  </widget>
