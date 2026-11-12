@@ -11,6 +11,7 @@
 #define FORMPAGEPROGRESSINFO_H
 
 #include <QHash>
+#include <QPersistentModelIndex>
 #include <QWidget>
 
 #include "traversedirectory.h"
@@ -49,6 +50,11 @@ private:
     void initTree();
     /** 按路径找到/创建节点；返回 nullptr 表示层级超出显示范围 */
     QStandardItem *ensureItem(const QString &sPath, int nLevel);
+    /**
+     * 把视图定位到"当前正在搜索的文件夹"：展开它的父链并选中它。
+     * 其余分支保持收起 —— 整盘搜索时默认全展开既乱又卡。
+     */
+    void focusOnDirectory(const QString &sDirPath);
     void applyNode(const DirProgressNode &node);
     /** 给操作列装/更新"停止""跳过"按钮 */
     void updateActionButton(QStandardItem *actionItem, DirNodeState state, const QString &sPath);
@@ -68,6 +74,8 @@ private:
     QLabel                   *m_statusLabel = nullptr;
     QHash<QString, QStandardItem *> m_items;   // 目录路径 -> 树节点
     QString                   m_sCurrentFile;
+    QString                   m_sFocusedDir;   // 已经聚焦过的目录（节点键），避免重复折叠/展开
+    QPersistentModelIndex     m_focusedIndex; // 当前选中的节点（防止被"回头"的进度拽回去）
     int                       m_nScanned = 0;
     int                       m_nMatched = 0;
 };
