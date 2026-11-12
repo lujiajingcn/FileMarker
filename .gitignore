@@ -36,3 +36,9 @@ __pycache__/
 
 # ---- 单元测试构建目录 ----
 /tests/build/
+
+# ---- Qt Creator 影子构建目录（Qt6 起新增的本地构建目录）----
+/build/
+
+# ---- Qt6 单元测试构建目录 ----
+/tests/build-qt6/

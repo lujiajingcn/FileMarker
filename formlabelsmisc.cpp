@@ -3,6 +3,10 @@
 #include "formlabels.h"
 #include "ui_formlabels.h"
 
+#include <QMouseEvent>
+#include <QDragMoveEvent>
+#include <QDropEvent>
+#include <QUrl>
 #include <QApplication>
 #include <QCheckBox>
 #include <QDateTime>
@@ -78,7 +82,7 @@ bool FormLabels::eventFilter(QObject *watched, QEvent *event)
                 // 只更新"当前行"用来做落点提示，且必须带 NoUpdate：
                 // setCurrentIndex() 默认会顺手选中该行，把用户多选的标签全部顶掉 ——
                 // 这就是"鼠标滑过标签时选中状态消失"的原因。
-                const QModelIndex index = m_labelsTree->indexAt(dragEvent->pos());
+                const QModelIndex index = m_labelsTree->indexAt(dragEvent->position().toPoint());
                 m_dropHoverRow = index.row();
                 if (index.isValid() && index != m_labelsTree->currentIndex()) {
                     m_labelsTree->selectionModel()->setCurrentIndex(
@@ -95,7 +99,7 @@ bool FormLabels::eventFilter(QObject *watched, QEvent *event)
             if (mime != nullptr
                 && (mime->hasUrls() || mime->hasFormat(QString::fromLatin1(MIME_FILEMARKER_FILES)))
                 && !mime->hasFormat(QString::fromLatin1(MIME_FILEMARKER_LABEL))) {
-                QModelIndex index = m_labelsTree->indexAt(dropEvent->pos());
+                QModelIndex index = m_labelsTree->indexAt(dropEvent->position().toPoint());
                 if (!index.isValid() && m_dropHoverRow >= 0) {
                     // 落在空白处：用拖拽过程中鼠标经过的最后一行
                     index = m_labelsTree->model()->index(m_dropHoverRow, 0,
@@ -213,9 +217,6 @@ void FormLabels::onTreeContextMenuRequested(const QPoint &pos)
     QAction *actionResetPrompt = menu.addAction(tr("恢复“新标签”询问"));
     connect(actionResetPrompt, &QAction::triggered, this, []() {
         QSettings settings(Utility::settingsFilePath(), QSettings::IniFormat);
-#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
-        settings.setIniCodec("UTF-8");
-#endif
         settings.setValue(QStringLiteral("labels/autoAddFromFiles"), 0);
     });
 
@@ -280,9 +281,6 @@ void FormLabels::promptAddNewLabels(const QStringList &qLInputLabels)
     } guard(m_promptShowing);
 
     QSettings settings(Utility::settingsFilePath(), QSettings::IniFormat);
-#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
-    settings.setIniCodec("UTF-8");
-#endif
     // 0=每次询问，1=总是加入，2=从不加入
     const int nMode = settings.value(QStringLiteral("labels/autoAddFromFiles"), 0).toInt();
     if (nMode == 2)

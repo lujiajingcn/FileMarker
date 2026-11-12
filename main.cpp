@@ -114,13 +114,6 @@ double autoUiScale()
 
 int main(int argc, char *argv[])
 {
-#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
-    // 开启高 DPI 缩放：缩略图/行高等尺寸都按逻辑像素书写，
-    // 不开启时在 150%/200% 缩放的屏幕上图标与文字的比例会失衡。
-    QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
-    QCoreApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
-#endif
-
     // 界面缩放：
     //  1) 用户在 exe 旁边的 FileMarker.ini 里写了 uiScale，就完全按它来；
     //  2) 没写则自动判断：Windows 缩放比还是 100%、但屏幕分辨率很高
@@ -159,21 +152,28 @@ int main(int argc, char *argv[])
     a.setApplicationName(QStringLiteral("FileMarker"));
     a.setApplicationVersion(QStringLiteral("1.0.0"));
 
-    // Qt 自带控件（文件对话框、消息框的标准按钮等）的中文文案要靠 qt_zh_CN.qm。
-    // 打包版把它放在 exe 旁边的 translations 目录；开发环境找不到时退回 Qt 安装目录。
+    // Qt 自带控件（文件对话框、消息框的标准按钮等）的中文文案要靠翻译文件。
+    // Qt6 把控件文案拆成了 qtbase_zh_CN.qm（Qt5 时代是 qt_zh_CN.qm），两个都试一遍：
+    // 先找 exe 旁边的 translations（打包版），再退回 Qt 安装目录。
     QTranslator qtTranslator;
-    QString sQtQmPath = a.applicationDirPath() + QStringLiteral("/translations/qt_zh_CN.qm");
-    if (!QFile::exists(sQtQmPath)) {
-        sQtQmPath.clear();
-        const QString sQtTranslations = QLibraryInfo::location(QLibraryInfo::TranslationsPath);
-        const QString sCandidate = sQtTranslations + QStringLiteral("/qt_zh_CN.qm");
-        if (!sQtTranslations.isEmpty() && QFile::exists(sCandidate))
-            sQtQmPath = sCandidate;
+    const QString sExeTr = a.applicationDirPath() + QStringLiteral("/translations/");
+    const QString sQtTr = QLibraryInfo::path(QLibraryInfo::TranslationsPath);
+    QStringList qLCandidates;
+    for (const QString &sFile : {QStringLiteral("qtbase_zh_CN.qm"), QStringLiteral("qt_zh_CN.qm")}) {
+        qLCandidates << sExeTr + sFile;
+        if (!sQtTr.isEmpty())
+            qLCandidates << sQtTr + QLatin1Char('/') + sFile;
     }
-    if (!sQtQmPath.isEmpty() && qtTranslator.load(sQtQmPath))
-        a.installTranslator(&qtTranslator);
-    else
-        qWarning() << "未找到 Qt 中文翻译 qt_zh_CN.qm，部分系统按钮会显示英文";
+    bool bTranslatorLoaded = false;
+    for (const QString &sQmPath : qLCandidates) {
+        if (QFile::exists(sQmPath) && qtTranslator.load(sQmPath)) {
+            a.installTranslator(&qtTranslator);
+            bTranslatorLoaded = true;
+            break;
+        }
+    }
+    if (!bTranslatorLoaded)
+        qWarning() << "未找到 Qt 中文翻译（qtbase_zh_CN.qm / qt_zh_CN.qm），部分系统按钮会显示英文";
 
     // ---- 单实例保护 ----
     // labels.xml 是在退出时才整体写一遍的，两个实例同时开着，后关掉的会把

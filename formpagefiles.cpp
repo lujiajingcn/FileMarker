@@ -5,6 +5,9 @@
 #include "formpagefilesutil.h"
 #include "ui_formpagefiles.h"
 
+#include <QMouseEvent>
+#include <QDragMoveEvent>
+#include <QDropEvent>
 #include <QKeySequence>
 #include <QMenu>
 #include <QDebug>
@@ -141,9 +144,6 @@ FormPageFiles::FormPageFiles(QWidget *parent) :
     // 恢复上次的列宽/列顺序（窗口大小在 MainWindow 中恢复）
     {
         QSettings settings(Utility::settingsFilePath(), QSettings::IniFormat);
-#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
-        settings.setIniCodec("UTF-8");
-#endif
         const QByteArray headerState = settings.value(QStringLiteral("view/headerState")).toByteArray();
         const int nSettingsVersion = settings.value(QStringLiteral("settings/version"), 0).toInt();
         if (nSettingsVersion >= 2 && !headerState.isEmpty()
@@ -202,13 +202,13 @@ FormPageFiles::FormPageFiles(QWidget *parent) :
 
     // 按钮没了，补两个快捷键，切换视图不用每次都去右键
     auto *actionDetail = new QAction(this);
-    actionDetail->setShortcut(QKeySequence(Qt::CTRL + Qt::SHIFT + Qt::Key_D));
+    actionDetail->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_D));
     actionDetail->setShortcutContext(Qt::WindowShortcut);
     connect(actionDetail, &QAction::triggered, this, &FormPageFiles::onTbDetailClicked);
     addAction(actionDetail);
 
     auto *actionThumb = new QAction(this);
-    actionThumb->setShortcut(QKeySequence(Qt::CTRL + Qt::SHIFT + Qt::Key_T));
+    actionThumb->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_T));
     actionThumb->setShortcutContext(Qt::WindowShortcut);
     connect(actionThumb, &QAction::triggered, this, &FormPageFiles::onTbThumbnailClicked);
     addAction(actionThumb);
@@ -281,8 +281,7 @@ FormPageFiles::FormPageFiles(QWidget *parent) :
     // F3 / Ctrl+Shift+F：弹出搜索按钮右侧的"标签关系 / 数据来源"菜单
     m_actionSearchMenu = new QAction(tr("查找条件…"), this);
     m_actionSearchMenu->setShortcuts(QList<QKeySequence>() << QKeySequence(Qt::Key_F3)
-                                                           << QKeySequence(Qt::CTRL + Qt::SHIFT
-                                                                           + Qt::Key_F));
+                                                           << QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_F));
     m_actionSearchMenu->setShortcutContext(Qt::WindowShortcut);
     connect(m_actionSearchMenu, &QAction::triggered, this, &FormPageFiles::popupSearchMenu);
     addAction(m_actionSearchMenu);
@@ -343,7 +342,7 @@ FormPageFiles::FormPageFiles(QWidget *parent) :
 
     // Ctrl+L：把面包屑切换成可输入路径的输入框（和资源管理器一样）
     auto *actionFocusPath = new QAction(this);
-    actionFocusPath->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_L));
+    actionFocusPath->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_L));
     actionFocusPath->setShortcutContext(Qt::WindowShortcut);
     connect(actionFocusPath, &QAction::triggered, this, [this]() { m_breadcrumb->startEditing(); });
     addAction(actionFocusPath);
@@ -355,9 +354,6 @@ FormPageFiles::~FormPageFiles()
 {
     // 保存列宽与上次目录，下次启动恢复
     QSettings settings(Utility::settingsFilePath(), QSettings::IniFormat);
-#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
-    settings.setIniCodec("UTF-8");
-#endif
     if (m_filesTree != nullptr && m_filesTree->header() != nullptr)
         settings.setValue(QStringLiteral("view/headerState"), m_filesTree->header()->saveState());
     settings.setValue(QStringLiteral("settings/version"), 2);
@@ -775,7 +771,7 @@ bool FormPageFiles::eventFilter(QObject *watched, QEvent *event)
                 activeView = m_filesList;
             else
                 activeView = m_filesTree;
-            const QModelIndex dropIndex = activeView != nullptr ? activeView->indexAt(dropEvent->pos()) : QModelIndex();
+            const QModelIndex dropIndex = activeView != nullptr ? activeView->indexAt(dropEvent->position().toPoint()) : QModelIndex();
             dropEvent->setDropAction(Qt::CopyAction);
             dropEvent->accept();
             applyDroppedLabels(qLLabels, dropIndex);

@@ -1,5 +1,6 @@
 #include "editablefiledelegate.h"
 
+#include <QMouseEvent>
 #include <QtMath>
 #include <QFileInfo>
 

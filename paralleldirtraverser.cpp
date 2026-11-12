@@ -20,19 +20,9 @@
 #include <winioctl.h>
 #endif
 
-// ---- MinGW 7.x 的 winioctl.h 不全：缺的定义在这里补齐 ----
-#ifndef IOCTL_STORAGE_QUERY_PROPERTY
-#define IOCTL_STORAGE_QUERY_PROPERTY \
-    CTL_CODE(IOCTL_STORAGE_BASE, 0x0500, METHOD_BUFFERED, FILE_ANY_ACCESS)
-#endif
-#ifndef DEVICE_SEEK_PENALTY_DESCRIPTOR
-typedef struct _FM_DEVICE_SEEK_PENALTY_DESCRIPTOR
-{
-    DWORD   Version;
-    DWORD   Size;
-    BOOLEAN IncursSeekPenalty;
-} DEVICE_SEEK_PENALTY_DESCRIPTOR;
-#endif
+// 说明：MinGW-w64 13（Qt 6 自带工具链）的 winioctl.h 已经有
+// DEVICE_SEEK_PENALTY_DESCRIPTOR 与 IOCTL_STORAGE_QUERY_PROPERTY，这里不再补定义。
+// （Qt5 时代的 MinGW 7 缺这两个，才需要手写兜底；本项目已不再支持 Qt5。）
 
 namespace {
 

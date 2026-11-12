@@ -4,6 +4,9 @@
 #include "formpagefilesutil.h"
 #include "toolicons.h"
 
+#include <QMouseEvent>
+#include <QContextMenuEvent>
+#include <QKeyEvent>
 #include <QDir>
 #include <QFileInfo>
 #include <QFontMetrics>
@@ -148,7 +151,7 @@ void PathBreadcrumb::rebuild()
         // 逐级追加：只追加到当前路径为止
         const QString sNative = QDir::toNativeSeparators(m_path);
         const int nSkip = segments.last().path.size();            // 已包含的根路径长度
-        const QStringList qLParts = sNative.mid(nSkip).split(QLatin1Char('\\'), QString::SkipEmptyParts);
+        const QStringList qLParts = sNative.mid(nSkip).split(QLatin1Char('\\'), Qt::SkipEmptyParts);
         QString sAccum = segments.last().path;
         for (const QString &sPart : qLParts) {
             if (!sAccum.endsWith(QLatin1Char('/')))

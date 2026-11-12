@@ -38,9 +38,6 @@
 void FormPageFiles::restoreLastDir()
 {
     QSettings settings(Utility::settingsFilePath(), QSettings::IniFormat);
-#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
-    settings.setIniCodec("UTF-8");
-#endif
     const QString sLastDir = settings.value(QStringLiteral("view/lastDir")).toString();
     if (sLastDir.isEmpty() || FmPageUtil::isMyComputerName(sLastDir))
         return;
@@ -105,9 +102,6 @@ void FormPageFiles::rememberPath(const QString &sPath)
 void FormPageFiles::loadRecentDirs()
 {
     QSettings settings(Utility::settingsFilePath(), QSettings::IniFormat);
-#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
-    settings.setIniCodec("UTF-8");
-#endif
 
     const QStringList qLStored = settings.value(QStringLiteral("view/recentDirs")).toStringList();
     m_recentDirs.clear();
@@ -129,9 +123,6 @@ void FormPageFiles::loadRecentDirs()
 void FormPageFiles::saveRecentDirs() const
 {
     QSettings settings(Utility::settingsFilePath(), QSettings::IniFormat);
-#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
-    settings.setIniCodec("UTF-8");
-#endif
     settings.setValue(QStringLiteral("view/recentDirs"), m_recentDirs);
 }
 

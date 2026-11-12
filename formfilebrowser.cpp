@@ -266,9 +266,6 @@ void FormFileBrowser::initNavPanelToggle()
 
     // 恢复上次的状态（默认展开）
     QSettings settings(Utility::settingsFilePath(), QSettings::IniFormat);
-#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
-    settings.setIniCodec("UTF-8");
-#endif
     const bool bVisible = settings.value(QStringLiteral("view/navPanelVisible"), true).toBool();
     setNavPanelVisible(bVisible, false);
 }
@@ -313,9 +310,6 @@ void FormFileBrowser::setNavPanelVisible(bool bVisible, bool bSave)
 void FormFileBrowser::saveNavPanelVisible(bool bVisible) const
 {
     QSettings settings(Utility::settingsFilePath(), QSettings::IniFormat);
-#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
-    settings.setIniCodec("UTF-8");
-#endif
     settings.setValue(QStringLiteral("view/navPanelVisible"), bVisible);
 }
 

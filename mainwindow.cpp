@@ -51,9 +51,6 @@ MainWindow::MainWindow(QWidget *parent) :
     // 恢复上次的窗口大小/位置；恢复上次访问的目录（等窗口显示后执行，保证模型已就绪）
     {
         QSettings settings(Utility::settingsFilePath(), QSettings::IniFormat);
-#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
-        settings.setIniCodec("UTF-8");
-#endif
         const QByteArray geometry = settings.value(QStringLiteral("window/geometry")).toByteArray();
         if (!geometry.isEmpty())
             restoreGeometry(geometry);
@@ -226,9 +223,6 @@ MainWindow::~MainWindow()
 void MainWindow::saveWindowGeometry()
 {
     QSettings settings(Utility::settingsFilePath(), QSettings::IniFormat);
-#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
-    settings.setIniCodec("UTF-8");
-#endif
     settings.setValue(QStringLiteral("window/geometry"), saveGeometry());
 }
 
