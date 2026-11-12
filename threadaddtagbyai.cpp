@@ -124,7 +124,12 @@ bool ThreadAddTagByAI::addTag(const QFileInfo& info)
     if (info.isDir())
         return true;
 
-    QString filePath = info.filePath();
+    const QString filePath = info.filePath();
+    // 只读文件写不了 ADS：跳过并给出明确原因（不改文件属性）
+    if (ADSOperation::isFileReadOnly(filePath)) {
+        return recordFailure(filePath,
+                             tr("文件是只读的（请先取消「只读」属性）"));
+    }
 
     QString script = g_sAppDir + "/extract_and_tag.py";
     QStringList args;

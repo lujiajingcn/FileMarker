@@ -897,23 +897,31 @@ void FormPageFiles::applyLabelsToFiles(const QStringList &qLLabels, const QStrin
 
     emit sendBeforeTagsChanged(qLTargets);   // 支持 Ctrl+Z 撤销
 
-    int nFailed = 0;
-    QStringList qLFailedFiles;
+    QStringList qLFailedPaths;
     for (const QString &sFilePath : qLTargets) {
-        if (!ADSOperation::appendTags(sFilePath, qLLabels)) {
-            ++nFailed;
-            qLFailedFiles << QFileInfo(sFilePath).fileName();
-        }
+        if (!ADSOperation::appendTags(sFilePath, qLLabels))
+            qLFailedPaths << sFilePath;
     }
 
     emit sendTagsChanged(qLTargets);
     refreshAfterTagChange(qLTargets);
 
-    if (nFailed > 0) {
-        QMessageBox::warning(this, tr("添加标签失败"),
-                             tr("以下 %1 个文件没能写入标签（可能被占用或只读）：\n%2")
-                                 .arg(nFailed)
-                                 .arg(qLFailedFiles.mid(0, 5).join(QStringLiteral("\n"))));
+    if (!qLFailedPaths.isEmpty()) {
+        QStringList qLReadOnly, qLOther;
+        for (const QString &sPath : qLFailedPaths) {
+            (ADSOperation::isFileReadOnly(sPath) ? qLReadOnly : qLOther)
+                << QFileInfo(sPath).fileName();
+        }
+        QStringList qLMsg;
+        if (!qLReadOnly.isEmpty()) {
+            qLMsg << tr("以下 %1 个文件是只读的，无法写入标签。\n请先取消文件的「只读」属性后重试：\n%2")
+                         .arg(qLReadOnly.size()).arg(qLReadOnly.mid(0, 8).join(QStringLiteral("\n")));
+        }
+        if (!qLOther.isEmpty()) {
+            qLMsg << tr("以下 %1 个文件没能写入标签（被占用或权限不足）：\n%2")
+                         .arg(qLOther.size()).arg(qLOther.mid(0, 8).join(QStringLiteral("\n")));
+        }
+        QMessageBox::warning(this, tr("添加标签失败"), qLMsg.join(QStringLiteral("\n\n")));
     } else {
         emit sendHintMessage(tr("已给 %1 个文件添加标签：%2")
                                  .arg(qLTargets.size())

@@ -77,24 +77,32 @@ void FormPageFiles::clearTagsForPaths(const QStringList &qLPaths)
     emit sendBeforeTagsChanged(qLSelFilePaths);
 
     bool bAllOk = true;
-    QStringList qLFailedFiles;          // 把失败的文件名带回给用户
+    QStringList qLFailedPaths;          // 失败的文件（用来区分"只读"和其它原因）
     for (const QString &sSelFilePath : qLSelFilePaths) {
         if (!ADSOperation::deleteADSFiles(sSelFilePath)) {
             bAllOk = false;
-            qLFailedFiles << QFileInfo(sSelFilePath).fileName();
+            qLFailedPaths << sSelFilePath;
         }
     }
     emit sendTagsChanged(qLSelFilePaths);
     refreshAfterTagChange(qLSelFilePaths);
 
     if (!bAllOk) {
-        const QString sList = qLFailedFiles.mid(0, 5).join(QStringLiteral("\n"));
-        const QString sMore = qLFailedFiles.size() > 5
-                                  ? tr("\n…另有 %1 个文件").arg(qLFailedFiles.size() - 5)
-                                  : QString();
-        QMessageBox::warning(this, tr("清除标签失败"),
-                             tr("以下 %1 个文件的标签未能删除（可能是文件被占用、只读或权限不足）：\n\n%2%3")
-                                 .arg(qLFailedFiles.size()).arg(sList).arg(sMore));
+        QStringList qLReadOnly, qLOther;
+        for (const QString &sPath : qLFailedPaths) {
+            (ADSOperation::isFileReadOnly(sPath) ? qLReadOnly : qLOther)
+                << QFileInfo(sPath).fileName();
+        }
+        QStringList qLMsg;
+        if (!qLReadOnly.isEmpty()) {
+            qLMsg << tr("以下 %1 个文件是只读的，无法删除标签。\n请先取消文件的「只读」属性后重试：\n%2")
+                         .arg(qLReadOnly.size()).arg(qLReadOnly.mid(0, 8).join(QStringLiteral("\n")));
+        }
+        if (!qLOther.isEmpty()) {
+            qLMsg << tr("以下 %1 个文件的标签未能删除（被占用或权限不足）：\n%2")
+                         .arg(qLOther.size()).arg(qLOther.mid(0, 8).join(QStringLiteral("\n")));
+        }
+        QMessageBox::warning(this, tr("清除标签失败"), qLMsg.join(QStringLiteral("\n\n")));
     }
 }
 
@@ -113,7 +121,13 @@ void FormPageFiles::editTagsForPaths(const QStringList &qLFilePaths)
         return;
 
     QStringList qLChanged;
+    QStringList qLReadOnlySkipped;
     for (const QString &sFilePath : qLPaths) {
+        // 只读文件无法写 ADS：跳过并提示，不改属性
+        if (ADSOperation::isFileReadOnly(sFilePath)) {
+            qLReadOnlySkipped << QFileInfo(sFilePath).fileName();
+            continue;
+        }
         const QStringList adsNames = ADSOperation::listADSTagsInOrder(sFilePath);
         TagEditDialog dlg(adsNames, QFileInfo(sFilePath).fileName(), this);
         if (dlg.exec() != QDialog::Accepted)
@@ -137,6 +151,12 @@ void FormPageFiles::editTagsForPaths(const QStringList &qLFilePaths)
         qLChanged << sFilePath;
     }
 
+    if (!qLReadOnlySkipped.isEmpty()) {
+        QMessageBox::warning(this, tr("文件是只读的"),
+                             tr("以下 %1 个文件是只读的，已跳过（请先取消「只读」属性后重试）：\n%2")
+                                 .arg(qLReadOnlySkipped.size())
+                                 .arg(qLReadOnlySkipped.mid(0, 8).join(QStringLiteral("\n"))));
+    }
     if (!qLChanged.isEmpty())
         emit sendHintMessage(tr("已更新 %1 个文件的标签").arg(qLChanged.size()));
 }
@@ -235,6 +255,15 @@ void FormPageFiles::onEditTag(const QModelIndex &index)
     if (sFilePath.isEmpty() || m_modelFiles->isDir(index))
         return;
 
+    // 只读文件不能写标签：直接说明原因，不去改用户文件属性
+    if (ADSOperation::isFileReadOnly(sFilePath)) {
+        QMessageBox::warning(this, tr("文件是只读的"),
+                             tr("无法修改【%1】的标签。\n\n"
+                                "Windows 不允许在只读文件上写入附加数据流，请先取消该文件的「只读」属性后重试。")
+                                 .arg(QFileInfo(sFilePath).fileName()));
+        return;
+    }
+
     // 按录入顺序显示当前标签（NTFS 枚举流是按流名排序的，不能直接用它）
     const QStringList adsNames = ADSOperation::listADSTagsInOrder(sFilePath);
 
@@ -270,6 +299,14 @@ void FormPageFiles::onRemoveTagFromRow(const QModelIndex &index, const QString &
     const QString sFilePath = m_modelFiles->filePath(index);
     if (sFilePath.isEmpty() || m_modelFiles->isDir(index) || sTag.isEmpty())
         return;
+
+    if (ADSOperation::isFileReadOnly(sFilePath)) {
+        QMessageBox::warning(this, tr("文件是只读的"),
+                             tr("无法从【%1】删除标签。\n\n"
+                                "Windows 不允许在只读文件上修改附加数据流，请先取消该文件的「只读」属性后重试。")
+                                 .arg(QFileInfo(sFilePath).fileName()));
+        return;
+    }
 
     const QStringList qLTags = ADSOperation::listADSTagsInOrder(sFilePath);
     if (!qLTags.contains(sTag))

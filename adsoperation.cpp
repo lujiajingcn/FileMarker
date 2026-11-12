@@ -40,6 +40,7 @@ static std::wstring win32APIPath(const QString &filePath)
 // 标签操作只应改变 ADS，不应改变文件的“修改日期”。
 // Windows 在写入/删除流时会更新文件时间，这里在操作前保存、操作后恢复。
 namespace {
+
 class FileTimeGuard
 {
 public:
@@ -333,6 +334,11 @@ QString ADSOperation::sanitizeTagName(const QString &name)
 // 删除本程序写入的标签流（含归属清单），保留第三方 ADS / Zone.Identifier。
 bool ADSOperation::deleteADSFiles(const QString &filePath)
 {
+    if (isFileReadOnly(filePath)) {
+        // 只读文件无法打开可写 ADS 流；不改动用户文件属性，直接拒绝并让界面提示。
+        qWarning() << "文件是只读的，无法写入标签（请先取消只读属性）:" << filePath;
+        return false;
+    }
     // 删除流会更新文件的“修改日期”，这里保存/恢复文件时间（对外只应表现为标签变化）。
     FileTimeGuard timeGuard(filePath);
 
@@ -450,6 +456,11 @@ QStringList ADSOperation::listADSTagsInOrder(const QString &filePath)
 // 写入失败时尽量把操作前的标签恢复回去，并通过返回值让界面提示用户。
 bool ADSOperation::replaceTags(const QString &filePath, const QStringList &tags)
 {
+    if (isFileReadOnly(filePath)) {
+        // 只读文件无法打开可写 ADS 流；不改动用户文件属性，直接拒绝并让界面提示。
+        qWarning() << "文件是只读的，无法写入标签（请先取消只读属性）:" << filePath;
+        return false;
+    }
     // 最外层保护：内部 deleteADSFiles 也会保护一次，但写流同样会改时间，
     // 这里在整个“先删后写”结束后统一恢复到操作前的时间。
     FileTimeGuard timeGuard(filePath);
@@ -523,6 +534,11 @@ bool ADSOperation::replaceTags(const QString &filePath, const QStringList &tags)
 // 因此中途失败最多是少加几个新标签，不会丢失旧标签。
 bool ADSOperation::appendTags(const QString &filePath, const QStringList &tags)
 {
+    if (isFileReadOnly(filePath)) {
+        // 只读文件无法打开可写 ADS 流；不改动用户文件属性，直接拒绝并让界面提示。
+        qWarning() << "文件是只读的，无法写入标签（请先取消只读属性）:" << filePath;
+        return false;
+    }
     FileTimeGuard timeGuard(filePath);
 
     const QStringList existing = listADSTagsInOrder(filePath);
@@ -649,6 +665,11 @@ bool ADSOperation::renameTag(const QString &filePath, const QString &sOldTag, co
  **/
 bool ADSOperation::removeTag(const QString &filePath, const QString &sTag)
 {
+    if (isFileReadOnly(filePath)) {
+        // 只读文件无法打开可写 ADS 流；不改动用户文件属性，直接拒绝并让界面提示。
+        qWarning() << "文件是只读的，无法写入标签（请先取消只读属性）:" << filePath;
+        return false;
+    }
     if (filePath.isEmpty() || sTag.trimmed().isEmpty())
         return false;
 
@@ -681,4 +702,21 @@ bool ADSOperation::isHostFile(const QString &sFilePath, const QList<QSet<QString
         setAdsNames.insert(sName);
 
     return SearchMatch::matchesFileLabels(setAdsNames, qLLabelGroups, logic);
+}
+
+bool ADSOperation::isFileReadOnly(const QString &filePath)
+{
+    if (filePath.isEmpty())
+        return false;
+    const DWORD nAttrs = ::GetFileAttributesW(win32APIPath(filePath).c_str());
+    return nAttrs != INVALID_FILE_ATTRIBUTES && (nAttrs & FILE_ATTRIBUTE_READONLY) != 0;
+}
+
+QString ADSOperation::writeFailureReason(const QString &filePath)
+{
+    if (!QFileInfo::exists(filePath))
+        return QCoreApplication::translate("ADSOperation", "文件不存在");
+    if (isFileReadOnly(filePath))
+        return QCoreApplication::translate("ADSOperation", "文件是只读的（请先取消「只读」属性）");
+    return QCoreApplication::translate("ADSOperation", "文件被占用或权限不足");
 }

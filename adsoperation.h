@@ -14,6 +14,16 @@ public:
 public :
     /** 删除本程序写入的全部标签流（保留第三方 ADS / Zone.Identifier），返回是否全部成功 */
     static bool deleteADSFiles(const QString &filePath);
+
+    /**
+     * 文件是否带"只读"属性。
+     * 只读文件上无法打开可写的 ADS 流，所以所有写标签的操作都要先判断，
+     * 直接给出"请先取消只读"的提示 —— 不去改动用户文件的属性。
+     */
+    static bool isFileReadOnly(const QString &filePath);
+
+    /** 给界面用的失败原因（只读 / 不存在 / 被占用或权限不足） */
+    static QString writeFailureReason(const QString &filePath);
     static QStringList listADSFileName(const QString &filePath);
     static bool isHostFile(const QString &sFilePath, const QList<QSet<QString>> &qLLabelGroups, labelLogic logic);
 
