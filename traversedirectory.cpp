@@ -212,8 +212,34 @@ bool TraverseDirectory::isPathSkipped(const QString &sPath)
 
 bool TraverseDirectory::isPathStopRequested(const QString &sPath)
 {
+    const QString sKey = normalizedKey(sPath);
     QReadLocker locker(&g_pathLock);
-    return g_stoppedPaths.contains(normalizedKey(sPath));
+    if (g_stoppedPaths.isEmpty())
+        return false;
+    if (g_stoppedPaths.contains(sKey))
+        return true;
+
+    // 只按"自己的路径"匹配是不够的：点父目录的【停止】时，正在跑的深目录
+    // 路径和父目录不同，会一直扫到结束 —— 用户看到的就是"点停止没反应"。
+    // 这里沿路径逐级往上找：只要某个祖先被停止，整棵子树都算停止。
+    QString sParent = sKey;
+    while (true) {
+        const int nPos = sParent.lastIndexOf(QLatin1Char('/'));
+        if (nPos <= 0)
+            break;
+        sParent = sParent.left(nPos);
+        if (g_stoppedPaths.contains(sParent))
+            return true;
+        if (sParent.length() <= 2)   // "e:" 这种盘符根，再往上没有了
+            break;
+    }
+    return false;
+}
+
+bool TraverseDirectory::hasStopRequests()
+{
+    QReadLocker locker(&g_pathLock);
+    return !g_stoppedPaths.isEmpty();
 }
 
 void TraverseDirectory::resetPathControls()

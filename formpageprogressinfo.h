@@ -58,6 +58,10 @@ private:
     void updateActionButton(QStandardItem *actionItem, DirNodeState state, const QString &sPath);
     /** 点了某一行的操作按钮 */
     void onActionClicked(const QString &sPath);
+    /** 该路径（或它的祖先）是否被用户点过"停止" */
+    bool isStoppedByUser(const QString &sPath) const;
+    /** 立刻把某行及其已建出来的子行标成"已停止" */
+    void markSubtreeStopped(const QString &sPath);
     void updateStatusLabel();
 
     // 停止按钮处理函数：构造函数中显式 connect，
@@ -71,6 +75,9 @@ private:
     QStandardItemModel       *m_model = nullptr;
     QLabel                   *m_statusLabel = nullptr;
     QHash<QString, QStandardItem *> m_items;   // 目录路径 -> 树节点
+    // 用户点过【停止】的目录：后续快照可能把该行报成"完成/等待"，
+    // 这里强制保持"已停止"，否则界面看起来像"点了没反应"。
+    QStringList               m_stoppedByUser;
     QString                   m_sCurrentFile;
 
     int                       m_nScanned = 0;

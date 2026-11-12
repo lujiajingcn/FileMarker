@@ -150,6 +150,7 @@ void FormPageProgressInfo::initTree()
 void FormPageProgressInfo::resetProgress(const QStringList &qLSelDirs)
 {
     m_items.clear();
+    m_stoppedByUser.clear();
     m_model->removeRows(0, m_model->rowCount());
     m_sCurrentFile.clear();
 
@@ -236,6 +237,12 @@ void FormPageProgressInfo::applyNode(const DirProgressNode &node)
     if (nameItem == nullptr)
         return;
 
+    // 用户点过【停止】的目录（或其子树）：即使线程后续报"完成/等待"，
+    // 也保持"已停止"，避免看起来像没停成功。
+    DirNodeState effectiveState = node.state;
+    if (isStoppedByUser(node.path))
+        effectiveState = DirNodeState::Stopped;
+
     QStandardItem *parentItem = nameItem->parent();
     if (parentItem == nullptr)
         parentItem = m_model->invisibleRootItem();
@@ -250,12 +257,12 @@ void FormPageProgressInfo::applyNode(const DirProgressNode &node)
 
     // 每 150ms 会把整棵树的快照刷一遍（最多几百个节点），这里逐项比较再赋值：
     // 值没变就不 setText/setData，避免无谓的 dataChanged → 视图重绘。
-    const QString sStateText = stateText(node.state);
+    const QString sStateText = stateText(effectiveState);
     if (stateItem->text() != sStateText) {
         stateItem->setText(sStateText);
-        stateItem->setForeground(stateColor(node.state));
+        stateItem->setForeground(stateColor(effectiveState));
         QFont font = stateItem->font();
-        font.setBold(node.state == DirNodeState::Searching);
+        font.setBold(effectiveState == DirNodeState::Searching);
         stateItem->setFont(font);
     }
 
@@ -276,10 +283,10 @@ void FormPageProgressInfo::applyNode(const DirProgressNode &node)
     }
 
     actionItem->setText(QString());   // 文字交给按钮显示，避免格子里"停止"出现两次
-    actionItem->setData(int(node.state), kRoleState);
+    actionItem->setData(int(effectiveState), kRoleState);
 
     // 操作列放真正的按钮（不是靠点单元格文字）：更直观，也方便自动化点它
-    updateActionButton(actionItem, node.state, node.path);
+    updateActionButton(actionItem, effectiveState, node.path);
 }
 
 /** 按状态给操作列装/更新一个按钮（没有可做的操作就撤掉按钮）。 */
@@ -323,6 +330,54 @@ void FormPageProgressInfo::updateActionButton(QStandardItem *actionItem, DirNode
 }
 
 /** 点了某一行的操作按钮：停止 / 跳过。 */
+/** 该路径（或它的祖先）是否被用户点过【停止】。 */
+bool FormPageProgressInfo::isStoppedByUser(const QString &sPath) const
+{
+    const QString sKey = normalizedDirKey(sPath);
+    for (const QString &sStopped : m_stoppedByUser) {
+        const QString sStoppedKey = normalizedDirKey(sStopped);
+        if (sKey.compare(sStoppedKey, Qt::CaseInsensitive) == 0)
+            return true;
+        if (sKey.startsWith(sStoppedKey + QLatin1Char('/'), Qt::CaseInsensitive))
+            return true;
+    }
+    return false;
+}
+
+/** 立刻把某行及其已建出来的子行标成"已停止"（不等快照回来）。 */
+void FormPageProgressInfo::markSubtreeStopped(const QString &sPath)
+{
+    const QString sKey = normalizedDirKey(sPath);
+    for (auto it = m_items.constBegin(); it != m_items.constEnd(); ++it) {
+        const QString sItemKey = normalizedDirKey(it.key());
+        if (sItemKey.compare(sKey, Qt::CaseInsensitive) != 0
+                && !sItemKey.startsWith(sKey + QLatin1Char('/'), Qt::CaseInsensitive)) {
+            continue;
+        }
+
+        QStandardItem *nameItem = it.value();
+        if (nameItem == nullptr)
+            continue;
+        QStandardItem *parentItem = nameItem->parent();
+        if (parentItem == nullptr)
+            parentItem = m_model->invisibleRootItem();
+        QStandardItem *stateItem = parentItem->child(nameItem->row(), 1);
+        QStandardItem *actionItem = parentItem->child(nameItem->row(), 4);
+        if (stateItem != nullptr) {
+            stateItem->setText(stateText(DirNodeState::Stopped));
+            stateItem->setForeground(stateColor(DirNodeState::Stopped));
+            QFont font = stateItem->font();
+            font.setBold(false);
+            stateItem->setFont(font);
+        }
+        if (actionItem != nullptr) {
+            actionItem->setData(int(DirNodeState::Stopped), kRoleState);
+            actionItem->setText(QString());
+            updateActionButton(actionItem, DirNodeState::Stopped, it.key());
+        }
+    }
+}
+
 void FormPageProgressInfo::onActionClicked(const QString &sPath)
 {
     if (sPath.isEmpty())
@@ -344,7 +399,12 @@ void FormPageProgressInfo::onActionClicked(const QString &sPath)
     const DirNodeState state = DirNodeState(actionItem->data(kRoleState).toInt());
 
     if (state == DirNodeState::Searching) {
+        if (!isStoppedByUser(sPath))
+            m_stoppedByUser << sPath;
         emit sendStopDir(sPath);
+        // 立刻把这一行（以及已经建出来的子行）标成"已停止"，
+        // 不等线程下一次快照 —— 否则点了按钮看起来没任何变化。
+        markSubtreeStopped(sPath);
         actionItem->setText(tr("已停止"));
         actionItem->setData(int(DirNodeState::Stopped), kRoleState);
         updateActionButton(actionItem, DirNodeState::Stopped, sPath);
@@ -447,6 +507,7 @@ void FormPageProgressInfo::clear()
 {
     ui->plainTextEdit->clear();
     m_items.clear();
+    m_stoppedByUser.clear();
     if (m_model != nullptr)
         m_model->removeRows(0, m_model->rowCount());
     m_sCurrentFile.clear();

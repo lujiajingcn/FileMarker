@@ -255,7 +255,7 @@ bool ParallelDirTraverser::run(const QStringList &qLRoots, int nThreads,
             if (!TraverseDirectory::traverseDirectory(sRoot, hooks, true))
                 bAll = false;
         }
-        return bAll;
+        return bAll && !TraverseDirectory::hasStopRequests();
     }
 
     TraverseState state;
@@ -278,5 +278,9 @@ bool ParallelDirTraverser::run(const QStringList &qLRoots, int nThreads,
     }
     pool.waitForDone();
 
-    return state.aborted.loadAcquire() == 0 && !TraverseDirectory::isStopped();
+    // 用户点了某一行的【停止】时 aborted 不会置位（那是给整盘停止用的），
+    // 这里把"有过目录级停止"也算成不完整，结果页才会提示"本次搜索不完整"。
+    return state.aborted.loadAcquire() == 0
+           && !TraverseDirectory::isStopped()
+           && !TraverseDirectory::hasStopRequests();
 }

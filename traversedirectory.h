@@ -101,6 +101,9 @@ public:
     static void requestStopPath(const QString &sPath);
     static bool isPathSkipped(const QString &sPath);
     static bool isPathStopRequested(const QString &sPath);
+
+    /** 本轮是否有人点过"停止某个文件夹"（用来把搜索结果标记为不完整） */
+    static bool hasStopRequests();
     /** 每轮搜索/遍历开始前调用，清空上一轮遗留的跳过/停止请求 */
     static void resetPathControls();
     /** 本轮被跳过的目录数（写日志/结果提示用） */
