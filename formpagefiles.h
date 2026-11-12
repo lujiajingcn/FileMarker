@@ -193,6 +193,8 @@ private:
 
     // 导航到新目录后清空并重新扫描【当前目录标签】面板（后退/前进/上移复用）
     void updateDirLabelsPanel(const QString &sDir);
+    /** 统一导航按钮外观（紧凑、无边框、悬停高亮） */
+    void applyNavButtonStyle();
 
     // 缩略图列表的悬停项变化
     void onThumbnailHoverChanged(const QModelIndex &index);

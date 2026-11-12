@@ -189,6 +189,12 @@ FormPageFiles::FormPageFiles(QWidget *parent) :
     });
     connect(ui->toParentButton, &QToolButton::clicked, this, &FormPageFiles::onToParentButtonClicked);
     connect(ui->btnRefresh, &QToolButton::clicked, this, &FormPageFiles::onBtnRefreshClicked);
+
+    // 导航按钮做成一组紧凑的工具按钮（资源管理器那种感觉）：
+    // 原来 4 个按钮各自带边距、后退/前进还多出一块下拉箭头，看起来像 5~6 个独立按钮。
+    // 现在统一成同样大小的方形按钮、去掉边框、只在悬停/按下时给底色，
+    // 后退/前进的下拉箭头压窄，整体视觉上是一整组。
+    applyNavButtonStyle();
     // 「详情显示 / 缩略图显示」收进右键菜单的【查看】子菜单（见 fillViewMenu），
     // 工具条上这两个按钮不再显示，把它所在的那一行整行隐藏掉。
     if (ui->widget_3 != nullptr)
@@ -529,6 +535,58 @@ void FormPageFiles::initThumbnailFileList()
     m_filesList->setRootIndex(m_modelFiles->index(""));
 }
 
+
+/** 统一导航按钮的外观：紧凑、无边框、悬停高亮，整体像一组工具栏按钮。 */
+void FormPageFiles::applyNavButtonStyle()
+{
+    struct NavButtonSpec
+    {
+        QToolButton *button;
+        bool         bHasMenuArrow;
+    };
+    const QList<NavButtonSpec> qLButtons = {
+        {ui->backButton, true},
+        {ui->forwardButton, true},
+        {ui->toParentButton, false},
+        {ui->btnRefresh, false},
+    };
+
+    for (const NavButtonSpec &spec : qLButtons) {
+        QToolButton *button = spec.button;
+        if (button == nullptr)
+            continue;
+        button->setAutoRaise(true);
+        button->setIconSize(QSize(16, 16));
+        button->setToolButtonStyle(Qt::ToolButtonIconOnly);
+        // 带下拉箭头的按钮留出箭头宽度，其余做成正方形
+        button->setFixedSize(spec.bHasMenuArrow ? QSize(38, 28) : QSize(28, 28));
+        button->setCursor(Qt::ArrowCursor);
+    }
+
+    // 只对这几个按钮生效（用对象名选择器，避免影响页面里其它控件）
+    setStyleSheet(QStringLiteral(
+        "QToolButton#backButton, QToolButton#forwardButton,"
+        "QToolButton#toParentButton, QToolButton#btnRefresh {"
+        "  border: none; background: transparent; border-radius: 4px; padding: 0px;"
+        "}"
+        "QToolButton#backButton:hover, QToolButton#forwardButton:hover,"
+        "QToolButton#toParentButton:hover, QToolButton#btnRefresh:hover {"
+        "  background: #E8E8E8;"
+        "}"
+        "QToolButton#backButton:pressed, QToolButton#forwardButton:pressed,"
+        "QToolButton#toParentButton:pressed, QToolButton#btnRefresh:pressed {"
+        "  background: #D6D6D6;"
+        "}"
+        "QToolButton#backButton:disabled, QToolButton#forwardButton:disabled,"
+        "QToolButton#toParentButton:disabled, QToolButton#btnRefresh:disabled {"
+        "  background: transparent;"
+        "}"
+        // 下拉箭头区域压窄，并且不额外画分隔线和边框
+        "QToolButton#backButton::menu-button, QToolButton#forwardButton::menu-button {"
+        "  border: none; width: 12px;"
+        "}"
+    ));
+}
 
 /** 读取地址栏下拉历史（最多 10 条），并填充到 QComboBox。 */
 
