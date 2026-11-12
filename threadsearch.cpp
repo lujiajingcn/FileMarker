@@ -23,16 +23,26 @@ void ThreadSearch::setPara(const QStringList &selDirs, const QList<QSet<QString>
 
 void ThreadSearch::run()
 {
-    auto func = [this](const QFileInfo& info) -> bool {
-        return this->searchFile(info);
+    // 目录级遍历：文件交给 searchFile，目录进出事件这一步先不接 UI（步骤 2 再接目录进度树）。
+    TraverseHooks hooks;
+    hooks.onFile = [this](const QFileInfo &info) -> bool { return searchFile(info); };
+    // 默认跳过 node_modules / .git 这类目录：整盘搜索时它们几乎不可能带标签，
+    // 却往往占了文件量的大头，跳过能省下大量 ADS 枚举。
+    hooks.shouldSkipDir = [](const QString &sDirPath) -> bool {
+        const QString sName = QFileInfo(sDirPath).fileName();
+        return TraverseDirectory::isDefaultExcludedDirName(sName);
     };
 
     QStringList hostFiles;
-    TraverseDirectory::resetStop();   // 每个搜索任务开头复位一次停止标志（多目录搜索也能正确响应停止）
+    TraverseDirectory::resetStop();          // 每个搜索任务开头复位全局停止标志
+    TraverseDirectory::resetPathControls();  // 同时清空上一轮遗留的跳过/停止请求
     m_progressTimer.start();
-    for (QString selDir : m_selDirs)TraverseDirectory::traverseDirectory(selDir, func, true);
-    emit sendProcessInfo(QString("扫描结束：共扫描 %1 个文件，命中 %2 个")
-                             .arg(m_scanned).arg(m_filePaths.size()));
+    for (const QString &selDir : m_selDirs)
+        TraverseDirectory::traverseDirectory(selDir, hooks, true);
+
+    emit sendProcessInfo(QString("扫描结束：共扫描 %1 个文件，命中 %2 个（跳过 %3 个目录）")
+                             .arg(m_scanned).arg(m_filePaths.size())
+                             .arg(TraverseDirectory::skippedPathCount()));
 
     qInfo() << "磁盘查找结束: scanned=" << m_scanned << "matched=" << m_filePaths.size()
             << "logic=" << int(m_tagLogic) << "groups=" << m_labelGroups;
