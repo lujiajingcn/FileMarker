@@ -2,6 +2,7 @@
 #include "ui_formpagefilterdfiles.h"
 
 #include <QApplication>
+#include <QBrush>
 #include <QClipboard>
 #include <QCursor>
 #include <QDesktopServices>
@@ -19,6 +20,8 @@
 #include <QUrl>
 
 #include "adsoperation.h"
+#include "searchmatch.h"
+#include "utility.h"
 
 FormPageFilterdFiles::FormPageFilterdFiles(QWidget *parent) :
     QWidget(parent),
@@ -301,6 +304,85 @@ void FormPageFilterdFiles::onTvFilteredFilesCustomContextMenuRequested(const QPo
     m_clearTags->setEnabled(hasSelection);
     m_renameFile->setEnabled(hasSelection);
     menu.exec(m_filteredFilesTree->viewport()->mapToGlobal(pos));
+}
+
+
+void FormPageFilterdFiles::setSearchMatcher(const QList<QSet<QString>> &qLLabelGroups, labelLogic logic)
+{
+    m_labelGroups = qLLabelGroups;
+    m_searchLogic = logic;
+    m_hasMatcher = !qLLabelGroups.isEmpty();
+}
+
+/**
+ * 标签变化后就地刷新结果行：
+ *  - 重新读一次 ADS，更新"标签"列（原来只有搜索结果那一刻的旧值）；
+ *  - 用当前条件重新判断是否还匹配，不匹配的标灰并加后缀，
+ *    而不是让用户对着一行"其实已经不匹配"的结果继续操作。
+ */
+void FormPageFilterdFiles::onFileTagsChanged(const QStringList &qLFilePaths)
+{
+    if (m_modelFilteredFiles == nullptr || qLFilePaths.isEmpty())
+        return;
+
+    QStringList qLTargets;
+    for (const QString &sPath : qLFilePaths) {
+        const QString sClean = QDir::cleanPath(sPath);
+        if (sClean.isEmpty() || qLTargets.contains(sClean))
+            continue;
+        qLTargets << sClean;
+        refreshRowForPath(sClean);
+    }
+    updateStaleCountText();
+}
+
+void FormPageFilterdFiles::refreshRowForPath(const QString &sFilePath)
+{
+    const QString sClean = QDir::cleanPath(sFilePath);
+    const int nRows = m_modelFilteredFiles->rowCount();
+    for (int nRow = 0; nRow < nRows; ++nRow) {
+        QStandardItem *pathItem = m_modelFilteredFiles->item(nRow, 1);
+        QStandardItem *tagItem = m_modelFilteredFiles->item(nRow, 2);
+        if (pathItem == nullptr || tagItem == nullptr)
+            continue;
+        const QString sRowPath = QDir::cleanPath(QDir::fromNativeSeparators(pathItem->text()));
+        if (sRowPath.compare(sClean, Qt::CaseInsensitive) != 0)
+            continue;
+
+        const QStringList qLTags = ADSOperation::listADSTagsInOrder(sClean);
+        bool bMatched = true;
+        if (m_hasMatcher) {
+            bMatched = SearchMatch::matchesFileLabels(Utility::toSet(qLTags), m_labelGroups,
+                                                      static_cast<int>(m_searchLogic));
+        }
+
+        QString sText = qLTags.join(QStringLiteral(", "));
+        if (!bMatched) {
+            if (!sText.isEmpty())
+                sText += QStringLiteral(" ");
+            sText += tr("（已不匹配当前条件）");
+        }
+        tagItem->setText(sText);
+        tagItem->setData(!bMatched, Qt::UserRole + 1);
+        tagItem->setForeground(bMatched ? QBrush() : QBrush(Qt::gray));
+    }
+}
+
+void FormPageFilterdFiles::updateStaleCountText()
+{
+    if (ui == nullptr || ui->lblResultCount == nullptr)
+        return;
+    int nStale = 0;
+    const int nRows = m_modelFilteredFiles->rowCount();
+    for (int nRow = 0; nRow < nRows; ++nRow) {
+        QStandardItem *tagItem = m_modelFilteredFiles->item(nRow, 2);
+        if (tagItem != nullptr && tagItem->data(Qt::UserRole + 1).toBool())
+            ++nStale;
+    }
+    QString sText = m_resultCountText;
+    if (nStale > 0)
+        sText += tr("（其中 %1 项已不匹配当前条件，可点【重新扫描】刷新）").arg(nStale);
+    ui->lblResultCount->setText(sText);
 }
 
 void FormPageFilterdFiles::setSearchInterrupted(bool bInterrupted)

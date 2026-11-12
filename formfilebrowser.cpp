@@ -136,6 +136,10 @@ FormFileBrowser::FormFileBrowser(QWidget *parent) :
 
     connect(ui->pageFiles, &FormPageFiles::sendLabels, this, &FormFileBrowser::onRecvLabels);
 
+    // 标签一变，结果页的芯片和"是否还匹配条件"就地刷新（不必等重新搜索）
+    connect(ui->pageFiles, &FormPageFiles::sendTagsChanged,
+            ui->pageFilteredFiles, &FormPageFilterdFiles::onFileTagsChanged);
+
     // 进入目录后立即把该目录的标签送到【当前目录标签】面板（不再依赖先执行“遍历文件”）。
     connect(ui->pageFiles, &FormPageFiles::sendDirLabels, this,
             [this](const QString &sDir, const QSet<QString> &setLabels) {
@@ -156,7 +160,7 @@ FormFileBrowser::FormFileBrowser(QWidget *parent) :
                 // 缓存按"遍历根"存，文件可能在根的子孙目录里，
                 // 必须按文件反查所有包含它的根目录，不能只删 absolutePath()。
                 for (const QString &sFilePath : qLFilePaths)
-                    m_sqlOperation->invalidateCacheForFile(sFilePath);
+                    m_sqlOperation->refreshCachedFile(sFilePath);
             });
 
     // 页面里要改标签之前先广播，这里记住改动前的标签用于撤销

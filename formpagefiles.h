@@ -63,6 +63,13 @@ public:
     /** 取选中的目录；bFallbackToCurrent=true 时没有选中目录会回退到当前目录 */
     QStringList getSelDirs(bool bFallbackToCurrent = true);
 
+    /**
+     * 过滤掉目录。
+     * 文件夹没有"标签"这个概念：写上去的 ADS 在界面上改不掉、搜索也扫不到，
+     * 所以所有"打标签"的入口都要先过这一层。
+     */
+    static QStringList filesOnly(const QStringList &qLPaths);
+
     void updateToolButtons();
 
     void setAction(QAction *actionDeleteLabels);

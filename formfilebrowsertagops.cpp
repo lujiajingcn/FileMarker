@@ -62,7 +62,7 @@ void FormFileBrowser::onActionAddLabelByAITriggered()
     // 选中的文件优先；没有选文件才按选中的目录（含子目录）处理。
     // 注意这里用 getSelDirs(false)：不能用会回退"当前目录"的那个版本，
     // 否则"我只选了一个文件"会变成"给整个文件夹打标签"。
-    const QStringList qLSelFiles = getSelFilePath();
+    const QStringList qLSelFiles = FormPageFiles::filesOnly(getSelFilePath());
     const QStringList qLSelDirs = getSelDirs(false);
     if (qLSelFiles.isEmpty() && qLSelDirs.isEmpty()) {
         showFilesWidget();
@@ -84,7 +84,7 @@ void FormFileBrowser::onActionAddLabelByAITriggered()
     connect(m_threadAddLabelByAI, &ThreadAddTagByAI::sendTagChanged, this,
             [this](const QString &sFilePath) {
                 if (m_sqlOperation != nullptr)
-                    m_sqlOperation->invalidateCacheForFile(sFilePath);   // 按文件反查遍历根
+                    m_sqlOperation->refreshCachedFile(sFilePath);   // 只刷新这个文件在缓存里的行
             });
 
     // 线程结束后自动释放对象并把指针置空，避免反复创建导致对象泄漏以及悬空指针误用。
@@ -134,10 +134,18 @@ void FormFileBrowser::onRecvLabelsGeneratedByAI(const QString &sLabels)
 
 void FormFileBrowser::onActionAddLabelsTriggered()
 {
-    QStringList qLFilePaths = getSelFilePath();
-    if (qLFilePaths.count() == 0)
+    // 文件夹不参与打标签（与文件列表、拖拽保持同一套规则）
+    const QStringList qLSelected = getSelFilePath();
+    const QStringList qLFilePaths = FormPageFiles::filesOnly(qLSelected);
+    if (qLFilePaths.isEmpty())
     {
-        QMessageBox::information(this, "提示", "未选中文件或文件夹！");
+        if (!qLSelected.isEmpty()) {
+            // 选中了东西但全是文件夹：不能说"未选中"，否则用户以为选择丢了
+            QMessageBox::information(this, tr("添加标签"),
+                                     tr("选中的是文件夹。文件夹不支持打标签，请选择文件后再试。"));
+        } else {
+            QMessageBox::information(this, tr("添加标签"), tr("未选中文件或文件夹！"));
+        }
         return;
     }
 
@@ -174,7 +182,7 @@ void FormFileBrowser::onActionAddLabelsTriggered()
     // 按文件反查所有包含它的"遍历根"，不能只按父目录删缓存。
     if (m_sqlOperation != nullptr) {
         for (const QString &sFilePath : qLFilePaths)
-            m_sqlOperation->invalidateCacheForFile(sFilePath);
+            m_sqlOperation->refreshCachedFile(sFilePath);
     }
 
     emit sendRefresh();
@@ -199,45 +207,61 @@ void FormFileBrowser::onBeforeTagsChanged(const QStringList &qLFilePaths)
     if (qLFilePaths.isEmpty())
         return;
 
-    m_mapUndoOldTags.clear();
+    UndoTagEntry entry;
     for (const QString &sFilePath : qLFilePaths) {
         if (sFilePath.isEmpty() || !QFileInfo(sFilePath).isFile())
             continue;
-        m_mapUndoOldTags.insert(sFilePath, ADSOperation::listADSTagsInOrder(sFilePath));
+        const QString sClean = QDir::cleanPath(sFilePath);
+        if (entry.oldTags.contains(sClean))
+            continue;
+        entry.oldTags.insert(sClean, ADSOperation::listADSTagsInOrder(sClean));
     }
-    m_undoDesc = tr("撤销：恢复 %1 个文件的标签").arg(m_mapUndoOldTags.size());
-    emit sendUndoStateChanged(!m_mapUndoOldTags.isEmpty());
+    if (entry.oldTags.isEmpty())
+        return;
+
+    entry.desc = tr("恢复 %1 个文件的标签").arg(entry.oldTags.size());
+    m_undoStack.append(entry);
+    while (m_undoStack.size() > kMaxUndoDepth)
+        m_undoStack.removeFirst();
+    emit sendUndoStateChanged(true);
 }
 
 /** 把最近一次标签操作改回原样。 */
 void FormFileBrowser::undoLastTagOperation()
 {
-    if (m_mapUndoOldTags.isEmpty()) {
+    if (m_undoStack.isEmpty()) {
         QMessageBox::information(this, tr("撤销"), tr("没有可以撤销的标签操作。"));
         return;
     }
 
+    const UndoTagEntry entry = m_undoStack.takeLast();
     int nFailed = 0;
-    for (auto cItr = m_mapUndoOldTags.cbegin(); cItr != m_mapUndoOldTags.cend(); ++cItr) {
+    QStringList qLChanged;
+    for (auto cItr = entry.oldTags.cbegin(); cItr != entry.oldTags.cend(); ++cItr) {
         if (!ADSOperation::replaceTags(cItr.key(), cItr.value())) {
             ++nFailed;
             continue;
         }
-        if (m_sqlOperation != nullptr)
-            m_sqlOperation->invalidateCacheForFile(cItr.key());
+        qLChanged << cItr.key();
     }
 
-    const int nTotal = m_mapUndoOldTags.size();
-    m_mapUndoOldTags.clear();
-    emit sendUndoStateChanged(false);
+    // 缓存精确刷新 + 结果页就地刷新（撤销也是"标签变了"）
+    if (!qLChanged.isEmpty()) {
+        if (m_sqlOperation != nullptr)
+            m_sqlOperation->refreshCachedFiles(qLChanged);
+        ui->pageFilteredFiles->onFileTagsChanged(qLChanged);
+    }
+    emit sendUndoStateChanged(!m_undoStack.isEmpty());
     emit sendRefresh();
 
-    if (nFailed > 0)
+    if (nFailed > 0) {
         QMessageBox::warning(this, tr("撤销"),
                              tr("已恢复 %1 个文件，%2 个失败（可能被占用或只读）。")
-                                 .arg(nTotal - nFailed).arg(nFailed));
-    else
-        emit sendStatusMessage(tr("已撤销上一次标签操作（%1 个文件）。").arg(nTotal));
+                                 .arg(entry.oldTags.size() - nFailed).arg(nFailed));
+    } else {
+        emit sendStatusMessage(tr("已撤销：%1（还可撤销 %2 次）")
+                                   .arg(entry.desc).arg(m_undoStack.size()));
+    }
 }
 
 /** 标签库那边把文件拖到了某个标签上：交给文件页统一写盘（撤销点/缓存/刷新都在那里）。 */
@@ -295,7 +319,7 @@ void FormFileBrowser::onRecvLabels(const QString &sFilePath, const QString &sLab
     const bool bOk = ADSOperation::replaceTags(sFilePath, qLLabels);
 
     if (m_sqlOperation != nullptr)
-        m_sqlOperation->invalidateCacheForFile(sFilePath);   // 按文件反查遍历根
+        m_sqlOperation->refreshCachedFile(sFilePath);   // 只刷新这个文件在缓存里的行
 
     emit sendRefresh();
 

@@ -622,6 +622,22 @@ QStringList FormPageFiles::getSelFilePath()
     return selFilePath;
 }
 
+QStringList FormPageFiles::filesOnly(const QStringList &qLPaths)
+{
+    QStringList qLFiles;
+    for (const QString &sPath : qLPaths) {
+        if (sPath.isEmpty())
+            continue;
+        const QFileInfo info(sPath);
+        if (info.isDir())
+            continue;
+        const QString sClean = QDir::cleanPath(sPath);
+        if (!qLFiles.contains(sClean))
+            qLFiles << sClean;
+    }
+    return qLFiles;
+}
+
 QStringList FormPageFiles::getSelDirs(bool bFallbackToCurrent)
 {
     QStringList qLSelDirs;
@@ -865,15 +881,20 @@ void FormPageFiles::applyDroppedLabels(const QStringList &qLLabels, const QModel
  */
 void FormPageFiles::applyLabelsToFiles(const QStringList &qLLabels, const QStringList &qLFiles)
 {
-    // 统一成 QFileSystemModel 的路径形式（正斜杠），否则 clearTagCacheForFile() 清不掉，
-    // 标签列的 chip 会停留在旧内容。
-    QStringList qLTargets;
+    // 统一成 QFileSystemModel 的路径形式（正斜杠），否则清缓存/刷新会失败。
+    // 同时过滤掉目录：文件夹被打上标签后界面上改不掉、搜索也扫不到。
+    QStringList qLAllTargets;
     for (const QString &sFile : qLFiles) {
         if (sFile.trimmed().isEmpty())
             continue;
         const QString sClean = QDir::cleanPath(sFile);
-        if (!qLTargets.contains(sClean))
-            qLTargets << sClean;
+        if (!qLAllTargets.contains(sClean))
+            qLAllTargets << sClean;
+    }
+    const QStringList qLTargets = filesOnly(qLAllTargets);
+    if (qLTargets.size() < qLAllTargets.size()) {
+        emit sendHintMessage(tr("已跳过 %1 个文件夹（文件夹不支持打标签）")
+                                 .arg(qLAllTargets.size() - qLTargets.size()));
     }
     if (qLLabels.isEmpty() || qLTargets.isEmpty())
         return;

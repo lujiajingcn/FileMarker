@@ -193,10 +193,12 @@ void FormFileBrowser::importTagsFromFile()
     progress.close();
     m_longOperationRunning = false;
 
-    // 缓存与界面同步
-    for (const TagExport::FileTags &record : qLRecords) {
-        if (m_sqlOperation != nullptr)
-            m_sqlOperation->invalidateCacheForFile(record.sPath);
+    // 缓存与界面同步：少量文件精确刷新，大量文件由 refreshCachedFiles 内部退化为整根失效
+    if (m_sqlOperation != nullptr) {
+        QStringList qLChangedPaths;
+        for (const TagExport::FileTags &record : qLRecords)
+            qLChangedPaths << record.sPath;
+        m_sqlOperation->refreshCachedFiles(qLChangedPaths);
     }
     emit sendRefresh();
 

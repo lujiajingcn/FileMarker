@@ -120,6 +120,9 @@ void FormFileBrowser::onActionSearchFilesbyLabelsTriggered()
         qLConditionTexts << tr("%1（含子标签：%2）").arg(sRoot, qLChildren.join("、"));
     }
 
+    // 结果页要能自己判断"这行还匹配不匹配"，条件在这里交给它
+    const SearchConfig scMatcher = ConfigOperation::readSearchConfig(g_sAppDir + "/" + SEARCH_CONFIG_FILE);
+    ui->pageFilteredFiles->setSearchMatcher(m_labelGroups, scMatcher.logic);
     ui->pageFilteredFiles->setSearchCondition(
         tr("标签：%1；目录：%2").arg(qLConditionTexts.join("、"), qLSearchDirs.join("；")));
 

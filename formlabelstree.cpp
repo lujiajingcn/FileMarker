@@ -395,7 +395,7 @@ int FormLabels::syncTagToFiles(bool bRename, const QString &sOldTag, const QStri
                                  : ADSOperation::removeTag(sFilePath, sOldTag);
         if (bOk) {
             ++nOk;
-            m_sqlOperation->invalidateCacheForFile(sFilePath);
+            m_sqlOperation->refreshCachedFile(sFilePath);
         } else {
             ++nFailed;
         }

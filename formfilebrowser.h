@@ -187,8 +187,15 @@ private:
     QList<QSet<QString>> m_labelGroups;
 
     // "撤销上一次标签操作"的现场：文件 → 改动前的标签列表
-    QMap<QString, QStringList> m_mapUndoOldTags;
-    QString                    m_undoDesc;
+    /** 一次"标签操作"的现场：文件 → 操作前的标签 */
+    struct UndoTagEntry {
+        QMap<QString, QStringList> oldTags;
+        QString                    desc;
+    };
+    // 撤销栈：以前只保留最近一次，连续两次操作后第一次就撤不回来了。
+    // 现在保留最近 kMaxUndoDepth 次，Ctrl+Z 可以连续按。
+    QList<UndoTagEntry>        m_undoStack;
+    static const int           kMaxUndoDepth = 20;
 
     // 上一次搜索的结果来源（缓存 / 磁盘扫描），显示在结果页
     QString                    m_searchSource;

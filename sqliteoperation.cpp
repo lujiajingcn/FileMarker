@@ -1,4 +1,6 @@
 #include "sqliteoperation.h"
+
+#include "adsoperation.h"
 #include <QDateTime>
 #include <common.h>
 #include <QDebug>
@@ -252,6 +254,115 @@ void SqliteOperation::invalidateCacheForFile(const QString &sFilePath)
 
     for (const QString &sRoot : qLRoots)
         invalidateDirCache(sRoot);
+}
+
+QStringList SqliteOperation::cachedRootsForFile(const QString &sFilePath) const
+{
+    QStringList qLRoots;
+    if (sFilePath.isEmpty())
+        return qLRoots;
+
+    const QString sFileDir = QDir::cleanPath(QFileInfo(sFilePath).absolutePath());
+    SqliteOperation *self = const_cast<SqliteOperation *>(this);
+    QSqlQuery query(self->m_sqlDB);
+    if (!query.exec(QString("SELECT dir FROM %1").arg(TABLE_NAME_DIR)))
+        return qLRoots;
+
+    while (query.next()) {
+        const QString sRoot = QDir::cleanPath(query.value(0).toString());
+        if (sRoot.isEmpty())
+            continue;
+        QString sRootCmp = sRoot;
+        while (sRootCmp.endsWith(QLatin1Char('/')) && sRootCmp.size() > 1)
+            sRootCmp.chop(1);
+        if (sFileDir.compare(sRootCmp, Qt::CaseInsensitive) == 0
+                || sFileDir.startsWith(sRootCmp + QLatin1Char('/'), Qt::CaseInsensitive)) {
+            qLRoots << sRoot;
+        }
+    }
+    return qLRoots;
+}
+
+void SqliteOperation::refreshCachedFile(const QString &sFilePath)
+{
+    if (sFilePath.isEmpty())
+        return;
+    const QString sClean = QDir::cleanPath(sFilePath);
+    const QStringList qLRoots = cachedRootsForFile(sClean);
+    if (qLRoots.isEmpty())
+        return;   // 不在缓存里，不用管
+
+    // 只读一次 ADS，再按根更新对应行（dir 列存的是遍历根，可能有多行）
+    const QStringList qLTags = ADSOperation::listADSTagsInOrder(sClean);
+    const QString sLabels = qLTags.join(QStringLiteral(","));
+    const qint64 nNow = QDateTime::currentSecsSinceEpoch();
+
+    for (const QString &sRoot : qLRoots) {
+        if (qLTags.isEmpty()) {
+            QSqlQuery del(m_sqlDB);
+            del.prepare(QString("DELETE FROM %1 WHERE dir = :dir AND filepath = :path")
+                            .arg(TABLE_NAME_FILEPATH_TAG));
+            del.bindValue(":dir", sRoot);
+            del.bindValue(":path", sClean);
+            if (!del.exec())
+                qWarning() << "刷新缓存(删除)失败:" << del.lastError().text();
+        } else {
+            QSqlQuery upd(m_sqlDB);
+            upd.prepare(QString("UPDATE %1 SET labels = :labels WHERE dir = :dir AND filepath = :path")
+                            .arg(TABLE_NAME_FILEPATH_TAG));
+            upd.bindValue(":labels", sLabels);
+            upd.bindValue(":dir", sRoot);
+            upd.bindValue(":path", sClean);
+            if (!upd.exec()) {
+                qWarning() << "刷新缓存(更新)失败:" << upd.lastError().text();
+            } else if (upd.numRowsAffected() == 0) {
+                QSqlQuery ins(m_sqlDB);
+                ins.prepare(QString("INSERT INTO %1 (dir, filepath, labels) VALUES (:dir, :path, :labels)")
+                                .arg(TABLE_NAME_FILEPATH_TAG));
+                ins.bindValue(":dir", sRoot);
+                ins.bindValue(":path", sClean);
+                ins.bindValue(":labels", sLabels);
+                if (!ins.exec())
+                    qWarning() << "刷新缓存(插入)失败:" << ins.lastError().text();
+            }
+        }
+
+        // 让"缓存是多久前的"跟着刷新，避免刚改过却显示"3 小时前"
+        QSqlQuery touch(m_sqlDB);
+        touch.prepare(QString("UPDATE %1 SET updatedAt = :ts WHERE dir = :dir").arg(TABLE_NAME_DIR));
+        touch.bindValue(":ts", nNow);
+        touch.bindValue(":dir", sRoot);
+        touch.exec();
+    }
+}
+
+void SqliteOperation::refreshCachedFiles(const QStringList &qLFiles)
+{
+    if (qLFiles.isEmpty())
+        return;
+
+    // 批量操作（典型：导入备份）逐个读 ADS + 查表会很慢，
+    // 超过阈值就退化为"受影响遍历根整根失效"，把成本摊回一次重扫。
+    const int kPreciseLimit = 200;
+    if (qLFiles.size() > kPreciseLimit) {
+        QSet<QString> setRoots;
+        for (const QString &sFile : qLFiles) {
+            for (const QString &sRoot : cachedRootsForFile(QDir::cleanPath(sFile)))
+                setRoots.insert(sRoot);
+        }
+        for (const QString &sRoot : setRoots)
+            invalidateDirCache(sRoot);
+        return;
+    }
+
+    QStringList qLDone;
+    for (const QString &sFile : qLFiles) {
+        const QString sClean = QDir::cleanPath(sFile);
+        if (sClean.isEmpty() || qLDone.contains(sClean))
+            continue;
+        qLDone << sClean;
+        refreshCachedFile(sClean);
+    }
 }
 
 void SqliteOperation::insertRecord(const QMap<QString, FILE_TAGS> &dirAndFileTags,

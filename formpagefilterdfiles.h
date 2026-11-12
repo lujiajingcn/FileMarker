@@ -10,6 +10,10 @@
 #include <QTreeView>
 #include <QStandardItemModel>
 #include <QAction>
+#include <QList>
+#include <QSet>
+
+#include "common.h"
 
 namespace Ui {
 class FormPageFilterdFiles;
@@ -41,6 +45,9 @@ signals:
 
 public slots:
     void onShowFilteredFiles(const QStringList &qLFilteredFiles);
+
+    /** 外部（文件页/结果页右键）改了标签：刷新这些结果行的芯片并标注是否还匹配 */
+    void onFileTagsChanged(const QStringList &qLFilePaths);
     void onGotoFilePath();
     void setSearchCondition(const QString &sCondition);
 
@@ -49,6 +56,9 @@ public slots:
 
     // 这次搜索是否被用户中途停掉：是的话结果不完整，必须在标题里写明
     void setSearchInterrupted(bool bInterrupted);
+
+    /** 记下这次搜索的匹配条件，用于"标签改了之后判断这行还匹配不匹配" */
+    void setSearchMatcher(const QList<QSet<QString>> &qLLabelGroups, labelLogic logic);
 
 protected:
     void hideEvent(QHideEvent *event) override;
@@ -99,6 +109,13 @@ private:
     int                      m_rowSourceRow = 0;
     QString                  m_resultCountText;   // 填完后再显示"搜索结果 N 项（…）"
     void continueAddRows();
+    // 标签改动后就地刷新对应结果行（芯片 + 是否还匹配当前条件）
+    void refreshRowForPath(const QString &sFilePath);
+    void updateStaleCountText();
+    QList<QSet<QString>>     m_labelGroups;
+    labelLogic               m_searchLogic = labelLogic::AND;
+    bool                     m_hasMatcher = false;
+
     QStringList              m_tagScanPaths;
     QString                  m_searchSource;
     int                      m_tagScanRow;

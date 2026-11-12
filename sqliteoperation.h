@@ -50,11 +50,24 @@ public:
     /** 标签变化后让该目录的搜索缓存失效，下次搜索重新遍历，避免按旧标签命中/漏掉新标签 */
     void invalidateDirCache(const QString &sDir);
 
+    /** 找出包含该文件的缓存"遍历根"（没有则返回空） */
+    QStringList cachedRootsForFile(const QString &sFilePath) const;
+
     /**
      * 缓存按"遍历根"存，而文件的所在目录可能是这个根的子孙；
      * 某个文件的标签变化后，要把所有包含它的根目录一起失效，否则缓存会一直命中旧标签。
      */
     void invalidateCacheForFile(const QString &sFilePath);
+
+    /**
+     * 某个文件的标签变了：**只刷新它在缓存里的那一行**（读一次 ADS 后更新/插入/删除）。
+     * 不再像 invalidateCacheForFile 那样把整个"遍历根"的缓存删掉 ——
+     * 否则改一个文件就得让整目录下次全盘重扫。
+     */
+    void refreshCachedFile(const QString &sFilePath);
+
+    /** 批量版本：少量文件逐个精确刷新；文件很多（如导入）时退化为受影响根的整根失效 */
+    void refreshCachedFiles(const QStringList &qLFiles);
 
     /** 文件重命名后把缓存里的路径改掉（标签不变），避免"改名后搜不到" */
     void renameCachedFile(const QString &sOldPath, const QString &sNewPath);
