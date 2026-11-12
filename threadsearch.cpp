@@ -21,6 +21,19 @@ void ThreadSearch::setPara(const QStringList &selDirs, const QList<QSet<QString>
     m_tagLogic = taglLogic;
 }
 
+/**
+ * 目录节点用的统一键：cleanPath + 去掉结尾斜杠。
+ * 盘符根 "E:/" → "E:"；普通目录 "E:/a/b/" → "E:/a/b"。
+ * 这样节点之间能互相找到父节点（QFileInfo("E:/a").path() 正好是 "E:"）。
+ */
+static QString dirNodeKey(const QString &sPath)
+{
+    QString sKey = QDir::cleanPath(sPath);
+    while (sKey.size() > 1 && (sKey.endsWith(QLatin1Char('/')) || sKey.endsWith(QLatin1Char('\\'))))
+        sKey.chop(1);
+    return sKey;
+}
+
 void ThreadSearch::run()
 {
     // 目录级遍历：文件交给 searchFile，目录进出事件这一步先不接 UI（步骤 2 再接目录进度树）。
@@ -38,23 +51,16 @@ void ThreadSearch::run()
     };
 
     QStringList hostFiles;
-    // 规范化搜索根：整盘搜索时根是 "E:/"（结尾带斜杠），
-    // 若不处理，下面 levelOfPath() 的前缀匹配会全部失配 → 进度树只剩一个根节点、计数全为 0。
-    for (QString &sRoot : m_selDirs) {
-        while (sRoot.endsWith(QLatin1Char('/')) || sRoot.endsWith(QLatin1Char('\\')))
-            sRoot.chop(1);
-    }
-
     TraverseDirectory::resetStop();          // 每个搜索任务开头复位全局停止标志
     TraverseDirectory::resetPathControls();  // 同时清空上一轮遗留的跳过/停止请求
     m_dirNodes.clear();
     // 每个搜索根先建一个节点（状态"等待"），界面上能立刻看到要扫哪些目录
     for (const QString &sRoot : m_selDirs) {
         DirProgressNode node;
-        node.path = sRoot;
+        node.path = dirNodeKey(sRoot);   // "E:/" → "E:"，和子目录的父路径一致
         node.level = 0;
         node.state = DirNodeState::Waiting;
-        m_dirNodes.insert(sRoot, node);
+        m_dirNodes.insert(node.path, node);
     }
     emitDirSnapshot();
     m_progressTimer.start();
@@ -74,11 +80,14 @@ void ThreadSearch::run()
 /** 某个路径相对哪个搜索根、在第几层（0 = 搜索根本身）；不属于任何搜索根返回 -1。 */
 int ThreadSearch::levelOfPath(const QString &sPath) const
 {
+    const QString sKey = dirNodeKey(sPath);
     for (const QString &sRoot : m_selDirs) {
-        if (sPath.compare(sRoot, Qt::CaseInsensitive) == 0)
+        const QString sRootKey = dirNodeKey(sRoot);
+        if (sKey.compare(sRootKey, Qt::CaseInsensitive) == 0)
             return 0;
-        if (sPath.startsWith(sRoot + QLatin1Char('/'), Qt::CaseInsensitive)) {
-            const QString sRest = sPath.mid(sRoot.size() + 1);
+        const QString sPrefix = sRootKey + QLatin1Char('/');
+        if (sKey.startsWith(sPrefix, Qt::CaseInsensitive)) {
+            const QString sRest = sKey.mid(sPrefix.size());
             return sRest.count(QLatin1Char('/')) + 1;
         }
     }
@@ -88,10 +97,12 @@ int ThreadSearch::levelOfPath(const QString &sPath) const
 /** 超过显示深度时，找它对应的第 3 层祖先（聚合到那一层）。 */
 QString ThreadSearch::ancestorAtDisplayDepth(const QString &sPath) const
 {
-    QString sAncestor = sPath;
+    QString sAncestor = dirNodeKey(sPath);
     int nLevel = levelOfPath(sAncestor);
     while (nLevel > 3 && !sAncestor.isEmpty()) {
-        sAncestor = QFileInfo(sAncestor).path();
+        // QFileInfo("E:/bin").path() 会返回带斜杠的 "E:/"，每步都要重新规范化，
+        // 否则上一层就查不到节点（根节点统计会一直停在很早期的数字）。
+        sAncestor = dirNodeKey(QFileInfo(sAncestor).path());
         nLevel = levelOfPath(sAncestor);
     }
     return nLevel >= 0 ? sAncestor : QString();
@@ -99,19 +110,20 @@ QString ThreadSearch::ancestorAtDisplayDepth(const QString &sPath) const
 
 void ThreadSearch::onDirEnterHook(const QString &sPath)
 {
-    m_sCurrentDir = sPath;
+    m_sCurrentDir = dirNodeKey(sPath);
     const int nLevel = levelOfPath(sPath);
     if (nLevel < 0)
         return;
 
+    const QString sKey = dirNodeKey(sPath);
     if (nLevel <= 3) {
-        auto it = m_dirNodes.find(sPath);
+        auto it = m_dirNodes.find(sKey);
         if (it == m_dirNodes.end()) {
             DirProgressNode node;
-            node.path = sPath;
+            node.path = sKey;
             node.level = nLevel;
             node.state = DirNodeState::Searching;
-            m_dirNodes.insert(sPath, node);
+            m_dirNodes.insert(sKey, node);
         } else {
             it->state = DirNodeState::Searching;
         }
@@ -145,7 +157,7 @@ void ThreadSearch::onDirLeaveHook(const QString &sPath, DirOutcome outcome)
     };
 
     if (nLevel <= 3) {
-        auto it = m_dirNodes.find(sPath);
+        auto it = m_dirNodes.find(dirNodeKey(sPath));
         if (it != m_dirNodes.end())
             it->state = toState(outcome);
         return;
@@ -165,13 +177,14 @@ void ThreadSearch::onDirLeaveHook(const QString &sPath, DirOutcome outcome)
 /** 把当前文件的扫描/命中记到它所属的各级（≤3 层）目录节点上。 */
 void ThreadSearch::countFileInCurrentDir(bool bMatched)
 {
-    QString sPath = m_sCurrentDir;
+    QString sPath = dirNodeKey(m_sCurrentDir);
     while (!sPath.isEmpty()) {
-        const int nLevel = levelOfPath(sPath);
+        const QString sKey = dirNodeKey(sPath);
+        const int nLevel = levelOfPath(sKey);
         if (nLevel < 0)
             break;
         if (nLevel <= 3) {
-            auto it = m_dirNodes.find(sPath);
+            auto it = m_dirNodes.find(sKey);
             if (it != m_dirNodes.end()) {
                 ++it->files;
                 if (bMatched)
@@ -180,7 +193,7 @@ void ThreadSearch::countFileInCurrentDir(bool bMatched)
         }
         if (nLevel == 0)
             break;
-        sPath = QFileInfo(sPath).path();
+        sPath = dirNodeKey(QFileInfo(sKey).path());
     }
 }
 

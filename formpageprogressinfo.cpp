@@ -59,6 +59,19 @@ QString actionText(DirNodeState state)
     return QString();
 }
 
+/**
+ * 目录节点键：cleanPath + 去掉结尾斜杠。
+ * 必须和 ThreadSearch::dirNodeKey() 一致：QFileInfo("E:/bin").path() 在 Qt 里返回的是
+ * "E:/"（带斜杠），不统一的话父节点会另建一个 "E:/"，界面上就出现两个 "E:\" 根节点。
+ */
+QString normalizedDirKey(const QString &sPath)
+{
+    QString sKey = QDir::cleanPath(sPath);
+    while (sKey.size() > 1 && sKey.endsWith(QLatin1Char('/')))
+        sKey.chop(1);
+    return sKey;
+}
+
 const int kRolePath = Qt::UserRole;
 const int kRoleState = Qt::UserRole + 1;
 
@@ -132,9 +145,15 @@ void FormPageProgressInfo::resetProgress(const QStringList &qLSelDirs)
     m_nScanned = 0;
     m_nMatched = 0;
 
+    // 和 ThreadSearch 用同一套节点键（去尾斜杠）：否则这里建的是 "E:/"，
+    // 线程那边报上来的是 "E:"，界面上会出现两个 "E:\" 根节点。
     for (const QString &sDir : qLSelDirs) {
+        QString sKey = QDir::cleanPath(sDir);
+        while (sKey.size() > 1 && sKey.endsWith(QLatin1Char('/')))
+            sKey.chop(1);
+
         DirProgressNode node;
-        node.path = sDir;
+        node.path = sKey;
         node.level = 0;
         node.state = DirNodeState::Waiting;
         applyNode(node);
@@ -149,7 +168,8 @@ QStandardItem *FormPageProgressInfo::ensureItem(const QString &sPath, int nLevel
     if (nLevel < 0 || nLevel > kMaxDisplayDepth)
         return nullptr;
 
-    const auto existed = m_items.constFind(sPath);
+    const QString sKey = normalizedDirKey(sPath);
+    const auto existed = m_items.constFind(sKey);
     if (existed != m_items.constEnd())
         return existed.value();
 
@@ -161,23 +181,23 @@ QStandardItem *FormPageProgressInfo::ensureItem(const QString &sPath, int nLevel
     // 搜索根显示完整路径；盘符根本身是 "E:"，补个斜杠显示成 "E:\"
     QString sName;
     if (nLevel == 0) {
-        sName = QDir::toNativeSeparators(sPath);
+        sName = QDir::toNativeSeparators(sKey);
         if (sName.endsWith(QLatin1Char(':')))
             sName += QLatin1Char('\\');
     } else {
-        sName = QFileInfo(sPath).fileName();
+        sName = QFileInfo(sKey).fileName();
     }
     items[0]->setText(sName);
-    items[0]->setData(sPath, kRolePath);
-    items[0]->setToolTip(QDir::toNativeSeparators(sPath));
+    items[0]->setData(sKey, kRolePath);
+    items[0]->setToolTip(QDir::toNativeSeparators(sKey));
     for (int i = 1; i < kDirProgressColumns; ++i)
-        items[i]->setData(sPath, kRolePath);
+        items[i]->setData(sKey, kRolePath);
 
     QStandardItem *parentItem = nullptr;
     if (nLevel > 0) {
         // 快照里的节点顺序不保证父在前，所以父节点不存在就现建（递归向上补链），
         // 否则子节点会被挂到根上，层级就乱了。
-        parentItem = ensureItem(QFileInfo(sPath).path(), nLevel - 1);
+        parentItem = ensureItem(normalizedDirKey(QFileInfo(sKey).path()), nLevel - 1);
     }
 
     if (parentItem != nullptr)
@@ -185,7 +205,7 @@ QStandardItem *FormPageProgressInfo::ensureItem(const QString &sPath, int nLevel
     else
         m_model->invisibleRootItem()->appendRow(items);
 
-    m_items.insert(sPath, items[0]);
+    m_items.insert(sKey, items[0]);
 
     // 树是边扫边长的：新节点插进来时父节点可能还是折叠的，
     // 这里顺手把父节点展开，用户不用手动点（节点数上限也就几百个）。
