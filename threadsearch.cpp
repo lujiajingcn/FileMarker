@@ -38,6 +38,13 @@ void ThreadSearch::run()
     };
 
     QStringList hostFiles;
+    // 规范化搜索根：整盘搜索时根是 "E:/"（结尾带斜杠），
+    // 若不处理，下面 levelOfPath() 的前缀匹配会全部失配 → 进度树只剩一个根节点、计数全为 0。
+    for (QString &sRoot : m_selDirs) {
+        while (sRoot.endsWith(QLatin1Char('/')) || sRoot.endsWith(QLatin1Char('\\')))
+            sRoot.chop(1);
+    }
+
     TraverseDirectory::resetStop();          // 每个搜索任务开头复位全局停止标志
     TraverseDirectory::resetPathControls();  // 同时清空上一轮遗留的跳过/停止请求
     m_dirNodes.clear();

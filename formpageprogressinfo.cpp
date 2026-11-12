@@ -8,6 +8,7 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QStandardItemModel>
+#include <QToolButton>
 #include <QTreeView>
 
 namespace {
@@ -99,7 +100,8 @@ void FormPageProgressInfo::initTree()
     m_tree->setRootIsDecorated(true);
     m_tree->setUniformRowHeights(true);      // 行高一致，几万行也不会慢
     m_tree->setAlternatingRowColors(true);
-    m_tree->setSelectionMode(QAbstractItemView::NoSelection);
+    // 允许选中一行：选中后按回车等同于点该行的"停止/跳过"（键盘可达，也方便验证）
+    m_tree->setSelectionMode(QAbstractItemView::SingleSelection);
     m_tree->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_tree->header()->setSectionResizeMode(0, QHeaderView::Stretch);
     m_tree->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
@@ -109,6 +111,14 @@ void FormPageProgressInfo::initTree()
     m_tree->header()->resizeSection(4, 70);
 
     connect(m_tree, &QTreeView::clicked, this, &FormPageProgressInfo::onTreeClicked);
+    // 选中一行按回车 = 点该行的"停止/跳过"。
+    // 注意不能再用 m_model->item(row) 去找行：那是顶层行号，子目录会取错行
+    // （实测误把根节点停掉）。路径直接取自 index 的自定义角色即可。
+    connect(m_tree, &QTreeView::activated, this, [this](const QModelIndex &index) {
+        if (!index.isValid())
+            return;
+        onActionClicked(index.data(kRolePath).toString());
+    });
 
     // 顶部是停止按钮/状态行（第 0 行），状态行第 1 行，进度树第 2 行
     ui->gridLayout->addWidget(m_tree, 2, 0);
@@ -148,8 +158,15 @@ QStandardItem *FormPageProgressInfo::ensureItem(const QString &sPath, int nLevel
         items << new QStandardItem();
 
     // 显示名：搜索根显示完整路径，其它层只显示目录名（和资源管理器一致）
-    const QString sName = (nLevel == 0) ? QDir::toNativeSeparators(sPath)
-                                        : QFileInfo(sPath).fileName();
+    // 搜索根显示完整路径；盘符根本身是 "E:"，补个斜杠显示成 "E:\"
+    QString sName;
+    if (nLevel == 0) {
+        sName = QDir::toNativeSeparators(sPath);
+        if (sName.endsWith(QLatin1Char(':')))
+            sName += QLatin1Char('\\');
+    } else {
+        sName = QFileInfo(sPath).fileName();
+    }
     items[0]->setText(sName);
     items[0]->setData(sPath, kRolePath);
     items[0]->setToolTip(QDir::toNativeSeparators(sPath));
@@ -169,6 +186,19 @@ QStandardItem *FormPageProgressInfo::ensureItem(const QString &sPath, int nLevel
         m_model->invisibleRootItem()->appendRow(items);
 
     m_items.insert(sPath, items[0]);
+
+    // 树是边扫边长的：新节点插进来时父节点可能还是折叠的，
+    // 这里顺手把父节点展开，用户不用手动点（节点数上限也就几百个）。
+    if (parentItem != nullptr) {
+        const QModelIndex parentIndex = parentItem->index();
+        if (parentIndex.isValid() && !m_tree->isExpanded(parentIndex))
+            m_tree->expand(parentIndex);
+    } else {
+        const QModelIndex selfIndex = items[0]->index();
+        if (selfIndex.isValid() && !m_tree->isExpanded(selfIndex))
+            m_tree->expand(selfIndex);
+    }
+
     return items[0];
 }
 
@@ -206,9 +236,82 @@ void FormPageProgressInfo::applyNode(const DirProgressNode &node)
                                  .arg(node.subDirs));
     }
 
-    actionItem->setText(actionText(node.state));
+    actionItem->setText(QString());   // 文字交给按钮显示，避免格子里"停止"出现两次
     actionItem->setData(int(node.state), kRoleState);
     actionItem->setForeground(QColor(0x1a, 0x73, 0xe8));
+
+    // 操作列放真正的按钮（不是靠点单元格文字）：更直观，也方便自动化点它
+    updateActionButton(actionItem, node.state, node.path);
+}
+
+/** 按状态给操作列装/更新一个按钮（没有可做的操作就撤掉按钮）。 */
+void FormPageProgressInfo::updateActionButton(QStandardItem *actionItem, DirNodeState state,
+                                              const QString &sPath)
+{
+    if (actionItem == nullptr)
+        return;
+
+    const QModelIndex index = actionItem->index();
+    if (!index.isValid())
+        return;
+
+    const QString sText = actionText(state);
+    auto *button = qobject_cast<QToolButton *>(m_tree->indexWidget(index));
+
+    if (sText.isEmpty()) {
+        if (button != nullptr)
+            m_tree->setIndexWidget(index, nullptr);   // 已停止/已跳过：不再给按钮
+        return;
+    }
+
+    if (button == nullptr) {
+        button = new QToolButton(m_tree);
+        button->setAutoRaise(true);
+        button->setCursor(Qt::PointingHandCursor);
+        m_tree->setIndexWidget(index, button);
+    }
+    button->setText(sText);
+    button->setToolTip(state == DirNodeState::Searching
+                           ? tr("停止搜索这个文件夹（它下面的子目录也一起停）")
+                           : tr("跳过这个文件夹（整棵子树不搜索）"));
+    // 每次重建连接，保证路径和当前状态是最新的
+    disconnect(button, &QToolButton::clicked, nullptr, nullptr);
+    connect(button, &QToolButton::clicked, this, [this, sPath]() { onActionClicked(sPath); });
+}
+
+/** 点了某一行的操作按钮：停止 / 跳过。 */
+void FormPageProgressInfo::onActionClicked(const QString &sPath)
+{
+    if (sPath.isEmpty())
+        return;
+
+    // 状态从模型里取（按钮文字可能滞后于快照）
+    const auto it = m_items.constFind(sPath);
+    if (it == m_items.constEnd())
+        return;
+
+    QStandardItem *nameItem = it.value();
+    QStandardItem *parentItem = nameItem->parent();
+    if (parentItem == nullptr)
+        parentItem = m_model->invisibleRootItem();
+    QStandardItem *actionItem = parentItem->child(nameItem->row(), 4);
+    if (actionItem == nullptr)
+        return;
+
+    const DirNodeState state = DirNodeState(actionItem->data(kRoleState).toInt());
+
+    if (state == DirNodeState::Searching) {
+        emit sendStopDir(sPath);
+        actionItem->setText(tr("已停止"));
+        actionItem->setData(int(DirNodeState::Stopped), kRoleState);
+        updateActionButton(actionItem, DirNodeState::Stopped, sPath);
+    } else if (state == DirNodeState::Waiting || state == DirNodeState::Complete
+               || state == DirNodeState::Incomplete) {
+        emit sendSkipDir(sPath);
+        actionItem->setText(tr("已跳过"));
+        actionItem->setData(int(DirNodeState::Skipped), kRoleState);
+        updateActionButton(actionItem, DirNodeState::Skipped, sPath);
+    }
 }
 
 void FormPageProgressInfo::onRecvDirSnapshot(const DirProgressSnapshot &snapshot)
@@ -263,21 +366,7 @@ void FormPageProgressInfo::onTreeClicked(const QModelIndex &index)
     if (actionItem == nullptr)
         return;
 
-    const QString sPath = actionItem->data(kRolePath).toString();
-    const DirNodeState state = DirNodeState(actionItem->data(kRoleState).toInt());
-    if (sPath.isEmpty())
-        return;
-
-    if (state == DirNodeState::Searching) {
-        emit sendStopDir(sPath);
-        actionItem->setText(tr("已停止"));
-        actionItem->setData(int(DirNodeState::Stopped), kRoleState);
-    } else if (state == DirNodeState::Waiting || state == DirNodeState::Complete
-               || state == DirNodeState::Incomplete) {
-        emit sendSkipDir(sPath);
-        actionItem->setText(tr("已跳过"));
-        actionItem->setData(int(DirNodeState::Skipped), kRoleState);
-    }
+    onActionClicked(actionItem->data(kRolePath).toString());
 }
 
 void FormPageProgressInfo::onBtnStopClicked()

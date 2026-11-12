@@ -50,6 +50,10 @@ private:
     /** 按路径找到/创建节点；返回 nullptr 表示层级超出显示范围 */
     QStandardItem *ensureItem(const QString &sPath, int nLevel);
     void applyNode(const DirProgressNode &node);
+    /** 给操作列装/更新"停止""跳过"按钮 */
+    void updateActionButton(QStandardItem *actionItem, DirNodeState state, const QString &sPath);
+    /** 点了某一行的操作按钮 */
+    void onActionClicked(const QString &sPath);
     void updateStatusLabel();
 
     // 停止按钮处理函数：构造函数中显式 connect，

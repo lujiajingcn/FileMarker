@@ -1,5 +1,9 @@
 #include "traversedirectory.h"
 
+#ifdef Q_OS_WIN
+#include <QtCore/qt_windows.h>
+#endif
+
 #include <QReadWriteLock>
 #include <QSet>
 
@@ -20,6 +24,10 @@ const QSet<QString> &defaultExcludedNames()
 {
     static const QSet<QString> s_names = {
         QStringLiteral("node_modules"),
+        QStringLiteral(".pnpm-store"),
+        QStringLiteral(".npm"),
+        QStringLiteral(".yarn"),
+        QStringLiteral(".cache"),
         QStringLiteral(".git"),
         QStringLiteral(".svn"),
         QStringLiteral(".hg"),
@@ -33,6 +41,30 @@ const QSet<QString> &defaultExcludedNames()
         QStringLiteral("venv")
     };
     return s_names;
+}
+
+}   // namespace
+
+
+namespace {
+
+/**
+ * 是否是"重解析点"（Windows 的符号链接 / 目录联接 junction / OneDrive 占位等）。
+ *
+ * 必须跳过：旧实现用 QDirIterator 递归，它默认**不跟随**符号链接；改成自己递归后
+ * 如果不检查，就会钻进 junction 里 —— 目标不可达时会一直等超时（实测整盘搜索
+ * 卡在 E:\pnm-store 这类目录上，6 秒只扫了 3 个文件），指向父目录时还会无限递归。
+ */
+bool isReparsePoint(const QString &sPath)
+{
+#ifdef Q_OS_WIN
+    const DWORD attrs = GetFileAttributesW(reinterpret_cast<const wchar_t *>(sPath.utf16()));
+    if (attrs == INVALID_FILE_ATTRIBUTES)
+        return false;
+    return (attrs & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
+#else
+    return QFileInfo(sPath).isSymLink();
+#endif
 }
 
 }   // namespace
@@ -75,6 +107,14 @@ bool TraverseDirectory::traverseRecursive(const QString &sDirPath, const Travers
     if (m_isStop.load()) {
         outcome = DirOutcome::Stopped;
         return false;
+    }
+
+    // 符号链接 / junction：不进入（旧实现的 QDirIterator 默认也不跟随它们）
+    if (isReparsePoint(sDirPath)) {
+        outcome = DirOutcome::Skipped;
+        if (hooks.onDirLeave)
+            hooks.onDirLeave(sDirPath, DirOutcome::Skipped);
+        return true;
     }
 
     // 用户把这棵子树整个跳过：不进入、不扫，向调用方报"已跳过"
