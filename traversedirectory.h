@@ -20,6 +20,8 @@
 #include <QFileInfo>
 #include <QSet>
 #include <QString>
+#include <QVector>
+#include <QMetaType>
 
 #include <atomic>
 #include <functional>
@@ -35,6 +37,32 @@ enum class DirOutcome
     Incomplete,  // 有子目录被停止/出错，或者全局停止
     Failed       // 无法读取（权限等）
 };
+
+/** 目录进度树上每个节点的状态 */
+enum class DirNodeState
+{
+    Waiting = 0,   // 还没轮到
+    Searching,     // 正在扫
+    Complete,      // 扫完了
+    Stopped,       // 用户停止了这个子树
+    Skipped,       // 用户跳过了这个子树
+    Incomplete     // 有子目录被停止/读不了，整体不完整
+};
+
+/** 目录进度树的一个节点（工作线程算好、UI 线程只负责显示） */
+struct DirProgressNode
+{
+    QString path;         // 目录绝对路径
+    int     level = 0;    // 相对搜索根的层级：0 = 搜索根
+    int     files = 0;    // 已扫描文件数（含被聚合的更深层）
+    int     matches = 0;  // 命中数
+    int     subDirs = 0;  // 被聚合进来的深层子目录数（>0 时界面上提示"含 N 个子目录"）
+    DirNodeState state = DirNodeState::Waiting;
+};
+using DirProgressSnapshot = QVector<DirProgressNode>;
+
+Q_DECLARE_METATYPE(DirProgressNode)
+Q_DECLARE_METATYPE(DirProgressSnapshot)
 
 /** 目录级遍历钩子；不需要的部分留空即可 */
 struct TraverseHooks

@@ -1,5 +1,6 @@
 #include <windows.h>
 
+#include "traversedirectory.h"
 #include "mainwindow.h"
 
 #include <QApplication>
@@ -145,6 +146,9 @@ int main(int argc, char *argv[])
     qInstallMessageHandler(earlyMessageHandler);
 
     QApplication a(argc, argv);
+
+    // 目录进度快照要在工作线程和 UI 线程之间用 queued 连接传递，先注册类型
+    qRegisterMetaType<DirProgressSnapshot>("DirProgressSnapshot");
 
     // 显式设置界面字体。
     // Qt 5 在 Windows 上会拿 SPI_GETNONCLIENTMETRICS 里的字号，再按**物理** DPI 折算成磅值；

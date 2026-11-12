@@ -6,6 +6,8 @@
 #include <QDir>
 
 #include "common.h"
+#include "traversedirectory.h"
+#include <QHash>
 #include <QSet>
 
 class ThreadSearch : public QThread
@@ -27,6 +29,8 @@ signals:
     // 扫描结束时的完整结果；处理完由 FormFileBrowser::onRecvSearchResult 接手
     void sigResult(const QStringList &qLHostFiles);
     void sendProcessInfo(const QString &sProcessedFilePath);
+    // 目录进度树快照（每 150ms 一次，避免把 UI 线程灌满）
+    void sendDirSnapshot(const DirProgressSnapshot &snapshot);
 
 private:
     QStringList m_selDirs;
@@ -38,6 +42,19 @@ private:
     // 界面会一直"卡"），改成最多每 150ms 报一次，并带上已扫描计数。
     QElapsedTimer m_progressTimer;
     int           m_progressFiles = 0;
+
+    // ---- 目录进度树 ----
+    // 只在工作线程里读写；深度超过 3 层的目录不建节点，计入第 3 层祖先的计数，
+    // 这样整盘几万个目录也不会把 UI 撑爆（实测 E: 盘 3 层内只有 412 个目录）。
+    void onDirEnterHook(const QString &sPath);
+    void onDirLeaveHook(const QString &sPath, DirOutcome outcome);
+    void countFileInCurrentDir(bool bMatched);
+    void emitDirSnapshot();
+    int  levelOfPath(const QString &sPath) const;     // -1 表示不属于任何搜索根
+    QString ancestorAtDisplayDepth(const QString &sPath) const;
+
+    QHash<QString, DirProgressNode> m_dirNodes;
+    QString m_sCurrentDir;
 };
 
 #endif // THREADSEARCH_H

@@ -25,6 +25,7 @@
 #include "adsoperation.h"
 #include "configoperation.h"
 #include "searchmatch.h"
+#include "traversedirectory.h"
 #include "tagexport.h"
 #include "utility.h"
 
@@ -167,8 +168,19 @@ void FormFileBrowser::onActionSearchFilesbyLabelsTriggered()
     showProcessPage(RUNNINGTHREAD::SEARCHFILE);// 从磁盘查找比较耗时，切换到处理进度页面
     m_threadSearch = new ThreadSearch(this);
     m_threadSearch->setPara(qLSelDirs, m_labelGroups, sc.logic);
+
+    // 目录进度树：清空并建立顶层节点；快照按 150ms 合并发过来
+    ui->pageProgressInfo->clear();
+    ui->pageProgressInfo->resetProgress(qLSelDirs);
     connect(m_threadSearch, &ThreadSearch::sigResult, this, &FormFileBrowser::showFilteredFile);
     connect(m_threadSearch, &ThreadSearch::sendProcessInfo, ui->pageProgressInfo, &FormPageProgressInfo::onRecvProgress);
+    connect(m_threadSearch, &ThreadSearch::sendDirSnapshot, ui->pageProgressInfo,
+            &FormPageProgressInfo::onRecvDirSnapshot);
+    // 单个目录的停止/跳过：直接写进遍历器的控制集合（线程安全），遍历线程下一层就会响应
+    connect(ui->pageProgressInfo, &FormPageProgressInfo::sendStopDir, this,
+            [](const QString &sPath) { TraverseDirectory::requestStopPath(sPath); });
+    connect(ui->pageProgressInfo, &FormPageProgressInfo::sendSkipDir, this,
+            [](const QString &sPath) { TraverseDirectory::requestSkipPath(sPath); });
     // 注意：ThreadSearch 构造函数里已连接 finished->deleteLater，这里只需在线程结束后把指针置空，避免悬空指针。
     connect(m_threadSearch, &QThread::finished, this, [this](){ m_threadSearch = nullptr; });
     m_threadSearch->start();
