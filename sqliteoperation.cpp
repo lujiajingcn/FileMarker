@@ -89,6 +89,34 @@ void SqliteOperation::createTable()
             qWarning() << "为 dirs 表添加 updatedAt 列失败:" << alterQuery.lastError().text();
         }
     }
+
+    // dirs 表再加两列，用来区分"缓存是否完整"和"是否用户主动排除"：
+    //   complete = 1 表示这个目录被完整遍历过，缓存可以放心用；
+    //   complete = 0 表示遍历被停止/中断，查询时应回退到磁盘重扫；
+    //   excluded = 1 表示用户主动跳过（如 node_modules），查询时视为"已处理、无命中"，
+    //                不再回退磁盘，否则每次搜索都会把这些目录重新扫一遍。
+    // 老库没有这两列，启动时各补一次。
+    auto ensureColumn = [this](const QString &sColumn, const QString &sDefinition) {
+        bool bExists = false;
+        QSqlQuery infoQuery(m_sqlDB);
+        if (infoQuery.exec(QStringLiteral("PRAGMA table_info(%1)").arg(TABLE_NAME_DIR))) {
+            while (infoQuery.next()) {
+                if (infoQuery.value(1).toString() == sColumn) {
+                    bExists = true;
+                    break;
+                }
+            }
+        }
+        if (bExists)
+            return;
+        QSqlQuery alterQuery(m_sqlDB);
+        if (!alterQuery.exec(QStringLiteral("ALTER TABLE %1 ADD COLUMN %2 %3")
+                                 .arg(TABLE_NAME_DIR, sColumn, sDefinition))) {
+            qWarning() << "为 dirs 表添加" << sColumn << "列失败:" << alterQuery.lastError().text();
+        }
+    };
+    ensureColumn(QStringLiteral("complete"), QStringLiteral("INTEGER NOT NULL DEFAULT 1"));
+    ensureColumn(QStringLiteral("excluded"), QStringLiteral("INTEGER NOT NULL DEFAULT 0"));
 }
 
 void SqliteOperation::migrateLegacyLabels()
@@ -226,7 +254,10 @@ void SqliteOperation::invalidateCacheForFile(const QString &sFilePath)
         invalidateDirCache(sRoot);
 }
 
-void SqliteOperation::insertRecord(const QMap<QString, FILE_TAGS> &dirAndFileTags, const QStringList &qLCompletedDirs)
+void SqliteOperation::insertRecord(const QMap<QString, FILE_TAGS> &dirAndFileTags,
+                                   const QStringList &qLCompletedDirs,
+                                   const QStringList &qLSkippedDirs,
+                                   const QStringList &qLIncompleteDirs)
 {
     // dirs 表必须和文件行在同一个事务里。否则文件行回滚了、目录却仍标着"已缓存"，
     // 之后按缓存搜索会命中"有目录、没数据"的空壳，永远查不到文件。
@@ -250,21 +281,49 @@ void SqliteOperation::insertRecord(const QMap<QString, FILE_TAGS> &dirAndFileTag
     const qint64 nNow = QDateTime::currentSecsSinceEpoch();
     query.prepare(QString("INSERT OR IGNORE INTO %1 (dir, updatedAt) VALUES (:dir, :ts)").arg(TABLE_NAME_DIR));
     QSqlQuery touchQuery(m_sqlDB);
-    touchQuery.prepare(QString("UPDATE %1 SET updatedAt = :ts WHERE dir = :dir").arg(TABLE_NAME_DIR));
-    for (int i = 0; i < qLAllDirs.count(); i++) {
-        query.bindValue(":dir", qLAllDirs.at(i));
+    touchQuery.prepare(QString("UPDATE %1 SET updatedAt = :ts, complete = :complete, excluded = :excluded "
+                               "WHERE dir = :dir").arg(TABLE_NAME_DIR));
+
+    // 一个目录写一行，带"完整/排除"两个标记：
+    //   完整遍历 → complete=1, excluded=0（缓存可信）
+    //   用户跳过 → complete=1, excluded=1（视为已处理，不再回退磁盘）
+    //   被中断   → complete=0, excluded=0（查询时回退磁盘重扫）
+    //   被中断的目录本身若之前是完整的，这里只改标记、不删旧数据，避免把好数据弄坏。
+    auto writeDirRow = [&](const QString &sDir, int nComplete, int nExcluded) -> bool {
+        if (sDir.isEmpty())
+            return true;
+        query.bindValue(":dir", sDir);
         query.bindValue(":ts", nNow);
         if (!query.exec()) {
-            QString sErrorMsg = QString("向表dirs中插入数据失败：%1").arg(query.lastError().text());
-            qCritical("%s", qPrintable(sErrorMsg));
+            qCritical("向表dirs中插入数据失败：%s", qPrintable(query.lastError().text()));
+            return false;
+        }
+        touchQuery.bindValue(":ts", nNow);
+        touchQuery.bindValue(":complete", nComplete);
+        touchQuery.bindValue(":excluded", nExcluded);
+        touchQuery.bindValue(":dir", sDir);
+        if (!touchQuery.exec()) {
+            qWarning() << "更新目录缓存标记失败:" << sDir << touchQuery.lastError().text();
+        }
+        return true;
+    };
+
+    for (int i = 0; i < qLAllDirs.count(); i++) {
+        if (!writeDirRow(qLAllDirs.at(i), 1, 0)) {
             m_sqlDB.rollback();
             return;
         }
-        // 目录已存在时 INSERT OR IGNORE 不会更新，这里再刷一次时间
-        touchQuery.bindValue(":ts", nNow);
-        touchQuery.bindValue(":dir", qLAllDirs.at(i));
-        if (!touchQuery.exec()) {
-            qWarning() << "更新缓存时间失败:" << qLAllDirs.at(i) << touchQuery.lastError().text();
+    }
+    for (int i = 0; i < qLSkippedDirs.count(); i++) {
+        if (!writeDirRow(qLSkippedDirs.at(i), 1, 1)) {
+            m_sqlDB.rollback();
+            return;
+        }
+    }
+    for (int i = 0; i < qLIncompleteDirs.count(); i++) {
+        if (!writeDirRow(qLIncompleteDirs.at(i), 0, 0)) {
+            m_sqlDB.rollback();
+            return;
         }
     }
 
@@ -317,18 +376,34 @@ void SqliteOperation::searchFilesByLabels(const QStringList &qLSelDirs,
                                           const QList<QSet<QString>> &qLLabelGroups,
                                           int nLabelLogic,
                                           QStringList &qLFilePaths,
-                                          QStringList &qLNotHitedDirs)
+                                          QStringList &qLNotHitedDirs,
+                                          int &nExcludedDirs)
 {
-    QStringList qLSearchedDirs; // 已经缓存过的文件夹，从数据库中查找获得
+    nExcludedDirs = 0;
+
+    QStringList qLSearchedDirs; // 可以放心用缓存的目录（完整遍历过且不是"用户主动排除"）
+    QStringList qLExcludedDirs; // 用户主动跳过的目录：视为"已处理、无命中"，不回退磁盘
+    QStringList qLIncompleteDirs; // 被中断的目录：缓存不可信，要回退磁盘重扫
+
     QSqlQuery query(m_sqlDB);
-    query.exec(QString("SELECT dir FROM dirs"));
-    while (query.next())
+    if (query.exec(QString("SELECT dir, complete, excluded FROM dirs")))
     {
-        qLSearchedDirs << query.value("dir").toString();
+        while (query.next())
+        {
+            const QString sDir = query.value("dir").toString();
+            const int nComplete = query.value("complete").toInt();
+            const int nExcluded = query.value("excluded").toInt();
+            if (nExcluded != 0)
+                qLExcludedDirs << sDir;
+            else if (nComplete == 0)
+                qLIncompleteDirs << sDir;
+            else
+                qLSearchedDirs << sDir;
+        }
     }
     query.finish();
 
-    if (qLSearchedDirs.count() == 0)
+    if (qLSearchedDirs.count() == 0 && qLExcludedDirs.count() == 0)
     {
         qLNotHitedDirs = qLSelDirs;
         return;
@@ -344,13 +419,46 @@ void SqliteOperation::searchFilesByLabels(const QStringList &qLSelDirs,
     stHitedDirs.intersect(stSearchedDirs);
     QSet<QString> stNotHitedDirs = stSelDirs;           // 未命中缓存的部分，后续直接从磁盘查找
     stNotHitedDirs.subtract(stSearchedDirs);
+
+    // 用户主动排除的目录：既不算命中（不去查它的文件），也不算未命中（不回退磁盘），
+    // 只统计数量，结果页上提示"已排除 N 个目录"，让用户知道结果为什么可能偏少。
+    const QSet<QString> stExcludedDirs = Utility::toSet(qLExcludedDirs);
+
+    // 统计"选中目录下被主动排除的目录数"（含子目录）：
+    // 选择的是整盘/大目录时，被排除的往往是它下面的 node_modules 之类，
+    // 只按"选中的目录本身是否被排除"统计会永远是 0，用户看不到提示。
+    auto normDir = [](const QString &sPath) {
+        QString sKey = QDir::cleanPath(sPath);
+        while (sKey.size() > 1 && sKey.endsWith(QLatin1Char('/')))
+            sKey.chop(1);
+        return sKey;
+    };
+    for (QSet<QString>::const_iterator cItr = stExcludedDirs.begin(); cItr != stExcludedDirs.end(); cItr++) {
+        const QString sExcluded = normDir(*cItr);
+        for (QSet<QString>::const_iterator sItr = stSelDirs.begin(); sItr != stSelDirs.end(); sItr++) {
+            const QString sSel = normDir(*sItr);
+            if (sExcluded == sSel || sExcluded.startsWith(sSel + QLatin1Char('/'))) {
+                ++nExcludedDirs;
+                break;
+            }
+        }
+    }
+    stNotHitedDirs.subtract(stExcludedDirs);
+
+    // 被中断过的目录：缓存不可信 → 当作未命中，回退磁盘重扫
+    const QSet<QString> stIncompleteDirs = Utility::toSet(qLIncompleteDirs);
+    QSet<QString> stIncompleteHited = stSelDirs;
+    stIncompleteHited.intersect(stIncompleteDirs);
+    for (QSet<QString>::const_iterator cItr = stIncompleteHited.begin(); cItr != stIncompleteHited.end(); cItr++)
+        stNotHitedDirs.insert(*cItr);
     for (QSet<QString>::const_iterator cItr = stNotHitedDirs.begin(); cItr != stNotHitedDirs.end(); cItr++)
     {
         qLNotHitedDirs << *cItr;
     }
 
     qDebug() << "[缓存查询] 选中=" << qLSelDirs << "已缓存=" << qLSearchedDirs
-            << "命中=" << stHitedDirs << "未命中=" << qLNotHitedDirs;
+            << "命中=" << stHitedDirs << "未命中=" << qLNotHitedDirs
+            << "已排除=" << nExcludedDirs << "不完整=" << qLIncompleteDirs;
 
     // 使用预编译语句 + bindValue，避免路径中包含单引号等字符导致 SQL 语法错误。
     QSqlQuery hitQuery(m_sqlDB);

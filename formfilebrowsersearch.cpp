@@ -131,7 +131,15 @@ void FormFileBrowser::onActionSearchFilesbyLabelsTriggered()
 
     if (sc.bFromCache && !bForceDisk) {
         QStringList qLFilePaths, qLNotHitedDirs;
-        m_sqlOperation->searchFilesByLabels(qLSelDirs, m_labelGroups, sc.logic, qLFilePaths, qLNotHitedDirs);
+        int nExcludedDirs = 0;
+        m_sqlOperation->searchFilesByLabels(qLSelDirs, m_labelGroups, sc.logic, qLFilePaths,
+                                            qLNotHitedDirs, nExcludedDirs);
+        if (nExcludedDirs > 0) {
+            // 用户主动跳过的目录不会回退磁盘，所以结果可能偏少，明确告诉用户
+            m_excludedDirNote = tr("（已排除 %1 个目录）").arg(nExcludedDirs);
+        } else {
+            m_excludedDirNote.clear();
+        }
         qInfo() << "[搜索] 缓存命中文件=" << qLFilePaths.size() << " 未命中目录数=" << qLNotHitedDirs.size()
                 << " 分组数=" << m_labelGroups.size() << " logic=" << int(sc.logic);
         if (qLNotHitedDirs.count() == 0) { // 查找的文件夹全部在缓存数据库中存在，则显示查找结果后结束。
@@ -142,6 +150,8 @@ void FormFileBrowser::onActionSearchFilesbyLabelsTriggered()
             const QString sAge = humanReadableCacheAge(cacheTime);
             m_searchSource = sAge.isEmpty() ? tr("（结果来自缓存）")
                                              : tr("（结果来自缓存，%1）").arg(sAge);
+            if (!m_excludedDirNote.isEmpty())
+                m_searchSource += m_excludedDirNote;
             showFilteredFile(qLFilePaths);
             return;
         } else { // 查找的文件夹有部分未在缓存数据库中，不在的文件夹从磁盘查找
@@ -152,6 +162,8 @@ void FormFileBrowser::onActionSearchFilesbyLabelsTriggered()
         }
     } else {
         m_searchSource = tr("（结果来自磁盘扫描）");
+    if (!m_excludedDirNote.isEmpty())
+        m_searchSource += m_excludedDirNote;
     }
 
     qInfo() << "[搜索] 启动磁盘扫描 dirs=" << qLSelDirs;
@@ -220,6 +232,8 @@ void FormFileBrowser::onActionTraverseSelDirsTriggered()
 void FormFileBrowser::onRecvTraverseResult(const QMap<QString, FILE_TAGS> &dirAndFileTags,
                                            QMap<QString, QSet<QString>> dirAndTags,
                                            const QStringList &qLCompletedDirs,
+                                           const QStringList &qLSkippedDirs,
+                                           const QStringList &qLIncompleteDirs,
                                            bool bAborted)
 {
     // 注意：insertRecord 内部已经按目录做“先删后插”，因此这里不能再整体清空
@@ -227,8 +241,9 @@ void FormFileBrowser::onRecvTraverseResult(const QMap<QString, FILE_TAGS> &dirAn
     // 导致“命中缓存”的优化几乎永远不生效。
     // 只有"完整扫完"的目录才会出现在 dirAndFileTags / qLCompletedDirs 里；
     // 被中断时未扫完的目录不会入库，旧缓存也保持原样（不会被残缺数据覆盖）。
-    if (!qLCompletedDirs.isEmpty() || !dirAndFileTags.isEmpty())
-        m_sqlOperation->insertRecord(dirAndFileTags, qLCompletedDirs);
+    if (!qLCompletedDirs.isEmpty() || !dirAndFileTags.isEmpty()
+        || !qLSkippedDirs.isEmpty() || !qLIncompleteDirs.isEmpty())
+        m_sqlOperation->insertRecord(dirAndFileTags, qLCompletedDirs, qLSkippedDirs, qLIncompleteDirs);
 
     showFilesWidget();
     setActionState(TRAVERER_FINISH);
@@ -244,7 +259,7 @@ void FormFileBrowser::onRecvTraverseResult(const QMap<QString, FILE_TAGS> &dirAn
 
     if (bAborted) {
         // 遍历完成提示：小目录时进度页一闪而过，用户需要明确的完成反馈。
-        emit sendStatusMessage(tr("遍历已取消：已完成的 %1 个目录已写入缓存，未完成的目录保持原样")
+        emit sendStatusMessage(tr("遍历已取消：已完成的 %1 个目录已写入缓存，未完成的目录标记为不完整")
                                    .arg(qLCompletedDirs.size()));
         qInfo() << "遍历被取消: completedDirs=" << qLCompletedDirs.size()
                 << "files=" << nFiles << "labels=" << nLabels;

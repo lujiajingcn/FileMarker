@@ -24,34 +24,57 @@ void ThreadTraverseDirs::setSelDirs(const QStringList &selDirs)
 
 void ThreadTraverseDirs::run()
 {
-    auto func = [this](const QFileInfo& info) -> bool {
-        return this->traverseDir(info);
-    };
-
     QMap<QString, FILE_TAGS> dirAndFileTags;
     QMap<QString, QSet<QString>> dirAndTags;
-    QStringList qLCompletedDirs;      // 只收录"完整扫完"的目录
+    QStringList qLCompletedDirs;      // 完整扫完的目录
+    QStringList qLSkippedDirs;        // 用户主动跳过 / 默认排除的目录（记为"已排除"）
+    QStringList qLIncompleteDirs;     // 被停止、读不了、或子目录没扫完的目录（缓存不可信）
 
-    TraverseDirectory::resetStop();   // 每个遍历任务开头复位一次停止标志（多目录遍历也能正确响应停止）
+    TraverseDirectory::resetStop();          // 每个遍历任务开头复位全局停止标志
+    TraverseDirectory::resetPathControls();  // 清空上一轮遗留的跳过/停止请求
+
     for (const QString &selDir : m_selDirs) {
         // 用户已点停止：后面的目录一个都不要进，避免又跑一遍
         if (TraverseDirectory::isStopped())
             break;
 
-        const bool bCompleted = TraverseDirectory::traverseDirectory(selDir, func, true);
-        if (bCompleted) {
-            qLCompletedDirs << selDir;
+        m_tags.clear();
+        m_fileTags.clear();
+
+        // 目录级钩子：把每个目录的结局收集起来，写缓存时据此打 complete / excluded 标记
+        TraverseHooks hooks;
+        hooks.onFile = [this](const QFileInfo &info) -> bool { return traverseDir(info); };
+        hooks.onDirLeave = [&](const QString &sPath, DirOutcome outcome) {
+            switch (outcome) {
+            case DirOutcome::Complete:
+                qLCompletedDirs << sPath;
+                break;
+            case DirOutcome::Skipped:
+                qLSkippedDirs << sPath;
+                break;
+            case DirOutcome::Stopped:
+            case DirOutcome::Incomplete:
+            case DirOutcome::Failed:
+                qLIncompleteDirs << sPath;
+                break;
+            }
+        };
+        // 默认排除目录：和搜索保持一致，避免把 node_modules/.pnpm-store 这类目录写进缓存
+        hooks.shouldSkipDir = [](const QString &sDirPath) -> bool {
+            return TraverseDirectory::isDefaultExcludedDirName(QFileInfo(sDirPath).fileName());
+        };
+
+        const bool bCompleted = TraverseDirectory::traverseDirectory(selDir, hooks, true);
+        if (bCompleted && !m_fileTags.isEmpty()) {
             dirAndFileTags[selDir] = m_fileTags;
             if (m_tags.count() != 0)
                 dirAndTags[selDir] = m_tags;
         }
         // 未扫完的目录：本地结果直接丢弃，绝不进入缓存（否则缓存里只剩残缺数据）
-
-        m_tags.clear();
-        m_fileTags.clear();
     }
 
-    emit sendResult(dirAndFileTags, dirAndTags, qLCompletedDirs, TraverseDirectory::isStopped());
+    emit sendResult(dirAndFileTags, dirAndTags, qLCompletedDirs, qLSkippedDirs,
+                    qLIncompleteDirs, TraverseDirectory::isStopped());
 }
 
 bool ThreadTraverseDirs::traverseDir(const QFileInfo& fileInfo)

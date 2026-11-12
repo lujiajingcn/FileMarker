@@ -127,6 +127,8 @@ private slots:
     void onRecvTraverseResult(const QMap<QString, FILE_TAGS> &dirAndFileTags,
                               QMap<QString, QSet<QString>> dirAndTags,
                               const QStringList &qLCompletedDirs,
+                              const QStringList &qLSkippedDirs,
+                              const QStringList &qLIncompleteDirs,
                               bool bAborted);
 
 
@@ -187,6 +189,7 @@ private:
 
     // 上一次搜索的结果来源（缓存 / 磁盘扫描），显示在结果页
     QString                    m_searchSource;
+    QString                    m_excludedDirNote;   // 结果页提示"已排除 N 个目录"
 
     SqliteOperation     *m_sqlOperation;        // 操作sqlite数据库
     ThreadSearch        *m_threadSearch;        // 处理根据标签查找文件的线程

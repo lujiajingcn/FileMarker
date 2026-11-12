@@ -37,6 +37,8 @@ signals:
     void sendResult(const QMap<QString, FILE_TAGS> &dirAndFileTags,
                     QMap<QString, QSet<QString>> dirAndTags,
                     const QStringList &qLCompletedDirs,
+                    const QStringList &qLSkippedDirs,
+                    const QStringList &qLIncompleteDirs,
                     bool bAborted);
     void sendProcessInfo(const QString &sProcessedFilePath);
 
