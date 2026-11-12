@@ -144,8 +144,7 @@ void FormPageProgressInfo::resetProgress(const QStringList &qLSelDirs)
     m_items.clear();
     m_model->removeRows(0, m_model->rowCount());
     m_sCurrentFile.clear();
-    m_sFocusedDir.clear();
-    m_focusedIndex = QPersistentModelIndex();
+
     m_nScanned = 0;
     m_nMatched = 0;
 
@@ -171,8 +170,6 @@ void FormPageProgressInfo::resetProgress(const QStringList &qLSelDirs)
         if (rootIndex.isValid())
             m_tree->expand(rootIndex);
     }
-    m_sFocusedDir.clear();
-    m_focusedIndex = QPersistentModelIndex();
     updateStatusLabel();
 }
 
@@ -223,65 +220,6 @@ QStandardItem *FormPageProgressInfo::ensureItem(const QString &sPath, int nLevel
     // 注意：这里**不自动展开**父节点。整盘搜索时树会一直长，
     // 全展开既乱又卡；展开/定位统一由 focusOnDirectory() 按"当前搜索目录"处理。
     return items[0];
-}
-
-/**
- * 把视图定位到"当前正在搜索的文件夹"：
- * 先全部收起，再只展开它的父链，然后选中它并滚动到可见位置。
- */
-void FormPageProgressInfo::focusOnDirectory(const QString &sDirPath)
-{
-    if (sDirPath.isEmpty())
-        return;
-
-    // 深层目录没有节点：往上找到最近的、已建出来的祖先（最多到第 3 层）
-    QString sKey = normalizedDirKey(sDirPath);
-    QStandardItem *item = nullptr;
-    while (!sKey.isEmpty()) {
-        const auto it = m_items.constFind(sKey);
-        if (it != m_items.constEnd()) {
-            item = it.value();
-            break;
-        }
-        // 盘符根 "E:" 的 QFileInfo::path() 还是 "E:"，必须显式跳出，
-        // 否则这里会变成死循环把界面卡住（实测：进到这个循环后整个界面停住）。
-        const QString sParent = normalizedDirKey(QFileInfo(sKey).path());
-        if (sParent == sKey)
-            break;
-        sKey = sParent;
-    }
-    if (item == nullptr)
-        return;
-
-    const QModelIndex targetIndex = item->index();
-    if (!targetIndex.isValid() || targetIndex == m_focusedIndex)
-        return;
-
-    // 新目标是"当前选中项"的祖先时不要往回跳：
-    // 并行/深层扫描时进度会在相邻目录间来回，若每次都折叠到上层，
-    // 界面上就会一直闪、停在很浅的层级（实测会只剩根节点）。
-    for (QModelIndex parent = m_focusedIndex.parent(); parent.isValid(); parent = parent.parent()) {
-        if (parent == targetIndex)
-            return;
-    }
-    if (sKey == m_sFocusedDir && m_focusedIndex == targetIndex)
-        return;
-    m_sFocusedDir = sKey;
-
-    // 只保留"通往当前目录"的那一条链是展开的
-    m_tree->collapseAll();
-    QList<QStandardItem *> qLAncestors;
-    for (QStandardItem *parent = item->parent(); parent != nullptr; parent = parent->parent())
-        qLAncestors.prepend(parent);
-    for (QStandardItem *ancestor : qLAncestors) {
-        const QModelIndex ancestorIndex = ancestor->index();
-        if (ancestorIndex.isValid())
-            m_tree->expand(ancestorIndex);
-    }
-
-    m_tree->setCurrentIndex(targetIndex);
-    m_focusedIndex = targetIndex;
-    m_tree->scrollTo(targetIndex, QAbstractItemView::PositionAtCenter);
 }
 
 void FormPageProgressInfo::applyNode(const DirProgressNode &node)
@@ -437,12 +375,11 @@ void FormPageProgressInfo::onRecvDirSnapshot(const DirProgressSnapshot &snapshot
 
 void FormPageProgressInfo::onRecvProgress(const QString &sProcessedFilePath)
 {
-    // 只保留"当前正在处理的文件"一行，不再往文本框里追加几十万行
+    // 只保留"当前正在处理的文件"一行，不再往文本框里追加几十万行。
+    // 注意：这里**不再**自动展开/选中目录 —— 树保持用户自己的展开状态，
+    // 需要看哪个分支由用户手动展开。
     m_sCurrentFile = sProcessedFilePath;
     updateStatusLabel();
-
-    // 树跟着"当前搜索的文件夹"走：展开它的父链并选中它
-    focusOnDirectory(QFileInfo(sProcessedFilePath).path());
 }
 
 void FormPageProgressInfo::updateStatusLabel()
