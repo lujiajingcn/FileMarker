@@ -1,7 +1,21 @@
 #include "dirprogresstracker.h"
 
+#include "traversedirectory.h"
+
 #include <QDir>
 #include <QFileInfo>
+
+/**
+ * 节点键转成可以交给 QDir 的路径。
+ * 盘符根的键是 "E:"，而 QDir("E:") 表示"E 盘的当前目录"（列不出内容），
+ * 必须补成 "E:/" 才能枚举 —— 这个坑在搜索根上已经踩过一次了。
+ */
+static QString dirPathForIo(const QString &sKey)
+{
+    if (sKey.size() == 2 && sKey.at(1) == QLatin1Char(':'))
+        return sKey + QLatin1Char('/');
+    return sKey;
+}
 
 QString DirProgressTracker::dirNodeKey(const QString &sPath)
 {
@@ -24,6 +38,73 @@ void DirProgressTracker::reset(const QStringList &qLRoots)
         node.state = DirNodeState::Waiting;
         m_nodes.insert(node.path, node);
     }
+}
+
+void DirProgressTracker::prepopulate(const std::function<void()> &onChunkDone)
+{
+    // 分两趟，保证界面"马上就有结构"：
+    //   第一趟：根 + 它的直接子目录（很快，全盘也就几十个）；
+    //   第二趟：再逐个往下补到显示深度，每补完一个顶层子树发一次快照。
+    QList<QString> qLLevel1;
+    for (const QString &sRoot : m_roots) {
+        const QString sRootKey = dirNodeKey(sRoot);
+        ensureNode(sRootKey, 0);
+        const QFileInfoList subDirs = QDir(dirPathForIo(sRootKey)).entryInfoList(
+            QDir::Dirs | QDir::NoDotAndDotDot | QDir::NoSymLinks, QDir::Name);
+        for (const QFileInfo &subDirInfo : subDirs) {
+            const QString sChild = subDirInfo.absoluteFilePath();
+            if (TraverseDirectory::isReparsePoint(sChild))
+                continue;
+            ensureNode(sChild, 1);
+            qLLevel1 << sChild;
+        }
+    }
+    if (onChunkDone)
+        onChunkDone();   // 第一层立刻可见
+
+    for (const QString &sDir : qLLevel1) {
+        addTree(sDir, 1);   // 补这一棵子树（节点已存在则跳过，只建更深层）
+        if (onChunkDone)
+            onChunkDone();
+    }
+}
+
+void DirProgressTracker::ensureNode(const QString &sDirPath, int nLevel)
+{
+    const QString sKey = dirNodeKey(sDirPath);
+    if (m_nodes.contains(sKey))
+        return;
+    DirProgressNode node;
+    node.path = sKey;
+    node.level = nLevel;
+    node.state = DirNodeState::Waiting;
+    m_nodes.insert(sKey, node);
+}
+
+void DirProgressTracker::addTree(const QString &sDirPath, int nLevel)
+{
+    if (nLevel > kMaxDisplayDepth)
+        return;
+
+    // 符号链接 / junction 不进（扫的时候也不会进，节点自然不该出现）
+    if (nLevel > 0 && TraverseDirectory::isReparsePoint(sDirPath))
+        return;
+
+    const QString sKey = dirNodeKey(sDirPath);
+    if (!m_nodes.contains(sKey)) {
+        DirProgressNode node;
+        node.path = sKey;
+        node.level = nLevel;
+        node.state = DirNodeState::Waiting;
+        m_nodes.insert(sKey, node);
+    }
+    if (nLevel >= kMaxDisplayDepth)
+        return;
+
+    const QFileInfoList subDirs = QDir(dirPathForIo(sKey)).entryInfoList(
+        QDir::Dirs | QDir::NoDotAndDotDot | QDir::NoSymLinks, QDir::Name);
+    for (const QFileInfo &subDirInfo : subDirs)
+        addTree(subDirInfo.absoluteFilePath(), nLevel + 1);
 }
 
 int DirProgressTracker::levelOfPath(const QString &sPath) const

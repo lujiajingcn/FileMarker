@@ -108,6 +108,9 @@ public:
     /** 并行遍历里每跳过一个目录就记一笔（单线程版在 traverseRecursive 内部自己记） */
     static void noteSkippedPath() { m_skippedCount.fetch_add(1); }
 
+    /** 是否符号链接 / junction / 其它重解析点（这些目录一律不进入） */
+    static bool isReparsePoint(const QString &sPath);
+
     /**
      * 常见的"没有意义"目录名：整盘搜索默认跳过，避免把时间花在
      * node_modules / .git 这些几乎不可能带标签的目录上。

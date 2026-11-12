@@ -15,6 +15,8 @@
 #include <QString>
 #include <QStringList>
 
+#include <functional>
+
 #include "traversedirectory.h"
 
 class DirProgressTracker
@@ -35,6 +37,12 @@ public:
     /** 每轮开始前调用：建立根节点（状态"等待"） */
     void reset(const QStringList &qLRoots);
 
+    /**
+     * 一开始就把根目录下的子目录（到显示深度为止）全部建成"等待"节点。
+     * 这样进度树一上来就是完整结构，而不是扫描过程中一个个往外蹦。
+     */
+    void prepopulate(const std::function<void()> &onChunkDone = std::function<void()>());
+
     void enterDir(const QString &sPath);
     void leaveDir(const QString &sPath, DirOutcome outcome);
     /** 扫到一个文件（bMatched 表示命中） */
@@ -48,6 +56,10 @@ private:
     int levelOfPath(const QString &sPath) const;
     /** 超过显示深度时，找它对应的第 kMaxDisplayDepth 层祖先 */
     QString ancestorAtDisplayDepth(const QString &sPath) const;
+    /** prepopulate() 的递归实现（把某目录及其子目录都建成"等待"节点） */
+    void addTree(const QString &sDirPath, int nLevel);
+    /** 只保证某个节点存在（不往下递归） */
+    void ensureNode(const QString &sDirPath, int nLevel);
 
     QStringList m_roots;                              // 原始根路径（遍历要用，不能去斜杠）
     QString     m_sCurrentDir;                        // 当前正在扫的目录（节点键形式）

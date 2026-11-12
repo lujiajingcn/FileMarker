@@ -40,6 +40,8 @@ void ThreadTraverseDirs::run()
 
     // 目录进度树：先建根节点（状态"等待"），然后每 150ms 发一次快照
     m_dirTracker.reset(m_selDirs);
+    // 先把子目录建好（分块发快照，界面边建边显示），再开始真正的遍历
+    m_dirTracker.prepopulate([this]() { emit sendDirSnapshot(m_dirTracker.snapshot()); });
     m_snapshotTimer.start();
     emit sendDirSnapshot(m_dirTracker.snapshot());
 

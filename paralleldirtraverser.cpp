@@ -85,7 +85,7 @@ public:
         const QString sKey = QDir::cleanPath(m_sPath);
 
         // 用户跳过 / 默认排除 / 重解析点：整棵子树不进入
-        if (isReparsePoint(sKey)) {
+        if (TraverseDirectory::isReparsePoint(sKey)) {
             if (cb.onDirLeave)
                 cb.onDirLeave(sKey, DirOutcome::Skipped);
             finish();

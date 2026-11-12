@@ -45,8 +45,10 @@ void ThreadSearch::run()
 
     TraverseDirectory::resetStop();          // 每个搜索任务开头复位全局停止标志
     TraverseDirectory::resetPathControls();  // 同时清空上一轮遗留的跳过/停止请求
-    // 每个搜索根先建一个节点（状态"等待"），界面上能立刻看到要扫哪些目录
+    // 每个搜索根先建一个节点（状态"等待"），然后**把显示深度内的子目录一次性建好**：
+    // 这样进度树一上来就是完整结构（全是"等待"），扫描过程中只改状态和计数。
     m_dirTracker.reset(m_selDirs);
+    m_dirTracker.prepopulate([this]() { emitDirSnapshot(); });
     emitDirSnapshot();
     m_progressTimer.start();
     const int nThreads = ParallelDirTraverser::defaultThreadCount(m_selDirs.value(0));

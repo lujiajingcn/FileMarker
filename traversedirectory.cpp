@@ -48,25 +48,6 @@ const QSet<QString> &defaultExcludedNames()
 
 namespace {
 
-/**
- * 是否是"重解析点"（Windows 的符号链接 / 目录联接 junction / OneDrive 占位等）。
- *
- * 必须跳过：旧实现用 QDirIterator 递归，它默认**不跟随**符号链接；改成自己递归后
- * 如果不检查，就会钻进 junction 里 —— 目标不可达时会一直等超时（实测整盘搜索
- * 卡在 E:\pnm-store 这类目录上，6 秒只扫了 3 个文件），指向父目录时还会无限递归。
- */
-bool isReparsePoint(const QString &sPath)
-{
-#ifdef Q_OS_WIN
-    const DWORD attrs = GetFileAttributesW(reinterpret_cast<const wchar_t *>(sPath.utf16()));
-    if (attrs == INVALID_FILE_ATTRIBUTES)
-        return false;
-    return (attrs & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
-#else
-    return QFileInfo(sPath).isSymLink();
-#endif
-}
-
 }   // namespace
 
 TraverseDirectory::TraverseDirectory()
@@ -253,4 +234,17 @@ bool TraverseDirectory::isDefaultExcludedDirName(const QString &sDirName)
     if (sDirName.isEmpty())
         return false;
     return defaultExcludedNames().contains(sDirName.toLower());
+}
+
+bool TraverseDirectory::isReparsePoint(const QString &sPath)
+{
+#ifdef Q_OS_WIN
+    // 目标不可达时访问会一直等超时，指向父目录时还会无限递归，一律不进入
+    const DWORD attrs = GetFileAttributesW(reinterpret_cast<const wchar_t *>(sPath.utf16()));
+    if (attrs == INVALID_FILE_ATTRIBUTES)
+        return false;
+    return (attrs & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
+#else
+    return QFileInfo(sPath).isSymLink();
+#endif
 }
