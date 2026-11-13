@@ -36,6 +36,8 @@ private:
     void onActionHelpTriggered();
 
     void onActionAuthorTriggered();
+    /** 打开【AI 打标设置】：本地 Ollama / 云端 API */
+    void onActionAiSettingsTriggered();
 
     /** 检查 AI 打标依赖：脚本是否存在、Python 是否可用、依赖库是否齐全 */
     void checkAIEnvironment();

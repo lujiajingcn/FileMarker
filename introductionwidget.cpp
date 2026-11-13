@@ -212,6 +212,8 @@ IntroductionWidget::IntroductionWidget(QWidget *parent)
              + QStringLiteral("<tr><td></td><td style=\"padding-right: 14px\">查找条件:</td>")
              + QStringLiteral("<td>点搜索按钮右侧的小箭头（或按 F3），选择标签之间的逻辑关系（与/或）和数据来源（缓存/磁盘）。</td></tr>")
              + QStringLiteral("<tr><td></td><td>帮助菜单:</td><td>界面介绍（就是本向导）、作者信息、检查 AI 打标环境。</td></tr>")
+             + QStringLiteral("<tr><td></td><td>AI 打标设置:</td><td>文件 → AI 打标设置…：选本地 Ollama 或云端 API"
+                              "（DeepSeek / 通义 / 智谱等 OpenAI 兼容接口），填 Base URL、API Key 和模型名。</td></tr>")
              + QStringLiteral("</table></p>")},
         {QLatin1String("statusBar"),
          tr("状态栏"),

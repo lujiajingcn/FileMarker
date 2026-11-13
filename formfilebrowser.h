@@ -114,6 +114,12 @@ public slots:
                                   const QString &sFirstError);
     // AI 打标分两步：先自动准备环境（缺什么装什么），成功后自动开始打标
     void startAiPrepare(const QStringList &qLFiles, const QStringList &qLDirs);
+
+public:
+    /** 【AI 打标设置】保存后调用：下次点 AI 时重新检查/安装环境。 */
+    void invalidateAiEnvironment();
+
+private:
     void startAiTagging(const QStringList &qLFiles, const QStringList &qLDirs);
     void onAiPrepareFinished(bool bOk, const QString &sError);
 
@@ -216,6 +222,7 @@ private:
     ThreadAddTagByAI    *m_threadAddLabelByAI;  // AI 自动生成标签的线程
     ThreadAIPrepare      *m_threadAiPrepare = nullptr;  // AI 依赖自动安装线程
     bool                  m_aiEnvReady = false;         // 本次运行是否已确认 AI 环境就绪
+    AiSettings            m_aiSettingsSnapshot;         // 上次准备环境时的配置（变了要重检）
     QStringList           m_pendingAiFiles;             // 环境准备好后要处理的文件
     QStringList           m_pendingAiDirs;              // 环境准备好后要处理的目录
 

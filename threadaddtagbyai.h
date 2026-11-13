@@ -5,6 +5,8 @@
 #include <QFileInfo>
 #include <QStringList>
 
+#include "aisettings.h"
+
 class ThreadAddTagByAI : public QThread
 {
     Q_OBJECT
@@ -39,10 +41,14 @@ protected:
 
     bool addTag(const QFileInfo& info);
 
+    /** 云端 API 模式：把图片缩放/压缩成临时 jpg，返回临时文件路径（失败返回空）。 */
+    QString makeApiImageCopy(const QString &sFilePath, QString *psError);
+
 private:
     // 记录一次失败：计数 + 只保留第一条错误 + 输出到进度页
     bool recordFailure(const QString &sFilePath, const QString &sReason, const QString &sDetail = QString());
 
+    AiSettings      m_ai;      // 本次打标使用的服务端配置（Ollama / 云端 API）
     QStringList     m_dirs;
     QStringList     m_files;
     int             m_succeeded = 0;

@@ -55,6 +55,12 @@ void FormFileBrowser::onRecvLabelGroups(const QList<QSet<QString>> &qLLabelGroup
     m_labelGroups = qLLabelGroups;
 }
 
+void FormFileBrowser::invalidateAiEnvironment()
+{
+    m_aiEnvReady = false;
+    m_aiSettingsSnapshot = AiSettings::load();
+}
+
 void FormFileBrowser::onActionAddLabelByAITriggered()
 {
     setActionState(ADDTAGBYAI_START);
@@ -71,6 +77,13 @@ void FormFileBrowser::onActionAddLabelByAITriggered()
         QMessageBox::information(this, tr("AI 自动生成标签"),
                                  tr("请先在文件列表里选中要处理的文件或文件夹。"));
         return;
+    }
+
+    // 服务端配置变了（用户刚在设置里切换本地/云端）也要重新检查环境
+    const AiSettings aiNow = AiSettings::load();
+    if (aiNow != m_aiSettingsSnapshot) {
+        m_aiSettingsSnapshot = aiNow;
+        m_aiEnvReady = false;
     }
 
     // 第一次使用（或上次整体失败）先自动准备环境：缺 Python/pip 库/Ollama/模型就下载安装，

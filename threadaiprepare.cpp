@@ -49,8 +49,9 @@ QString clampLine(const QString &sLine)
 ThreadAIPrepare::ThreadAIPrepare(QObject *parent)
     : QThread(parent)
 {
-    m_sTextModel = qEnvironmentVariable("FM_AI_TEXT_MODEL", QStringLiteral("qwen2.5:7b"));
-    m_sImageModel = qEnvironmentVariable("FM_AI_IMAGE_MODEL", QStringLiteral("qwen2.5vl:7b"));
+    m_ai = AiSettings::load();
+    m_sTextModel = m_ai.textModel();
+    m_sImageModel = m_ai.imageModel();
 }
 
 void ThreadAIPrepare::setNeededModels(bool bText, bool bImage)
@@ -499,6 +500,30 @@ void ThreadAIPrepare::run()
     }
     if (!stepPipModules(sPython, &sError)) {
         emit sendFinished(false, sError);
+        return;
+    }
+
+    // ---------------- 云端 API：不需要 Ollama / 本地模型 ----------------
+    if (m_ai.isApi()) {
+        emit sendStage(tr("检查云端 API 配置…"));
+        if (m_ai.apiBase.isEmpty()) {
+            emit sendFinished(false,
+                              tr("云端 API 模式没有配置 Base URL。\n"
+                                 "请打开【文件 → AI 打标设置…】填写 Base URL / API Key / 模型名。"));
+            return;
+        }
+        if (m_ai.textModel().isEmpty()) {
+            emit sendFinished(false,
+                              tr("云端 API 模式没有配置文本模型。\n"
+                                 "请打开【文件 → AI 打标设置…】填写模型名（如 deepseek-chat）。"));
+            return;
+        }
+        log(tr("云端 API 模式：%1").arg(m_ai.apiBase));
+        log(tr("文本模型：%1；视觉模型：%2")
+                .arg(m_ai.textModel(),
+                     m_ai.imageModel().isEmpty() ? tr("（未配置）") : m_ai.imageModel()));
+        log(tr("已跳过本地 Ollama / 模型下载，文件内容将发送到上面的服务端"));
+        emit sendFinished(true, QString());
         return;
     }
 

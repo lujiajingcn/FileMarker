@@ -1,11 +1,14 @@
 #include "threadaddtagbyai.h"
 
 #include <QProcess>
+#include <QDir>
+#include <QFile>
+#include <QImage>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
-#include <QFile>
 #include <QDebug>
+#include <QUuid>
 
 #include "common.h"
 #include "traversedirectory.h"
@@ -92,6 +95,23 @@ void ThreadAddTagByAI::run()
     m_done = 0;
     m_firstError.clear();
 
+    // 每次任务开始读一次服务端配置（用户在设置里改了也能立刻生效）
+    m_ai = AiSettings::load();
+    if (m_ai.isApi()) {
+        if (m_ai.apiBase.isEmpty()) {
+            m_firstError = tr("云端 API 模式没有配置 Base URL，请在【文件 → AI 打标设置…】里填写");
+            emit sendProcessInfo(m_firstError);
+            emit sendFinish(m_succeeded, m_failed, m_skipped, m_firstError);
+            return;
+        }
+        if (m_ai.textModel().isEmpty()) {
+            m_firstError = tr("云端 API 模式没有配置文本模型，请在【文件 → AI 打标设置…】里填写");
+            emit sendProcessInfo(m_firstError);
+            emit sendFinish(m_succeeded, m_failed, m_skipped, m_firstError);
+            return;
+        }
+    }
+
     auto func = [this](const QFileInfo& info) -> bool {
         return this->addTag(info);
     };
@@ -138,6 +158,40 @@ void ThreadAddTagByAI::run()
     emit sendFinish(m_succeeded, m_failed, m_skipped, m_firstError);
 }
 
+QString ThreadAddTagByAI::makeApiImageCopy(const QString &sFilePath, QString *psError)
+{
+    QImage image(sFilePath);
+    if (image.isNull()) {
+        if (psError != nullptr)
+            *psError = tr("图片无法读取（格式不支持或文件损坏）");
+        return QString();
+    }
+
+    // 云端视觉模型不需要原分辨率：最长边 1024 足够识别内容，体积能降一两个数量级
+    const int nMaxSide = 1024;
+    if (image.width() > nMaxSide || image.height() > nMaxSide) {
+        image = image.scaled(nMaxSide, nMaxSide, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    }
+    if (image.format() != QImage::Format_RGB888)
+        image = image.convertToFormat(QImage::Format_RGB888);
+
+    const QString sTemp = QDir::tempPath() + QStringLiteral("/fm_ai_")
+                          + QUuid::createUuid().toString(QUuid::WithoutBraces)
+                          + QStringLiteral(".jpg");
+    if (!image.save(sTemp, "JPG", 80)) {
+        if (psError != nullptr)
+            *psError = tr("图片压缩失败");
+        return QString();
+    }
+    if (QFileInfo(sTemp).size() > 2 * 1024 * 1024) {
+        QFile::remove(sTemp);
+        if (psError != nullptr)
+            *psError = tr("图片压缩后仍超过 2MB，已跳过（请先手动缩小图片）");
+        return QString();
+    }
+    return sTemp;
+}
+
 bool ThreadAddTagByAI::addTag(const QFileInfo& info)
 {
     if (info.isDir())
@@ -160,13 +214,46 @@ bool ThreadAddTagByAI::addTag(const QFileInfo& info)
                              tr("文件是只读的（请先取消「只读」属性）"));
     }
 
+    // 云端 API 模式：图片先在本机缩放到 1024 像素内、压成 jpg 再上传，
+    // 避免几十 MB 的原图撑爆请求体、也省 token。
+    QString sUploadPath = filePath;
+    QString sTempImage;
+    struct TempImageGuard {
+        QString path;
+        ~TempImageGuard() {
+            if (!path.isEmpty())
+                QFile::remove(path);
+        }
+    } tempGuard;
+    const QString sSuffix = info.suffix().toLower();
+    const bool bImage = (sSuffix == QLatin1String("png") || sSuffix == QLatin1String("jpg")
+                         || sSuffix == QLatin1String("jpeg"));
+    if (m_ai.isApi() && bImage) {
+        QString sImgErr;
+        sTempImage = makeApiImageCopy(filePath, &sImgErr);
+        if (sTempImage.isEmpty())
+            return recordFailure(filePath, sImgErr);
+        sUploadPath = sTempImage;
+        tempGuard.path = sTempImage;
+    }
+
     const QString script = Utility::aiScriptPath();
     QStringList args;
-    args << script << filePath;
+    args << script << sUploadPath;
 
     QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
     env.remove("PYTHONHOME");
     env.remove("PYTHONPATH");
+    // 把服务端配置传给脚本（Key 只通过环境变量传，不会出现在命令行/日志里）
+    env.insert(QStringLiteral("FM_AI_PROVIDER"), m_ai.isApi() ? QStringLiteral("api")
+                                                             : QStringLiteral("ollama"));
+    env.insert(QStringLiteral("FM_AI_TEXT_MODEL"), m_ai.textModel());
+    env.insert(QStringLiteral("FM_AI_IMAGE_MODEL"), m_ai.imageModel());
+    env.insert(QStringLiteral("FM_AI_TIMEOUT"), QString::number(m_ai.timeoutSec));
+    if (m_ai.isApi()) {
+        env.insert(QStringLiteral("FM_AI_API_BASE"), m_ai.apiBase);
+        env.insert(QStringLiteral("FM_AI_API_KEY"), m_ai.apiKey);
+    }
 
     // 先后尝试常见解释器名，避免环境里只有 python3 / py 而没有 python 时静默跳过。
     static const QStringList interpreters = { "python", "python3", "py" };

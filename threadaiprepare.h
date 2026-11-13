@@ -6,6 +6,8 @@
 
 #include <atomic>
 
+#include "aisettings.h"
+
 /**
  * AI 打标前的"环境自动准备"线程。
  *
@@ -69,6 +71,7 @@ private:
     bool        m_bNeedImageModel = true;
     QString     m_sTextModel;
     QString     m_sImageModel;
+    AiSettings  m_ai;              // 本次准备使用的服务端配置（本地 / 云端）
 };
 
 #endif   // THREADAIPREPARE_H

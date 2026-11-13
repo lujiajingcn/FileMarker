@@ -3,6 +3,8 @@
 #include "toolicons.h"
 #include "ui_mainwindow.h"
 
+#include "aisettings.h"
+#include "dlgaisettings.h"
 #include "dlgauthor.h"
 #include "utility.h"
 #include <QAction>
@@ -140,6 +142,11 @@ MainWindow::MainWindow(QWidget *parent) :
     QAction *actionImportTags = new QAction(tr("导入标签…"), this);
     ui->menuFileManage->insertAction(ui->actionExit, actionImportTags);
     connect(actionImportTags, &QAction::triggered, ui->wFileBrowser, &FormFileBrowser::importTagsFromFile);
+
+    // AI 打标服务端设置：本地 Ollama / 云端 API（OpenAI 兼容）
+    QAction *actionAiSettings = new QAction(tr("AI 打标设置…"), this);
+    ui->menuFileManage->insertAction(ui->actionExit, actionAiSettings);
+    connect(actionAiSettings, &QAction::triggered, this, &MainWindow::onActionAiSettingsTriggered);
 
     ui->menuFileManage->insertSeparator(ui->actionExit);
 
@@ -334,6 +341,16 @@ void MainWindow::showHintMessage(const QString &sMessage)
     statusBar()->showMessage(sMessage, 5000);
 }
 
+void MainWindow::onActionAiSettingsTriggered()
+{
+    DlgAiSettings dlg(this);
+    if (dlg.exec() == QDialog::Accepted) {
+        // 配置变了：下次点【AI自动生成标签】时重新准备环境（云端模式不再检查 Ollama）
+        ui->wFileBrowser->invalidateAiEnvironment();
+        statusBar()->showMessage(tr("AI 打标设置已保存"), 5000);
+    }
+}
+
 void MainWindow::onActionHelpTriggered()
 {
     // 介绍页盖在主窗口上（父对象是本窗口），点【跳过】或走完 7 页后自动关闭。
@@ -395,24 +412,39 @@ void MainWindow::checkAIEnvironment()
                                 .arg(bRequests ? tr("已安装") : tr("缺失"))
                                 .arg(bPypdf ? tr("已安装") : tr("缺失"))
                                 .arg(bDocx ? tr("已安装") : tr("缺失")));
-        // Ollama 服务与模型：这是运行时真正依赖，缺了会在每个文件上反复失败
-        QProcess ollama;
-        ollama.start(QStringLiteral("ollama"), QStringList() << QStringLiteral("list"));
-        bool bOllamaOk = ollama.waitForFinished(6000) && ollama.exitCode() == 0;
-        QString sOllamaOut = QString::fromLocal8Bit(ollama.readAllStandardOutput());
-        if (!bOllamaOk) {
-            qLLines << tr("④ Ollama：未运行或未安装\n   首次执行 AI 打标会自动尝试运行 ollama serve；"
-                          "需要先安装 Ollama，并执行：\n   ollama pull qwen2.5:7b\n   ollama pull qwen2.5vl:7b");
+        const AiSettings ai = AiSettings::load();
+        if (ai.isApi()) {
+            const QString sMaskedKey = ai.apiKey.isEmpty() ? tr("未配置（本地 LM Studio 等可留空）")
+                                                           : tr("已配置");
+            qLLines << tr("④ 云端 API：%1\n   文本模型：%2\n   视觉模型：%3\n   API Key：%4")
+                           .arg(ai.apiBase.isEmpty() ? tr("（未配置 Base URL）") : ai.apiBase,
+                                ai.apiTextModel.isEmpty() ? tr("（未配置）") : ai.apiTextModel,
+                                ai.apiImageModel.isEmpty() ? tr("（未配置，图片会跳过）") : ai.apiImageModel,
+                                sMaskedKey);
+            qLLines << tr("提示：云端模式不会安装 Ollama / 本地模型；文本只上传前 4000 字，"
+                          "图片会先缩放到 1024 像素内再压缩上传。");
         } else {
-            const bool bTextModel = sOllamaOut.contains(QStringLiteral("qwen2.5:7b"));
-            const bool bImageModel = sOllamaOut.contains(QStringLiteral("qwen2.5vl:7b"));
-            qLLines << tr("④ Ollama：服务可用；文本模型 %1，视觉模型 %2")
-                           .arg(bTextModel ? tr("已安装") : tr("未安装（ollama pull qwen2.5:7b）"),
-                                bImageModel ? tr("已安装") : tr("未安装（ollama pull qwen2.5vl:7b）"));
+            // Ollama 服务与模型：这是运行时真正依赖，缺了会在每个文件上反复失败
+            QProcess ollama;
+            ollama.start(QStringLiteral("ollama"), QStringList() << QStringLiteral("list"));
+            const bool bOllamaOk = ollama.waitForFinished(6000) && ollama.exitCode() == 0;
+            const QString sOllamaOut = QString::fromLocal8Bit(ollama.readAllStandardOutput());
+            if (!bOllamaOk) {
+                qLLines << tr("④ Ollama：未运行或未安装\n   首次执行 AI 打标会自动尝试运行 ollama serve；"
+                              "需要先安装 Ollama，并执行：\n   ollama pull %1\n   ollama pull %2")
+                               .arg(ai.ollamaTextModel, ai.ollamaImageModel);
+            } else {
+                const bool bTextModel = sOllamaOut.contains(ai.ollamaTextModel);
+                const bool bImageModel = sOllamaOut.contains(ai.ollamaImageModel);
+                qLLines << tr("④ Ollama：服务可用；文本模型 %1 %2，视觉模型 %3 %4")
+                               .arg(ai.ollamaTextModel,
+                                    bTextModel ? tr("已安装") : tr("未安装"),
+                                    ai.ollamaImageModel,
+                                    bImageModel ? tr("已安装") : tr("未安装"));
+            }
+            qLLines << tr("提示：点【AI自动生成标签】时，缺少的依赖 / Ollama / 模型会自动下载安装"
+                          "（进度和日志显示在进度页，可随时停止）；不支持的扩展名（视频/压缩包等）会直接跳过。");
         }
-
-        qLLines << tr("提示：点【AI自动生成标签】时，上面缺失的依赖 / Ollama / 模型会自动下载并安装"
-                      "（进度和日志显示在进度页，可随时停止）；不支持的扩展名（视频/压缩包等）会直接跳过。");
     }
 
     QMessageBox::information(this, tr("AI 打标环境"), qLLines.join(QStringLiteral("\n\n")));

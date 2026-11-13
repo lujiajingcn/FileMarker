@@ -37,6 +37,8 @@ SOURCES += \
     dirprogresstracker.cpp \
     paralleldirtraverser.cpp \
         adsoperation.cpp \
+        dlgaisettings.cpp \
+        aisettings.cpp \
         common.cpp \
         configoperation.cpp \
         dlgauthor.cpp \
@@ -80,6 +82,8 @@ HEADERS += \
     dirprogresstracker.h \
     paralleldirtraverser.h \
         adsoperation.h \
+        dlgaisettings.h \
+        aisettings.h \
         common.h \
         configoperation.h \
         dlgauthor.h \

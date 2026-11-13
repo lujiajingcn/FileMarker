@@ -16,8 +16,32 @@ PDF_EXTS = (".pdf",)
 DOCX_EXTS = (".docx",)
 IMAGE_EXTS = (".png", ".jpg", ".jpeg")
 
+# ---- 服务端配置（由 C++ 端通过环境变量传入）----
+# FM_AI_PROVIDER = ollama（本机 Ollama，默认）| api（任意 OpenAI 兼容接口）
+PROVIDER = (os.environ.get("FM_AI_PROVIDER") or "ollama").strip().lower()
+if PROVIDER not in ("ollama", "api"):
+    PROVIDER = "ollama"
+
+# 模型名可用环境变量覆盖（换更小/更大的模型不用改脚本）
+TEXT_MODEL = os.environ.get("FM_AI_TEXT_MODEL", "qwen2.5:7b")
+IMAGE_MODEL = os.environ.get("FM_AI_IMAGE_MODEL", "qwen2.5vl:7b")
+
+API_BASE = (os.environ.get("FM_AI_API_BASE") or "").strip().rstrip("/")
+API_KEY = os.environ.get("FM_AI_API_KEY") or ""
+
+try:
+    TIMEOUT = max(10, min(600, int(os.environ.get("FM_AI_TIMEOUT", "120"))))
+except ValueError:
+    TIMEOUT = 120
+
+OLLAMA_URL = "http://localhost:11434"
+
 
 class DependencyError(RuntimeError):
+    pass
+
+
+class CloudApiError(RuntimeError):
     pass
 
 
@@ -45,85 +69,53 @@ def clean_tags(tags):
             result.append(tag)
     return result[:8]
 
-def start_ollama_llm(commond):
-    """
-    在后台启动 Ollama 服务。
 
-    :param ollama_path: Ollama 可执行文件的路径或名称（如果它在PATH中）。
-    :return: 启动的子进程对象 (Popen)
-    """
-    print("尝试启动 Ollama 服务...")
-    
-    # 根据操作系统设置启动命令和参数
-    # 在 Windows 上，可能需要 'shell=True' 或直接使用完整的路径。
-    # 这里使用简单的 ['ollama', 'serve'] 命令，假设 ollama 在 PATH 中。
-    
+def split_model_tags(full_resp):
+    """模型可能用中文逗号/顿号/分号分隔，统一拆开再清洗。"""
+    tags = [tag.strip() for tag in re.split(r"[,，、;；\n]", full_resp) if tag.strip()]
+    return clean_tags(tags)
+
+
+# ============================================================
+# 本地 Ollama
+# ============================================================
+def start_ollama_llm(commond):
+    """在后台启动 Ollama 服务。"""
+    print("尝试启动 Ollama 服务...", file=sys.stderr)
     try:
-        # 使用 Popen 在后台启动，并将标准输出/错误重定向，防止阻塞
         process = subprocess.Popen(
             commond,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            # 设置一个独立进程组，有助于管理
-            start_new_session=True 
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
         )
-        print(f"Ollama 服务已尝试启动，进程 ID: {process.pid}")
-        
-        # 给予 Ollama 几秒钟时间启动
-        time.sleep(3) 
-        
-        # 检查进程是否仍然存活
+        print(f"Ollama 服务已尝试启动，进程 ID: {process.pid}", file=sys.stderr)
+        time.sleep(3)
         if process.poll() is None:
-            print("Ollama 服务似乎已成功启动。请继续使用 API 检查其可用性。")
+            print("Ollama 服务似乎已成功启动。", file=sys.stderr)
             return process
-        else:
-            # 如果进程立刻退出，检查是否有错误信息
-            stdout, stderr = process.communicate()
-            print(f"Ollama 启动失败，退出代码: {process.returncode}")
-            print("Stderr:\n", stderr.decode())
-            return None
-
+        print(f"Ollama 启动失败，退出代码: {process.returncode}", file=sys.stderr)
+        return None
     except FileNotFoundError:
-        print(f"错误: 找不到 Ollama 可执行文件。请确保 '{commond}' 在 PATH 中或提供完整路径。")
+        print("错误: 找不到 Ollama 可执行文件。", file=sys.stderr)
         return None
     except Exception as e:
-        print(f"启动 Ollama 时发生意外错误: {e}")
+        print(f"启动 Ollama 时发生意外错误: {e}", file=sys.stderr)
         return None
 
 
-
-def is_ollama_running(url="http://localhost:11434"):
-    """
-    通过尝试访问 Ollama 的 API 端点来检查它是否正在运行。
-    """
+def is_ollama_running(url=OLLAMA_URL):
     try:
-        # 尝试访问 /api/tags 端点
         response = requests.get(f"{url}/api/tags", timeout=5)
-        
-        # 如果能成功连接并且收到任何有效的响应（例如 200），
-        # 则说明 Ollama 正在运行。
-        if response.status_code == 200:
-            return True
-        else:
-            # 即使状态码不是 200，但连接成功，也说明服务可能已启动。
-            # 例如，访问根路径可能会返回 404/405，但这仍表示端口是开放的。
-            # 但是，访问 /api/tags 应该返回 200。
-            # 为了更严格，我们只接受 200。
-            return False
-
-    except ConnectionError:
-        # 如果连接失败（端口未开放），则 Ollama 未运行
+        return response.status_code == 200
+    except (ConnectionError, Timeout):
         return False
-    except Timeout:
-        # 请求超时，通常也意味着服务未及时响应
-        return False
-    except Exception as e:
-        # 处理其他可能的错误
-        print(f"检查 Ollama 时发生意外错误: {e}")
+    except Exception:
         return False
 
-def is_model_available(model, url="http://localhost:11434"):
-    """检查指定模型是否已通过 ollama 安装，避免缺失模型时静默跳过（P3）。"""
+
+def is_model_available(model, url=OLLAMA_URL):
+    """检查指定模型是否已通过 ollama 安装，避免缺失模型时静默跳过。"""
     try:
         r = requests.get(f"{url}/api/tags", timeout=5)
         if r.status_code != 200:
@@ -135,6 +127,140 @@ def is_model_available(model, url="http://localhost:11434"):
         return False
 
 
+def _ollama_generate(payload):
+    """调用 Ollama /api/generate（流式多行 JSON），把 response 拼起来。"""
+    r = requests.post(f"{OLLAMA_URL}/api/generate", json=payload, stream=True, timeout=TIMEOUT)
+    full_resp = ""
+    for line in r.iter_lines():
+        if not line:
+            continue
+        try:
+            obj = json.loads(line.decode("utf-8"))
+        except Exception:
+            continue
+        if "error" in obj:
+            raise RuntimeError(obj["error"])
+        if "response" in obj:
+            full_resp += obj["response"]
+    return full_resp
+
+
+def build_text_prompt(text):
+    return (
+        "请为下面的文件内容生成3个中文标签，标签要简短、概括核心内容，并用,分隔：\n"
+        + (text or "")[:4000]
+    )
+
+
+IMAGE_PROMPT = "请为下面的图片生成3个中文标签，标签要简短、概括核心内容，并用,分隔："
+
+
+def tag_text_ollama(text):
+    payload = {
+        "model": TEXT_MODEL,
+        "prompt": build_text_prompt(text),
+        "options": {"temperature": 0.3, "num_predict": 64},
+    }
+    return split_model_tags(_ollama_generate(payload))
+
+
+def tag_image_ollama(file_path):
+    try:
+        with open(file_path, "rb") as f:
+            b64 = base64.b64encode(f.read()).decode("utf-8")
+    except Exception as e:
+        raise RuntimeError(f"读取图片失败：{e}")
+    payload = {
+        "model": IMAGE_MODEL,
+        "prompt": IMAGE_PROMPT,
+        "images": [b64],
+        "options": {"temperature": 0.3, "num_predict": 64},
+    }
+    return split_model_tags(_ollama_generate(payload))
+
+
+# ============================================================
+# 云端 API（OpenAI 兼容：/chat/completions）
+# ============================================================
+def cloud_headers():
+    headers = {"Content-Type": "application/json"}
+    if API_KEY:
+        # 注意：Key 只放在请求头里，绝不能写进日志/输出
+        headers["Authorization"] = "Bearer " + API_KEY
+    return headers
+
+
+def _cloud_request(payload):
+    if not API_BASE:
+        raise CloudApiError("云端模式未配置 Base URL（请在【AI 打标设置】里填写）")
+
+    url = API_BASE + "/chat/completions"
+    try:
+        r = requests.post(url, json=payload, headers=cloud_headers(), timeout=TIMEOUT)
+    except Timeout:
+        raise CloudApiError(f"请求超时（{TIMEOUT} 秒）")
+    except ConnectionError as e:
+        raise CloudApiError(f"连接不上服务器：{e}")
+
+    if r.status_code == 401 or r.status_code == 403:
+        raise CloudApiError(f"API Key 无效或没有权限（HTTP {r.status_code}）")
+    if r.status_code == 402:
+        raise CloudApiError("账户余额不足（HTTP 402）")
+    if r.status_code == 429:
+        raise CloudApiError("被服务端限流（HTTP 429），请稍后重试")
+    if r.status_code >= 400:
+        detail = ""
+        try:
+            data = r.json()
+            detail = (data.get("error") or {}).get("message") or data.get("message") or ""
+        except Exception:
+            detail = r.text[:200]
+        raise CloudApiError(f"HTTP {r.status_code}：{detail or '请求失败'}")
+
+    try:
+        data = r.json()
+        return data["choices"][0]["message"]["content"]
+    except Exception:
+        raise CloudApiError("服务端返回格式无法识别（不是 OpenAI 兼容格式）")
+
+
+def tag_text_cloud(text):
+    payload = {
+        "model": TEXT_MODEL,
+        "temperature": 0.2,
+        "max_tokens": 64,
+        "messages": [{"role": "user", "content": build_text_prompt(text)}],
+    }
+    return split_model_tags(_cloud_request(payload))
+
+
+def tag_image_cloud(file_path):
+    ext = file_path.lower()
+    mime = "image/png" if ext.endswith(".png") else "image/jpeg"
+    try:
+        with open(file_path, "rb") as f:
+            b64 = base64.b64encode(f.read()).decode("utf-8")
+    except Exception as e:
+        raise RuntimeError(f"读取图片失败：{e}")
+
+    payload = {
+        "model": IMAGE_MODEL,
+        "temperature": 0.2,
+        "max_tokens": 64,
+        "messages": [{
+            "role": "user",
+            "content": [
+                {"type": "text", "text": IMAGE_PROMPT},
+                {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}},
+            ],
+        }],
+    }
+    return split_model_tags(_cloud_request(payload))
+
+
+# ============================================================
+# 文本提取
+# ============================================================
 def extract_text(file_path):
     ext = file_path.lower()
 
@@ -163,102 +289,15 @@ def extract_text(file_path):
     return None
 
 
-def tag_text_qwen(text: str):
-    prompt = f"""
-请为下面的文件内容生成3个中文标签，标签要简短、概括核心内容，并用,分隔：
-{text[:4000]}
-"""
-
-    payload = {
-        "model": TEXT_MODEL,
-        "prompt": prompt,
-        # 只要几个标签，限制生成长度能明显加快速度；低温让输出更稳定
-        "options": {"temperature": 0.3, "num_predict": 64},
-    }
-
-    # Ollama 生成是多行 JSON，每行一个对象，因此 stream=True
-    r = requests.post("http://localhost:11434/api/generate", json=payload, stream=True, timeout=120)
-
-    full_resp = ""
-
-    # 逐行读取模型生成的 response 字段
-    for line in r.iter_lines():
-        if not line:
-            continue
-
-        try:
-            obj = json.loads(line.decode("utf-8"))
-        except:
-            continue  # 不是 JSON 的行跳过
-
-        # Ollama 每个 JSON 都可能带 "response" 字段
-        if "response" in obj:
-            full_resp += obj["response"]
-
-    # 清理格式，转换为列表。模型可能用中文逗号/顿号/英文分号/中文分号分隔，统一拆分
-    tags = [tag.strip() for tag in re.split(r"[,，、;；]", full_resp) if tag.strip()]
-    return clean_tags(tags)
-
-def tag_image_qwen(file_path: str):
-    ext = file_path.lower()
-
-    # 非图片文件直接返回，避免对不支持的类型做无意义的请求
-    if not ext.endswith((".png", ".jpg", ".jpeg")):
-        return ""
-
-    # 将图片读取为 base64 作为视觉模型的输入
-    try:
-        with open(file_path, "rb") as f:
-            b64 = base64.b64encode(f.read()).decode("utf-8")
-    except Exception as e:
-        print(f"读取图片失败: {e}")
-        return ""
-
-    prompt = "请为下面的图片生成3个中文标签，标签要简短、概括核心内容，并用,分隔："
-
-    payload = {
-        "model": IMAGE_MODEL,
-        "prompt": prompt,
-        "images": [b64],
-        "options": {"temperature": 0.3, "num_predict": 64},
-    }
-
-    # Ollama 生成是多行 JSON，每行一个对象，因此 stream=True
-    r = requests.post("http://localhost:11434/api/generate", json=payload, stream=True, timeout=120)
-
-    full_resp = ""
-
-    # 逐行读取模型生成的 response 字段
-    for line in r.iter_lines():
-        if not line:
-            continue
-
-        try:
-            obj = json.loads(line.decode("utf-8"))
-        except:
-            continue  # 不是 JSON 的行跳过
-
-        # Ollama 每个 JSON 都可能带 "response" 字段
-        if "response" in obj:
-            full_resp += obj["response"]
-
-    # 清理格式，转换为列表。模型可能用中文逗号/顿号/英文分号/中文分号分隔，统一拆分
-    tags = [tag.strip() for tag in re.split(r"[,，、;；]", full_resp) if tag.strip()]
-    return clean_tags(tags)
-
-# 模型可用环境变量覆盖（换更小/更大的模型不用改脚本）
-TEXT_MODEL = os.environ.get("FM_AI_TEXT_MODEL", "qwen2.5:7b")
-IMAGE_MODEL = os.environ.get("FM_AI_IMAGE_MODEL", "qwen2.5vl:7b")
+def print_result(fp, tags=None, error=None):
+    data = {"file": fp, "tags": tags or []}
+    if error:
+        data["error"] = error
+    print(json.dumps(data))
 
 
 def main():
-    # 若 Ollama 未运行则尝试拉起；记录是否由本脚本启动，结束时只终止自己启动的实例，避免留下孤儿进程（P3）。
     ollama_proc = None
-    if not is_ollama_running():
-        # 启动 Ollama 服务（注意：应使用 `ollama serve` 而非交互式的 `ollama run`，
-        # 且命令必须作为列表传入，在 Windows 上以字符串传入会被当作单个可执行文件名而失败）。
-        ollama_proc = start_ollama_llm(["ollama", "serve"])
-
     try:
         if len(sys.argv) < 2:
             print(json.dumps({"error": "缺少文件路径参数"}))
@@ -267,34 +306,66 @@ def main():
         fp = sys.argv[1]
         kind = file_kind(fp)
         if kind == "unsupported":
-            print(json.dumps({"file": fp, "tags": [],
-                              "error": "不支持的文件类型：%s" % (os.path.splitext(fp)[1] or "无扩展名")}))
+            print_result(fp, error="不支持的文件类型：%s" % (os.path.splitext(fp)[1] or "无扩展名"))
             return
+
+        # ---------------- 云端 API ----------------
+        if PROVIDER == "api":
+            model = IMAGE_MODEL if kind == "image" else TEXT_MODEL
+            if not model:
+                print_result(fp, error="云端模式没有配置%s模型（请在【AI 打标设置】里填写）"
+                                       % ("视觉" if kind == "image" else "文本"))
+                return
+            try:
+                if kind == "image":
+                    tags = tag_image_cloud(fp)
+                else:
+                    text = extract_text(fp)
+                    if not text or not text.strip():
+                        print_result(fp, error="没有从文件里提取到可分析的文字")
+                        return
+                    tags = tag_text_cloud(text)
+            except DependencyError as e:
+                print_result(fp, error="缺少依赖：%s" % e)
+                return
+            except (CloudApiError, RuntimeError) as e:
+                print_result(fp, error="处理失败：%s" % e)
+                return
+            except Exception as e:
+                print_result(fp, error="处理失败：%s" % e)
+                return
+            print_result(fp, tags=tags)
+            return
+
+        # ---------------- 本地 Ollama ----------------
+        if not is_ollama_running():
+            ollama_proc = start_ollama_llm(["ollama", "serve"])
 
         model = IMAGE_MODEL if kind == "image" else TEXT_MODEL
         if not is_model_available(model):
-            print(json.dumps({"file": fp, "tags": [],
-                              "error": "模型 %s 未安装，请先执行 `ollama pull %s`" % (model, model)}))
+            print_result(fp, error="模型 %s 未安装，请先执行 `ollama pull %s`" % (model, model))
             return
 
         try:
             if kind == "image":
-                tags = tag_image_qwen(fp)
+                tags = tag_image_ollama(fp)
             else:
                 text = extract_text(fp)
                 if not text or not text.strip():
-                    print(json.dumps({"file": fp, "tags": [],
-                                      "error": "没有从文件里提取到可分析的文字"}))
+                    print_result(fp, error="没有从文件里提取到可分析的文字")
                     return
-                tags = tag_text_qwen(text)
+                tags = tag_text_ollama(text)
         except DependencyError as e:
-            print(json.dumps({"file": fp, "tags": [], "error": "缺少依赖：%s" % e}))
+            print_result(fp, error="缺少依赖：%s" % e)
+            return
+        except RuntimeError as e:
+            print_result(fp, error="处理失败：%s" % e)
             return
         except Exception as e:
-            print(json.dumps({"file": fp, "tags": [], "error": "处理失败：%s" % e}))
+            print_result(fp, error="处理失败：%s" % e)
             return
 
-        print(json.dumps({"file": fp, "tags": tags}))
+        print_result(fp, tags=tags)
 
     finally:
         if ollama_proc is not None:
