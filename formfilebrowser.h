@@ -16,6 +16,7 @@ class QMenu;
 #include "threadsearch.h"
 #include "threadtraversedirs.h"
 #include "threadaddtagbyai.h"
+#include "threadaiprepare.h"
 #include <QSet>
 
 namespace Ui {
@@ -111,6 +112,10 @@ public slots:
     // 结束信号带上统计与首个错误，便于界面提示失败原因
     void onRecvAddLabelByAIFinish(int nSucceeded, int nFailed, int nSkipped,
                                   const QString &sFirstError);
+    // AI 打标分两步：先自动准备环境（缺什么装什么），成功后自动开始打标
+    void startAiPrepare(const QStringList &qLFiles, const QStringList &qLDirs);
+    void startAiTagging(const QStringList &qLFiles, const QStringList &qLDirs);
+    void onAiPrepareFinished(bool bOk, const QString &sError);
 
     void onRecvLabelsGeneratedByAI(const QString &sLabels);
 
@@ -209,6 +214,10 @@ private:
     ThreadSearch        *m_threadSearch;        // 处理根据标签查找文件的线程
     ThreadTraverseDirs  *m_threadTraverseDirs;  // 遍历选中文件夹中全部文件的线程
     ThreadAddTagByAI    *m_threadAddLabelByAI;  // AI 自动生成标签的线程
+    ThreadAIPrepare      *m_threadAiPrepare = nullptr;  // AI 依赖自动安装线程
+    bool                  m_aiEnvReady = false;         // 本次运行是否已确认 AI 环境就绪
+    QStringList           m_pendingAiFiles;             // 环境准备好后要处理的文件
+    QStringList           m_pendingAiDirs;              // 环境准备好后要处理的目录
 
     int                 m_thread;              // 用来记录当前运行的线程：根据标签查找文件、遍历文件夹、AI自动生成标签。
 

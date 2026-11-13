@@ -66,6 +66,7 @@ SOURCES += \
         tagexport.cpp \
         tageditdialog.cpp \
         threadaddtagbyai.cpp \
+        threadaiprepare.cpp \
         threadsearch.cpp \
         threadtraversedirs.cpp \
         thumbnailiconprovider.cpp \
@@ -100,6 +101,7 @@ HEADERS += \
         tagexport.h \
         tageditdialog.h \
         threadaddtagbyai.h \
+        threadaiprepare.h \
         threadsearch.h \
         threadtraversedirs.h \
         thumbnailiconprovider.h \

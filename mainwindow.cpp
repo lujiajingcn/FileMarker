@@ -411,8 +411,8 @@ void MainWindow::checkAIEnvironment()
                                 bImageModel ? tr("已安装") : tr("未安装（ollama pull qwen2.5vl:7b）"));
         }
 
-        qLLines << tr("提示：AI 打标对每个文件启动一次脚本，第一个文件会比较慢（加载模型）；"
-                      "不支持的扩展名（视频/压缩包等）会直接跳过，不再空跑。");
+        qLLines << tr("提示：点【AI自动生成标签】时，上面缺失的依赖 / Ollama / 模型会自动下载并安装"
+                      "（进度和日志显示在进度页，可随时停止）；不支持的扩展名（视频/压缩包等）会直接跳过。");
     }
 
     QMessageBox::information(this, tr("AI 打标环境"), qLLines.join(QStringLiteral("\n\n")));

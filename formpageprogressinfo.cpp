@@ -12,6 +12,7 @@
 #include <QPushButton>
 #include <QStandardItemModel>
 #include <QToolButton>
+#include <QTextCursor>
 #include <QTreeView>
 
 namespace {
@@ -171,11 +172,45 @@ void FormPageProgressInfo::initTree()
     ui->gridLayout->addWidget(m_tree, 2, 0);
 }
 
+void FormPageProgressInfo::beginAIPrepare()
+{
+    clear();                 // 上次搜索/遍历残留的树和计数一并清掉
+    m_bAiMode = true;
+    m_bAiPrepare = true;
+    m_sAiStage = tr("检查环境…");
+    m_nAiDone = 0;
+    ui->plainTextEdit->clear();
+    ui->plainTextEdit->setVisible(true);   // AI 期间用日志区显示安装/下载过程
+    if (m_tree != nullptr)
+        m_tree->setVisible(false);
+    setRunning(true);
+    updateStatusLabel();
+}
+
+void FormPageProgressInfo::setAIPrepareStage(const QString &sStage)
+{
+    m_sAiStage = sStage;
+    updateStatusLabel();
+}
+
+void FormPageProgressInfo::appendAILog(const QString &sLine)
+{
+    if (sLine.isEmpty())
+        return;
+    ui->plainTextEdit->setVisible(true);
+    ui->plainTextEdit->appendPlainText(sLine);
+    ui->plainTextEdit->moveCursor(QTextCursor::End);
+}
+
 void FormPageProgressInfo::beginAITask()
 {
     clear();                 // 上次搜索/遍历残留的树和计数一并清掉
     m_bAiMode = true;
+    m_bAiPrepare = false;
     m_nAiDone = 0;
+    ui->plainTextEdit->setVisible(true);   // 打标过程也把每行结果留在日志区
+    if (m_tree != nullptr)
+        m_tree->setVisible(false);
     setRunning(true);        // 让【停止全部】和 Esc 在 AI 打标期间可用
     updateStatusLabel();
 }
@@ -557,6 +592,8 @@ void FormPageProgressInfo::onRecvProgress(const QString &sProcessedFilePath)
     // 注意：这里**不再**自动展开/选中目录 —— 树保持用户自己的展开状态，
     // 需要看哪个分支由用户手动展开。
     m_sCurrentFile = sProcessedFilePath;
+    if (m_bAiMode)
+        appendAILog(sProcessedFilePath);
     updateStatusLabel();
 }
 
@@ -566,6 +603,13 @@ void FormPageProgressInfo::updateStatusLabel()
         return;
 
     if (m_bAiMode) {
+        if (m_bAiPrepare) {
+            const QString sText = tr("AI 环境准备：%1").arg(m_sAiStage);
+            m_statusLabel->setText(sText);
+            m_statusLabel->setToolTip(sText);
+            return;
+        }
+
         QString sText = tr("AI 打标：已处理 %1 个文件").arg(m_nAiDone);
         if (!m_sCurrentFile.isEmpty()) {
             const QFontMetrics metrics(m_statusLabel->font());
@@ -642,11 +686,16 @@ void FormPageProgressInfo::onBtnStopClicked()
 void FormPageProgressInfo::clear()
 {
     m_bAiMode = false;
+    m_bAiPrepare = false;
     m_nAiDone = 0;
+    m_sAiStage.clear();
     m_bFinished = false;
     m_sFinishSummary.clear();
     if (m_btnBack != nullptr)
         m_btnBack->hide();
+    ui->plainTextEdit->setVisible(false);
+    if (m_tree != nullptr)
+        m_tree->setVisible(true);
     setRunning(false);  // 结束/离开：隐藏【停止全部】，避免"点了没反应"
     ui->plainTextEdit->clear();
     m_items.clear();

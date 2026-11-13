@@ -53,6 +53,13 @@ public:
      */
     void showTraversalStoppedSummary(int nWrittenRoots);
 
+    /** AI 环境准备：清空页面、显示【停止全部】和日志区，状态行显示当前阶段。 */
+    void beginAIPrepare();
+    /** AI 环境准备的当前阶段（如"下载模型 qwen2.5:7b…"）。 */
+    void setAIPrepareStage(const QString &sStage);
+    /** 往日志区追加一行（pip / ollama 的真实输出）。 */
+    void appendAILog(const QString &sLine);
+
     /** AI 打标开始：清空页面、显示【停止全部】，状态行改成"AI 打标：已处理 N 个文件"。 */
     void beginAITask();
     /** AI 打标进度：每处理完一个文件（成功/失败/跳过）加一。 */
@@ -106,7 +113,9 @@ private:
     bool                      m_bRunning = false;
     bool                      m_bFinished = false;        // 任务已结束、停在总结状态
     bool                      m_bAiMode = false;          // 当前是 AI 打标（显示"已处理"而不是"已扫描/命中"）
+    bool                      m_bAiPrepare = false;       // AI 打标前的环境准备阶段
     int                       m_nAiDone = 0;
+    QString                   m_sAiStage;                 // 环境准备的当前阶段
     QString                   m_sFinishSummary;
     QHash<QString, QStandardItem *> m_items;   // 目录路径 -> 树节点
     // 用户点过【停止】的目录：后续快照可能把该行报成"完成/等待"，

@@ -1,6 +1,7 @@
 // FormFileBrowser 的标签操作实现：AI 打标、添加标签、撤销、标签回传。
 
 #include "formfilebrowser.h"
+#include "threadaiprepare.h"
 #include <QMenu>
 #include <QToolButton>
 #include <QAction>
@@ -58,8 +59,6 @@ void FormFileBrowser::onActionAddLabelByAITriggered()
 {
     setActionState(ADDTAGBYAI_START);
     showProcessPage(RUNNINGTHREAD::AIADDTAG);
-    // AI 打标也走进度页：清空旧内容、显示【停止全部】、状态行显示"已处理 N 个文件"
-    ui->pageProgressInfo->beginAITask();
 
     // 选中的文件优先；没有选文件才按选中的目录（含子目录）处理。
     // 注意这里用 getSelDirs(false)：不能用会回退"当前目录"的那个版本，
@@ -74,8 +73,84 @@ void FormFileBrowser::onActionAddLabelByAITriggered()
         return;
     }
 
-    const int nTargets = qLSelFiles.isEmpty() ? qLSelDirs.count() : int(qLSelFiles.count());
-    emit sendStatusMessage(qLSelFiles.isEmpty()
+    // 第一次使用（或上次整体失败）先自动准备环境：缺 Python/pip 库/Ollama/模型就下载安装，
+    // 装好后会自动继续打标；已就绪则直接开始。
+    if (!m_aiEnvReady) {
+        startAiPrepare(qLSelFiles, qLSelDirs);
+        return;
+    }
+    startAiTagging(qLSelFiles, qLSelDirs);
+}
+
+/**
+ * AI 环境准备：缺什么装什么（Python / pip 依赖 / Ollama / 模型）。
+ * 进度和命令输出都显示在进度页，可随时【停止全部】。
+ */
+void FormFileBrowser::startAiPrepare(const QStringList &qLFiles, const QStringList &qLDirs)
+{
+    m_pendingAiFiles = qLFiles;
+    m_pendingAiDirs = qLDirs;
+
+    ui->pageProgressInfo->beginAIPrepare();
+    emit sendStatusMessage(tr("正在检查 AI 运行环境（缺少的依赖会自动下载安装，可停止）…"));
+
+    m_threadAiPrepare = new ThreadAIPrepare(this);
+
+    // 只准备用得到的模型：只选纯文本文件时不必下载 6GB 的视觉模型
+    bool bNeedText = !qLFiles.isEmpty() || !qLDirs.isEmpty();
+    bool bNeedImage = !qLDirs.isEmpty();
+    for (const QString &sFile : qLFiles) {
+        const QString sSuffix = QFileInfo(sFile).suffix().toLower();
+        if (sSuffix == QLatin1String("png") || sSuffix == QLatin1String("jpg")
+            || sSuffix == QLatin1String("jpeg")) {
+            bNeedImage = true;
+        } else {
+            bNeedText = true;
+        }
+    }
+    if (!bNeedText && !bNeedImage)
+        bNeedText = true;
+    m_threadAiPrepare->setNeededModels(bNeedText, bNeedImage);
+
+    connect(m_threadAiPrepare, &ThreadAIPrepare::sendStage, ui->pageProgressInfo,
+            &FormPageProgressInfo::setAIPrepareStage);
+    connect(m_threadAiPrepare, &ThreadAIPrepare::sendLog, ui->pageProgressInfo,
+            &FormPageProgressInfo::appendAILog);
+    connect(m_threadAiPrepare, &ThreadAIPrepare::sendFinished, this,
+            &FormFileBrowser::onAiPrepareFinished);
+    connect(m_threadAiPrepare, &QThread::finished, this, [this]() { m_threadAiPrepare = nullptr; });
+
+    m_threadAiPrepare->start();
+}
+
+void FormFileBrowser::onAiPrepareFinished(bool bOk, const QString &sError)
+{
+    if (bOk) {
+        m_aiEnvReady = true;
+        emit sendStatusMessage(tr("AI 运行环境已就绪，开始打标…"));
+        const QStringList qLFiles = m_pendingAiFiles;
+        const QStringList qLDirs = m_pendingAiDirs;
+        m_pendingAiFiles.clear();
+        m_pendingAiDirs.clear();
+        startAiTagging(qLFiles, qLDirs);
+        return;
+    }
+
+    showFilesWidget();
+    setActionState(ADDTAGBYAI_FINISH);
+    ui->pageProgressInfo->clear();
+    QMessageBox::warning(this, tr("AI 运行环境准备失败"),
+                         sError + tr("\n\n也可以手动安装后重试：\n"
+                                     "  pip install requests pypdf python-docx\n"
+                                     "  ollama pull qwen2.5:7b"));
+}
+
+void FormFileBrowser::startAiTagging(const QStringList &qLFiles, const QStringList &qLDirs)
+{
+    ui->pageProgressInfo->beginAITask();
+
+    const int nTargets = qLFiles.isEmpty() ? int(qLDirs.count()) : int(qLFiles.count());
+    emit sendStatusMessage(qLFiles.isEmpty()
                                ? tr("AI 正在分析 %1 个目录…").arg(nTargets)
                                : tr("AI 正在分析 %1 个文件…").arg(nTargets));
 
@@ -99,8 +174,8 @@ void FormFileBrowser::onActionAddLabelByAITriggered()
     connect(m_threadAddLabelByAI, &QThread::finished, m_threadAddLabelByAI, &QObject::deleteLater);
     connect(m_threadAddLabelByAI, &QThread::finished, this, [this](){ m_threadAddLabelByAI = nullptr; });
 
-    m_threadAddLabelByAI->setDirs(qLSelDirs);
-    m_threadAddLabelByAI->setFiles(qLSelFiles);
+    m_threadAddLabelByAI->setDirs(qLDirs);
+    m_threadAddLabelByAI->setFiles(qLFiles);
 
     m_threadAddLabelByAI->start();
 }
@@ -111,6 +186,9 @@ void FormFileBrowser::onRecvAddLabelByAIFinish(int nSucceeded, int nFailed, int 
     showFilesWidget();
     setActionState(ADDTAGBYAI_FINISH);
     ui->pageProgressInfo->clear();
+    // 一个都没成功且有错误：说明环境仍有问题，下次点 AI 时重新检查/安装
+    if (nSucceeded == 0 && !sFirstError.isEmpty())
+        m_aiEnvReady = false;
     // 状态栏给一句结果摘要（失败时的详细原因仍用对话框说明）
     if (nFailed > 0) {
         emit sendStatusMessage(tr("AI 打标结束：成功 %1 个，失败 %2 个，跳过 %3 个")

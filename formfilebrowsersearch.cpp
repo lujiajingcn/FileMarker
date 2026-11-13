@@ -368,6 +368,7 @@ void FormFileBrowser::onRecvStopSearch()
         break;
     case AIADDTAG:
         if (m_threadAddLabelByAI) m_threadAddLabelByAI->stopThread();
+    if (m_threadAiPrepare) m_threadAiPrepare->requestStop();
         break;
     case TRAVERSEDIR:
         if (m_threadTraverseDirs) m_threadTraverseDirs->stopThread();

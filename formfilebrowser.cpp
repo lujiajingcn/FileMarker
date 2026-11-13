@@ -181,6 +181,7 @@ FormFileBrowser::~FormFileBrowser()
     QThread *search = m_threadSearch;
     QThread *traverse = m_threadTraverseDirs;
     QThread *aI = m_threadAddLabelByAI;
+    QThread *aiPrepare = m_threadAiPrepare;
 
     if (m_threadSearch != nullptr)
         m_threadSearch->stopThread();
@@ -188,6 +189,8 @@ FormFileBrowser::~FormFileBrowser()
         m_threadTraverseDirs->stopThread();
     if (m_threadAddLabelByAI != nullptr)
         m_threadAddLabelByAI->stopThread();
+    if (m_threadAiPrepare != nullptr)
+        m_threadAiPrepare->requestStop();
 
     auto waitThread = [](QThread *thread, const QString &sName) {
         if (thread == nullptr)
@@ -200,6 +203,7 @@ FormFileBrowser::~FormFileBrowser()
     waitThread(search, QStringLiteral("搜索线程"));
     waitThread(traverse, QStringLiteral("遍历线程"));
     waitThread(aI, QStringLiteral("AI 线程"));
+    waitThread(aiPrepare, QStringLiteral("AI 依赖安装线程"));
 
     // m_sqlOperation 在构造函数中 new 在堆上，从未释放，导致内存泄漏。
     delete m_sqlOperation;
