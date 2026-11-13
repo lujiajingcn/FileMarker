@@ -240,7 +240,8 @@ QString FormPageFilterdFiles::wrapItemsBySeparator(const QString &sPrefix,
     for (const QString &sItem : qLItems) {
         const QString sPiece = (bLineHasItem ? sSeparator : QString()) + sItem;
         if (bLineHasItem && fm.horizontalAdvance(sCurrent + sPiece) > nAvailable) {
-            qLLines << sCurrent;          // 在条目之间换行
+            // 在条目之间换行；行尾补一个分隔符，"；E:..." 这种续行才不会看起来像漏了东西
+            qLLines << (sCurrent + sSeparator);
             sCurrent = sIndent + sItem;
             bLineHasItem = true;
         } else {
