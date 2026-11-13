@@ -326,6 +326,7 @@ void MainWindow::showHintMessage(const QString &sMessage)
 
 void MainWindow::onActionHelpTriggered()
 {
+    // 介绍页盖在主窗口上（父对象是本窗口），点【跳过】或走完 7 页后自动关闭。
     auto *wIntroduction = new IntroductionWidget(this);
     wIntroduction->show();
 }

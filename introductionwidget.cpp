@@ -74,7 +74,10 @@ IntroductionWidget::IntroductionWidget(QWidget *parent)
     m_continueLabel->setWordWrap(true);
     // 页码字号稍大于正文；此处先用系统字号占位，等正文字号算好后在构造末尾再调一次
     auto fnt = font();
-    fnt.setPointSizeF(fnt.pointSizeF() * 1.5);
+    if (fnt.pixelSize() > 0)
+        fnt.setPixelSize(qMax(12, qRound(fnt.pixelSize() * 1.5)));
+    else if (fnt.pointSizeF() > 0)
+        fnt.setPointSizeF(fnt.pointSizeF() * 1.5);
     m_continueLabel->setFont(fnt);
     m_continueLabel->setPalette(palette());
     layout->addWidget(m_continueLabel);
@@ -227,8 +230,8 @@ IntroductionWidget::IntroductionWidget(QWidget *parent)
          tr("<p>项目源码：<a style=\"color: #41CD52\" "
             "href=\"https://github.com/lujiajingcn/FileMarker\">FileMarker</a></p>"
             "<p>如有问题或建议，欢迎在 GitHub 上提交 Issue。</p>")}};
-    setStep(0);
     resizeToParent();
+    setStep(0);
 }
 
 IntroductionWidget::~IntroductionWidget()
@@ -577,8 +580,11 @@ void IntroductionWidget::calTextGeometry()
         int nMaxHeight = 0;
         for (const Item &item : m_items)
             nMaxHeight = qMax(nMaxHeight, measurePageHeight(item, innerWidth));
-        // 再留出页码、内边距和行距的位置
-        m_textBlockHeight = qBound(320, nMaxHeight + 96, int(height() * 0.72));
+        // 再留出页码、内边距和行距的位置。
+        // 注意：构造阶段窗口还没定尺寸时 height() 可能很小，max 会小于 min，
+        // qBound 会触发 "!(max < min)" 断言并直接 abort（点了【界面介绍】程序退出的原因）。
+        const int nMaxAllowed = qMax(320, int(height() * 0.72));
+        m_textBlockHeight = qBound(320, nMaxHeight + 96, nMaxAllowed);
         m_measureWidth = innerWidth;
     }
 
