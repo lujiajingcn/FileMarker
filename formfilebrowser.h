@@ -109,7 +109,8 @@ public slots:
     void onRecvLabelGroups(const QList<QSet<QString>> &qLLabelGroups);
 
     // 结束信号带上统计与首个错误，便于界面提示失败原因
-    void onRecvAddLabelByAIFinish(int nSucceeded, int nFailed, const QString &sFirstError);
+    void onRecvAddLabelByAIFinish(int nSucceeded, int nFailed, int nSkipped,
+                                  const QString &sFirstError);
 
     void onRecvLabelsGeneratedByAI(const QString &sLabels);
 

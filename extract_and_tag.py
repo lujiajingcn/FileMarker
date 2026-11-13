@@ -5,12 +5,45 @@ import base64
 import json
 import subprocess
 import time
-from pypdf import PdfReader
-from docx import Document
-from PIL import Image
-import pytesseract
+
+# pypdf / python-docx / Pillow / pytesseract 改成"用到才导入"：
+# 以前在文件开头就 import 全部，结果只要缺 Pillow，连纯 .txt 文件都跑不了。
 import requests
 from requests.exceptions import ConnectionError, Timeout
+
+TEXT_EXTS = (".txt", ".csv", ".json", ".xml", ".log", ".md")
+PDF_EXTS = (".pdf",)
+DOCX_EXTS = (".docx",)
+IMAGE_EXTS = (".png", ".jpg", ".jpeg")
+
+
+class DependencyError(RuntimeError):
+    pass
+
+
+def file_kind(file_path):
+    ext = file_path.lower()
+    if ext.endswith(TEXT_EXTS):
+        return "text"
+    if ext.endswith(PDF_EXTS):
+        return "pdf"
+    if ext.endswith(DOCX_EXTS):
+        return "docx"
+    if ext.endswith(IMAGE_EXTS):
+        return "image"
+    return "unsupported"
+
+
+def clean_tags(tags):
+    result = []
+    for raw in tags:
+        tag = (raw or "").strip().strip("。.,;")
+        tag = re.sub(r"^标签[:：\s]*", "", tag).strip()
+        if not tag or len(tag) > 12:
+            continue
+        if tag not in result:
+            result.append(tag)
+    return result[:8]
 
 def start_ollama_llm(commond):
     """
@@ -105,32 +138,30 @@ def is_model_available(model, url="http://localhost:11434"):
 def extract_text(file_path):
     ext = file_path.lower()
 
-    # 文本文件
-    if ext.endswith((".txt", ".csv", ".json", ".xml", ".log", ".md")):
-        return open(file_path, "r", encoding="utf8", errors="ignore").read()
+    # 纯文本：不需要第三方库
+    if ext.endswith(TEXT_EXTS):
+        with open(file_path, "r", encoding="utf8", errors="ignore") as f:
+            return f.read()
 
-    # PDF
-    if ext.endswith(".pdf"):
+    if ext.endswith(PDF_EXTS):
+        try:
+            from pypdf import PdfReader
+        except ImportError as e:
+            raise DependencyError(f"pypdf 未安装（pip install pypdf）：{e}")
         reader = PdfReader(file_path)
         return "\n".join([page.extract_text() or "" for page in reader.pages])
 
-    # Word
-    if ext.endswith(".docx"):
+    if ext.endswith(DOCX_EXTS):
+        try:
+            from docx import Document
+        except ImportError as e:
+            raise DependencyError(f"python-docx 未安装（pip install python-docx）：{e}")
         doc = Document(file_path)
         return "\n".join([p.text for p in doc.paragraphs])
 
-    # 图片（OCR）
-    if ext.endswith((".png", ".jpg", ".jpeg")):
-        img = Image.open(file_path)
-        return pytesseract.image_to_string(img, lang="chi_sim+eng")
-
-    # Excel（可选）
-    # if ext.endswith(".xlsx"):
-    #     import pandas as pd
-    #     df = pd.read_excel(file_path)
-    #     return df.to_string()
-
+    # 图片交给视觉模型；其它类型由 main() 判为不支持
     return None
+
 
 def tag_text_qwen(text: str):
     prompt = f"""
@@ -139,8 +170,10 @@ def tag_text_qwen(text: str):
 """
 
     payload = {
-        "model": "qwen2.5:7b",
-        "prompt": prompt
+        "model": TEXT_MODEL,
+        "prompt": prompt,
+        # 只要几个标签，限制生成长度能明显加快速度；低温让输出更稳定
+        "options": {"temperature": 0.3, "num_predict": 64},
     }
 
     # Ollama 生成是多行 JSON，每行一个对象，因此 stream=True
@@ -164,7 +197,7 @@ def tag_text_qwen(text: str):
 
     # 清理格式，转换为列表。模型可能用中文逗号/顿号/英文分号/中文分号分隔，统一拆分
     tags = [tag.strip() for tag in re.split(r"[,，、;；]", full_resp) if tag.strip()]
-    return tags
+    return clean_tags(tags)
 
 def tag_image_qwen(file_path: str):
     ext = file_path.lower()
@@ -184,9 +217,10 @@ def tag_image_qwen(file_path: str):
     prompt = "请为下面的图片生成3个中文标签，标签要简短、概括核心内容，并用,分隔："
 
     payload = {
-        "model": "qwen2.5vl:7b",
+        "model": IMAGE_MODEL,
         "prompt": prompt,
-        "images": [b64]
+        "images": [b64],
+        "options": {"temperature": 0.3, "num_predict": 64},
     }
 
     # Ollama 生成是多行 JSON，每行一个对象，因此 stream=True
@@ -210,7 +244,7 @@ def tag_image_qwen(file_path: str):
 
     # 清理格式，转换为列表。模型可能用中文逗号/顿号/英文分号/中文分号分隔，统一拆分
     tags = [tag.strip() for tag in re.split(r"[,，、;；]", full_resp) if tag.strip()]
-    return tags
+    return clean_tags(tags)
 
 TEXT_MODEL = "qwen2.5:7b"
 IMAGE_MODEL = "qwen2.5vl:7b"
@@ -230,21 +264,37 @@ def main():
             return
 
         fp = sys.argv[1]
-        text = extract_text(fp)
-        if text:
-            if not is_model_available(TEXT_MODEL):
-                print(json.dumps({"file": fp, "tags": [],
-                                  "error": f"模型 {TEXT_MODEL} 未安装，请先执行 `ollama pull {TEXT_MODEL}`"}))
-                return
-            tags = tag_text_qwen(text)
-            print(json.dumps({"file": fp, "tags": tags}))
-        else:
-            if not is_model_available(IMAGE_MODEL):
-                print(json.dumps({"file": fp, "tags": [],
-                                  "error": f"模型 {IMAGE_MODEL} 未安装，请先执行 `ollama pull {IMAGE_MODEL}`"}))
-                return
-            tags = tag_image_qwen(fp)
-            print(json.dumps({"file": fp, "tags": tags}))
+        kind = file_kind(fp)
+        if kind == "unsupported":
+            print(json.dumps({"file": fp, "tags": [],
+                              "error": "不支持的文件类型：%s" % (os.path.splitext(fp)[1] or "无扩展名")}))
+            return
+
+        model = IMAGE_MODEL if kind == "image" else TEXT_MODEL
+        if not is_model_available(model):
+            print(json.dumps({"file": fp, "tags": [],
+                              "error": "模型 %s 未安装，请先执行 `ollama pull %s`" % (model, model)}))
+            return
+
+        try:
+            if kind == "image":
+                tags = tag_image_qwen(fp)
+            else:
+                text = extract_text(fp)
+                if not text or not text.strip():
+                    print(json.dumps({"file": fp, "tags": [],
+                                      "error": "没有从文件里提取到可分析的文字"}))
+                    return
+                tags = tag_text_qwen(text)
+        except DependencyError as e:
+            print(json.dumps({"file": fp, "tags": [], "error": "缺少依赖：%s" % e}))
+            return
+        except Exception as e:
+            print(json.dumps({"file": fp, "tags": [], "error": "处理失败：%s" % e}))
+            return
+
+        print(json.dumps({"file": fp, "tags": tags}))
+
     finally:
         if ollama_proc is not None:
             try:

@@ -136,5 +136,18 @@ qnx: target.path = /tmp/$${TARGET}/bin
 else: unix:!android: target.path = /opt/$${TARGET}/bin
 !isEmpty(target.path): INSTALLS += target
 
+# ---- 打包 AI 打标脚本 ----
+# 开发构建（build-qt6/debug）以前没有 extract_and_tag.py，点【AI 自动生成标签】
+# 只会报"找不到脚本"。这里在链接后自动复制一份到输出目录；发行包见 dist/FileMarker-portable。
+win32 {
+    AI_SCRIPT = $$shell_path($$PWD/extract_and_tag.py)
+    CONFIG(debug, debug|release) {
+        AI_DEST = $$shell_path($$OUT_PWD/debug)
+    } else {
+        AI_DEST = $$shell_path($$OUT_PWD/release)
+    }
+    QMAKE_POST_LINK += $$QMAKE_COPY /Y \"$$AI_SCRIPT\" \"$$AI_DEST\"
+}
+
 RESOURCES += \
     resources.qrc

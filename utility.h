@@ -25,6 +25,9 @@ public:
     /** 设置文件路径：程序目录可写就用程序目录，否则回退到用户 AppData */
     static QString settingsFilePath();
 
+    /** 查找 AI 打标脚本 extract_and_tag.py：程序目录 → 上级目录 → 源码目录 → 环境变量。 */
+    static QString aiScriptPath();
+
     static QString createUuid();
 
     /** 判断两个QStringList是否有相同的元素 */

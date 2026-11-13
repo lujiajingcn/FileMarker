@@ -53,6 +53,11 @@ public:
      */
     void showTraversalStoppedSummary(int nWrittenRoots);
 
+    /** AI 打标开始：清空页面、显示【停止全部】，状态行改成"AI 打标：已处理 N 个文件"。 */
+    void beginAITask();
+    /** AI 打标进度：每处理完一个文件（成功/失败/跳过）加一。 */
+    void setAIProgress(int nDone);
+
 signals:
     void sendStop();                          // 全局停止（保留原来的停止按钮）
     void sendBackRequested();                 // 进度页上的【← 返回目录】被点击
@@ -100,6 +105,8 @@ private:
     QToolButton              *m_btnBack = nullptr;        // 【← 返回目录】（中断后显示）
     bool                      m_bRunning = false;
     bool                      m_bFinished = false;        // 任务已结束、停在总结状态
+    bool                      m_bAiMode = false;          // 当前是 AI 打标（显示"已处理"而不是"已扫描/命中"）
+    int                       m_nAiDone = 0;
     QString                   m_sFinishSummary;
     QHash<QString, QStandardItem *> m_items;   // 目录路径 -> 树节点
     // 用户点过【停止】的目录：后续快照可能把该行报成"完成/等待"，

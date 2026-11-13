@@ -58,6 +58,8 @@ void FormFileBrowser::onActionAddLabelByAITriggered()
 {
     setActionState(ADDTAGBYAI_START);
     showProcessPage(RUNNINGTHREAD::AIADDTAG);
+    // AI 打标也走进度页：清空旧内容、显示【停止全部】、状态行显示"已处理 N 个文件"
+    ui->pageProgressInfo->beginAITask();
 
     // 选中的文件优先；没有选文件才按选中的目录（含子目录）处理。
     // 注意这里用 getSelDirs(false)：不能用会回退"当前目录"的那个版本，
@@ -80,6 +82,7 @@ void FormFileBrowser::onActionAddLabelByAITriggered()
     m_threadAddLabelByAI = new ThreadAddTagByAI(this);
 
     connect(m_threadAddLabelByAI, &ThreadAddTagByAI::sendProcessInfo, ui->pageProgressInfo, &FormPageProgressInfo::onRecvProgress);
+    connect(m_threadAddLabelByAI, &ThreadAddTagByAI::sendAIProgress, ui->pageProgressInfo, &FormPageProgressInfo::setAIProgress);
     connect(m_threadAddLabelByAI, &ThreadAddTagByAI::sendFinish, this, &FormFileBrowser::onRecvAddLabelByAIFinish);
     connect(m_threadAddLabelByAI, &ThreadAddTagByAI::sendTags, this, &FormFileBrowser::onRecvLabelsGeneratedByAI);
     // AI 返回的 summary 之前被丢弃，这里记入日志（程序无专门展示 UI）。
@@ -102,15 +105,24 @@ void FormFileBrowser::onActionAddLabelByAITriggered()
     m_threadAddLabelByAI->start();
 }
 
-void FormFileBrowser::onRecvAddLabelByAIFinish(int nSucceeded, int nFailed, const QString &sFirstError)
+void FormFileBrowser::onRecvAddLabelByAIFinish(int nSucceeded, int nFailed, int nSkipped,
+                                               const QString &sFirstError)
 {
     showFilesWidget();
     setActionState(ADDTAGBYAI_FINISH);
     ui->pageProgressInfo->clear();
     // 状态栏给一句结果摘要（失败时的详细原因仍用对话框说明）
-    emit sendStatusMessage(nFailed > 0
-                               ? tr("AI 打标结束：成功 %1 个文件，失败 %2 个").arg(nSucceeded).arg(nFailed)
-                               : tr("AI 打标完成：成功 %1 个文件").arg(nSucceeded));
+    if (nFailed > 0) {
+        emit sendStatusMessage(tr("AI 打标结束：成功 %1 个，失败 %2 个，跳过 %3 个")
+                                   .arg(nSucceeded).arg(nFailed).arg(nSkipped));
+    } else if (!sFirstError.isEmpty()) {
+        // 例如脚本缺失/依赖缺失：nFailed 还是 0，不能说"完成：成功 0 个"
+        emit sendStatusMessage(tr("AI 打标未能运行：%1").arg(sFirstError.left(120)));
+    } else {
+        emit sendStatusMessage(nSkipped > 0
+                                   ? tr("AI 打标完成：成功 %1 个文件，跳过 %2 个").arg(nSucceeded).arg(nSkipped)
+                                   : tr("AI 打标完成：成功 %1 个文件").arg(nSucceeded));
+    }
     // AI 线程写 ADS 时 FileTimeGuard 保持 mtime 不变，模型不会自动感知标签变化；
     // 这里主动刷新并清空标签缓存，否则标签列会一直显示旧值。
     emit sendRefresh();
@@ -122,6 +134,8 @@ void FormFileBrowser::onRecvAddLabelByAIFinish(int nSucceeded, int nFailed, cons
         if (nFailed > 0) {
             sMsg = tr("AI 自动生成标签未全部成功：成功 %1 个文件，失败 %2 个。")
                        .arg(nSucceeded).arg(nFailed);
+            if (nSkipped > 0)
+                sMsg += tr("\n跳过 %1 个不支持的文件类型。").arg(nSkipped);
         } else {
             sMsg = tr("AI 自动生成标签未能运行。");
         }

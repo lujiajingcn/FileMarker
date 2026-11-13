@@ -25,7 +25,9 @@ public:
 signals:
     // 结束信号带上统计与首个错误，UI 才能提示"AI 根本没跑起来"，
     // 而不是像以前那样静默回到文件列表。
-    void sendFinish(int nSucceeded, int nFailed, const QString &sFirstError);
+    void sendFinish(int nSucceeded, int nFailed, int nSkipped, const QString &sFirstError);
+    /** 每处理完一个文件发一次，进度页据此显示"已处理 N 个文件" */
+    void sendAIProgress(int nDone);
     void sendProcessInfo(const QString &sProcessedFilePath);
     void sendTags(const QString &tags);
     void sendSummary(const QString &summary);
@@ -45,6 +47,8 @@ private:
     QStringList     m_files;
     int             m_succeeded = 0;
     int             m_failed = 0;
+    int             m_skipped = 0;
+    int             m_done = 0;
     QString         m_firstError;
 };
 

@@ -46,10 +46,27 @@ void ThreadAddTagByAI::stopThread()
     TraverseDirectory::stop();
 }
 
+namespace {
+/** 和脚本 extract_text() 支持的类型保持一致；其余类型不启动 Python，直接跳过。 */
+bool isAiSupportedFile(const QString &sPath)
+{
+    static const QStringList exts = {
+        QStringLiteral("txt"), QStringLiteral("csv"), QStringLiteral("json"),
+        QStringLiteral("xml"), QStringLiteral("log"), QStringLiteral("md"),
+        QStringLiteral("pdf"), QStringLiteral("docx"),
+        QStringLiteral("png"), QStringLiteral("jpg"), QStringLiteral("jpeg"),
+    };
+    const QString sSuffix = QFileInfo(sPath).suffix().toLower();
+    return exts.contains(sSuffix);
+}
+}   // namespace
+
 bool ThreadAddTagByAI::recordFailure(const QString &sFilePath, const QString &sReason,
                                      const QString &sDetail)
 {
     ++m_failed;
+    ++m_done;
+    emit sendAIProgress(m_done);
     const QString sLine = QString("%1      失败：%2%3")
                               .arg(sFilePath, sReason,
                                    sDetail.isEmpty() ? QString() : QStringLiteral("（") + sDetail + QStringLiteral("）"));
@@ -71,6 +88,8 @@ void ThreadAddTagByAI::run()
 {
     m_succeeded = 0;
     m_failed = 0;
+    m_skipped = 0;
+    m_done = 0;
     m_firstError.clear();
 
     auto func = [this](const QFileInfo& info) -> bool {
@@ -78,11 +97,11 @@ void ThreadAddTagByAI::run()
     };
 
     // 先确认脚本存在：以前脚本缺失时每个文件都静默失败，界面毫无提示。
-    const QString sScript = g_sAppDir + "/extract_and_tag.py";
-    if (!QFileInfo::exists(sScript)) {
-        m_firstError = tr("找不到 AI 脚本：%1（请把 extract_and_tag.py 与程序放在同一目录）").arg(sScript);
+    const QString sScript = Utility::aiScriptPath();
+    if (sScript.isEmpty()) {
+        m_firstError = tr("找不到 AI 脚本 extract_and_tag.py（应放在程序目录或源码目录）");
         emit sendProcessInfo(m_firstError);
-        emit sendFinish(m_succeeded, m_failed, m_firstError);
+        emit sendFinish(m_succeeded, m_failed, m_skipped, m_firstError);
         return;
     }
 
@@ -101,7 +120,7 @@ void ThreadAddTagByAI::run()
             if (m_succeeded == 0 && m_failed >= 3)
                 break;
         }
-        emit sendFinish(m_succeeded, m_failed, m_firstError);
+        emit sendFinish(m_succeeded, m_failed, m_skipped, m_firstError);
         return;
     }
 
@@ -116,7 +135,7 @@ void ThreadAddTagByAI::run()
             break;
     }
 
-    emit sendFinish(m_succeeded, m_failed, m_firstError);
+    emit sendFinish(m_succeeded, m_failed, m_skipped, m_firstError);
 }
 
 bool ThreadAddTagByAI::addTag(const QFileInfo& info)
@@ -125,13 +144,23 @@ bool ThreadAddTagByAI::addTag(const QFileInfo& info)
         return true;
 
     const QString filePath = info.filePath();
+    if (!isAiSupportedFile(filePath)) {
+        // 不支持的类型（mp4/mobi/epub/zip…）不启动 Python：以前每个都白跑一次进程，
+        // 脚本对非图片返回空标签还被算成"成功"，成功率虚高。
+        ++m_skipped;
+        ++m_done;
+        emit sendProcessInfo(QString("%1      跳过：不支持 AI 打标的文件类型").arg(filePath));
+        emit sendAIProgress(m_done);
+        return true;
+    }
+
     // 只读文件写不了 ADS：跳过并给出明确原因（不改文件属性）
     if (ADSOperation::isFileReadOnly(filePath)) {
         return recordFailure(filePath,
                              tr("文件是只读的（请先取消「只读」属性）"));
     }
 
-    QString script = g_sAppDir + "/extract_and_tag.py";
+    const QString script = Utility::aiScriptPath();
     QStringList args;
     args << script << filePath;
 
@@ -246,6 +275,8 @@ bool ThreadAddTagByAI::addTag(const QFileInfo& info)
     }
 
     ++m_succeeded;
+    ++m_done;
+    emit sendAIProgress(m_done);
     // 之前解析出 summary 却直接丢弃，这里通过信号上报，不再浪费模型输出。
     if (obj.contains("summary")) {
         QString sSummary = obj.value("summary").toString();

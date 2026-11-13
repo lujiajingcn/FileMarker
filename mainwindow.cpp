@@ -350,12 +350,12 @@ void MainWindow::onActionAuthorTriggered()
 /** AI 打标环境自检：脚本 / Python / 依赖库 三项，逐项给结果。 */
 void MainWindow::checkAIEnvironment()
 {
-    const QString sScript = g_sAppDir + "/extract_and_tag.py";
+    const QString sScript = Utility::aiScriptPath();
     QStringList qLLines;
 
-    qLLines << (QFileInfo::exists(sScript)
+    qLLines << (!sScript.isEmpty()
                     ? tr("① 脚本：已找到\n   %1").arg(sScript)
-                    : tr("① 脚本：未找到\n   期望位置：%1\n   请把 extract_and_tag.py 放到程序目录。").arg(sScript));
+                    : tr("① 脚本：未找到\n   请把 extract_and_tag.py 放到程序目录（或源码目录）。"));
 
     QString sPython;
     QProcess proc;
@@ -389,8 +389,24 @@ void MainWindow::checkAIEnvironment()
             qLLines << tr("③ 依赖库：缺少部分库\n   %1\n   可在命令行执行：pip install pypdf python-docx Pillow pytesseract requests")
                            .arg(sErr.isEmpty() ? tr("（没有拿到错误信息）") : sErr);
         }
-        qLLines << tr("提示：AI 打标对每个文件启动一次脚本，结果只写进日志与进度页；"
-                      "失败时会在结束时弹窗说明原因。");
+        // Ollama 服务与模型：这是运行时真正依赖，缺了会在每个文件上反复失败
+        QProcess ollama;
+        ollama.start(QStringLiteral("ollama"), QStringList() << QStringLiteral("list"));
+        bool bOllamaOk = ollama.waitForFinished(6000) && ollama.exitCode() == 0;
+        QString sOllamaOut = QString::fromLocal8Bit(ollama.readAllStandardOutput());
+        if (!bOllamaOk) {
+            qLLines << tr("④ Ollama：未运行或未安装\n   首次执行 AI 打标会自动尝试运行 ollama serve；"
+                          "需要先安装 Ollama，并执行：\n   ollama pull qwen2.5:7b\n   ollama pull qwen2.5vl:7b");
+        } else {
+            const bool bTextModel = sOllamaOut.contains(QStringLiteral("qwen2.5:7b"));
+            const bool bImageModel = sOllamaOut.contains(QStringLiteral("qwen2.5vl:7b"));
+            qLLines << tr("④ Ollama：服务可用；文本模型 %1，视觉模型 %2")
+                           .arg(bTextModel ? tr("已安装") : tr("未安装（ollama pull qwen2.5:7b）"),
+                                bImageModel ? tr("已安装") : tr("未安装（ollama pull qwen2.5vl:7b）"));
+        }
+
+        qLLines << tr("提示：AI 打标对每个文件启动一次脚本，第一个文件会比较慢（加载模型）；"
+                      "不支持的扩展名（视频/压缩包等）会直接跳过，不再空跑。");
     }
 
     QMessageBox::information(this, tr("AI 打标环境"), qLLines.join(QStringLiteral("\n\n")));

@@ -171,8 +171,27 @@ void FormPageProgressInfo::initTree()
     ui->gridLayout->addWidget(m_tree, 2, 0);
 }
 
+void FormPageProgressInfo::beginAITask()
+{
+    clear();                 // 上次搜索/遍历残留的树和计数一并清掉
+    m_bAiMode = true;
+    m_nAiDone = 0;
+    setRunning(true);        // 让【停止全部】和 Esc 在 AI 打标期间可用
+    updateStatusLabel();
+}
+
+void FormPageProgressInfo::setAIProgress(int nDone)
+{
+    if (!m_bAiMode)
+        return;
+    m_nAiDone = nDone;
+    updateStatusLabel();
+}
+
 void FormPageProgressInfo::resetProgress(const QStringList &qLSelDirs)
 {
+    m_bAiMode = false;
+    m_nAiDone = 0;
     m_bFinished = false;
     m_sFinishSummary.clear();
     if (m_btnBack != nullptr)
@@ -546,6 +565,25 @@ void FormPageProgressInfo::updateStatusLabel()
     if (m_statusLabel == nullptr)
         return;
 
+    if (m_bAiMode) {
+        QString sText = tr("AI 打标：已处理 %1 个文件").arg(m_nAiDone);
+        if (!m_sCurrentFile.isEmpty()) {
+            const QFontMetrics metrics(m_statusLabel->font());
+            const QString sPrefix = tr("    当前：");
+            int nPathWidth = m_statusLabel->width();
+            if (nPathWidth > 40)
+                nPathWidth = nPathWidth - metrics.boundingRect(sPrefix).width()
+                             - metrics.boundingRect(sText).width() - 16;
+            nPathWidth = qBound(120, nPathWidth, 600);
+            sText += sPrefix
+                     + metrics.elidedText(QDir::toNativeSeparators(m_sCurrentFile),
+                                          Qt::ElideMiddle, nPathWidth);
+        }
+        m_statusLabel->setText(sText);
+        m_statusLabel->setToolTip(sText);
+        return;
+    }
+
     if (m_bFinished) {
         // 结束/中断后停在总结页：状态行只显示总结，不再显示计数和当前文件
         m_statusLabel->setText(m_sFinishSummary);
@@ -603,6 +641,8 @@ void FormPageProgressInfo::onBtnStopClicked()
 
 void FormPageProgressInfo::clear()
 {
+    m_bAiMode = false;
+    m_nAiDone = 0;
     m_bFinished = false;
     m_sFinishSummary.clear();
     if (m_btnBack != nullptr)

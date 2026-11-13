@@ -1,3 +1,4 @@
+#include <QCoreApplication>
 #include "utility.h"
 
 #include <QUuid>
@@ -218,6 +219,35 @@ QStringList Utility::splitLabelsPreservingExisting(const QString &sLabels,
 
 // 参数改为按值传递。原签名是非 const 引用，函数内部调用 chop() 会修改调用者的字符串，
 // 调用者可能不期望参数被修改。按值传递后函数内部可以自由修改副本。
+/**
+ * 找 AI 打标脚本 extract_and_tag.py。
+ *
+ * 打包发行时脚本就在 exe 同级；但开发构建（build-qt6/debug/FileMarker.exe）里
+ * 脚本在源码目录，以前只认 exe 同级就会直接报"找不到脚本"。
+ * 顺序：环境变量 FM_AI_SCRIPT → exe 同级 → 逐级向上（含各层的 FileMarker 子目录）。
+ */
+QString Utility::aiScriptPath()
+{
+    const QString sEnv = qEnvironmentVariable("FM_AI_SCRIPT");
+    if (!sEnv.isEmpty() && QFileInfo::exists(sEnv))
+        return QDir::cleanPath(sEnv);
+
+    QDir dir(QCoreApplication::applicationDirPath());
+    for (int nLevel = 0; nLevel < 6; ++nLevel) {
+        const QString sSame = dir.filePath(QStringLiteral("extract_and_tag.py"));
+        if (QFileInfo::exists(sSame))
+            return QDir::cleanPath(sSame);
+
+        const QString sChild = dir.filePath(QStringLiteral("FileMarker/extract_and_tag.py"));
+        if (QFileInfo::exists(sChild))
+            return QDir::cleanPath(sChild);
+
+        if (!dir.cdUp())
+            break;
+    }
+    return QString();
+}
+
 bool Utility::isADSNameValid(QString sADSName)
 {
     sADSName = adsNameWithoutType(sADSName);
