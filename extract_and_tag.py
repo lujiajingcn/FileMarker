@@ -246,8 +246,9 @@ def tag_image_qwen(file_path: str):
     tags = [tag.strip() for tag in re.split(r"[,，、;；]", full_resp) if tag.strip()]
     return clean_tags(tags)
 
-TEXT_MODEL = "qwen2.5:7b"
-IMAGE_MODEL = "qwen2.5vl:7b"
+# 模型可用环境变量覆盖（换更小/更大的模型不用改脚本）
+TEXT_MODEL = os.environ.get("FM_AI_TEXT_MODEL", "qwen2.5:7b")
+IMAGE_MODEL = os.environ.get("FM_AI_IMAGE_MODEL", "qwen2.5vl:7b")
 
 
 def main():

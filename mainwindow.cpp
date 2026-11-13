@@ -378,17 +378,23 @@ void MainWindow::checkAIEnvironment()
     } else {
         qLLines << tr("② Python：%1").arg(sPython);
 
-        proc.start(QStringLiteral("python"),
-                   QStringList() << QStringLiteral("-c")
-                                 << QStringLiteral("import pypdf,docx,PIL,pytesseract,requests;print('ok')"));
-        const bool bDepsOk = proc.waitForFinished(20000) && proc.exitCode() == 0;
-        if (bDepsOk) {
-            qLLines << tr("③ 依赖库：pypdf / python-docx / Pillow / pytesseract / requests 均已安装");
-        } else {
-            const QString sErr = QString::fromLocal8Bit(proc.readAllStandardError()).trimmed();
-            qLLines << tr("③ 依赖库：缺少部分库\n   %1\n   可在命令行执行：pip install pypdf python-docx Pillow pytesseract requests")
-                           .arg(sErr.isEmpty() ? tr("（没有拿到错误信息）") : sErr);
-        }
+        // 只检查脚本真正用到的库：requests 必需，pypdf 用于 PDF，python-docx 用于 Word；
+        // 纯文本不需要任何库，图片走视觉模型也不需要 OCR 库。
+        auto probeModule = [](const QString &sModule) -> bool {
+            QProcess p;
+            p.start(QStringLiteral("python"), QStringList() << QStringLiteral("-c")
+                                                           << QStringLiteral("import %1").arg(sModule));
+            return p.waitForFinished(20000) && p.exitCode() == 0;
+        };
+        const bool bRequests = probeModule(QStringLiteral("requests"));
+        const bool bPypdf = probeModule(QStringLiteral("pypdf"));
+        const bool bDocx = probeModule(QStringLiteral("docx"));
+        qLLines << tr("③ 依赖库：%1\n   纯文本 / Markdown 不需要任何库；PDF 需要 pypdf，Word 需要 python-docx。"
+                      "\n   安装命令：pip install requests pypdf python-docx")
+                       .arg(tr("requests %1 · pypdf %2 · python-docx %3")
+                                .arg(bRequests ? tr("已安装") : tr("缺失"))
+                                .arg(bPypdf ? tr("已安装") : tr("缺失"))
+                                .arg(bDocx ? tr("已安装") : tr("缺失")));
         // Ollama 服务与模型：这是运行时真正依赖，缺了会在每个文件上反复失败
         QProcess ollama;
         ollama.start(QStringLiteral("ollama"), QStringList() << QStringLiteral("list"));
