@@ -255,8 +255,13 @@ bool IntroductionWidget::eventFilter(QObject *obj, QEvent *ev)
 {
     if (obj == parent() && ev->type() == QEvent::Resize)
         resizeToParent();
-    else if (obj == m_stepText && ev->type() == QEvent::MouseButtonRelease)
+    else if (obj == m_stepText && ev->type() == QEvent::MouseButtonRelease) {
+        // 正文 QLabel 的点击在这里处理。注意必须返回 true 把事件吃掉：
+        // 否则 QLabel 不处理、事件继续冒泡到本控件的 mouseReleaseEvent，
+        // 同一次点击会 step() 两次，翻页时就会"跳过"一页。
         step();
+        return true;
+    }
     return QWidget::eventFilter(obj, ev);
 }
 
