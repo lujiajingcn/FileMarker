@@ -126,6 +126,11 @@ FormFileBrowser::FormFileBrowser(QWidget *parent) :
     connect(this, &FormFileBrowser::sendShowFilteredFiles, ui->pageFilteredFiles, &FormPageFilterdFiles::onShowFilteredFiles);
     connect(this, &FormFileBrowser::sendRefresh, ui->pageFiles, &FormPageFiles::onBtnRefreshClicked);
     connect(ui->pageProgressInfo, &FormPageProgressInfo::sendStop, this, &FormFileBrowser::onRecvStopSearch);
+    // 遍历被中断后停在进度页显示总结，点【← 返回目录】才回文件列表
+    connect(ui->pageProgressInfo, &FormPageProgressInfo::sendBackRequested, this, [this]() {
+        showFilesWidget();
+        ui->pageProgressInfo->clear();
+    });
 
     // 目录进度树里"停止/跳过"某一行的动作：只连一次。
     // 以前是在每次搜索/遍历开始时连，连着跑几轮就会挂上好几份同样的处理器。

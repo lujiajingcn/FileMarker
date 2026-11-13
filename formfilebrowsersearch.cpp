@@ -254,10 +254,8 @@ void FormFileBrowser::onRecvTraverseResult(const QMap<QString, FILE_TAGS> &dirAn
         || !qLSkippedDirs.isEmpty() || !qLIncompleteDirs.isEmpty())
         m_sqlOperation->insertRecord(dirAndFileTags, qLCompletedDirs, qLSkippedDirs, qLIncompleteDirs);
 
-    showFilesWidget();
     setActionState(TRAVERER_FINISH);
     emit sendDirAndLabels(dirAndTags);
-    ui->pageProgressInfo->clear();
 
     int nFiles = 0;
     for (auto it = dirAndFileTags.constBegin(); it != dirAndFileTags.constEnd(); ++it)
@@ -267,14 +265,22 @@ void FormFileBrowser::onRecvTraverseResult(const QMap<QString, FILE_TAGS> &dirAn
         nLabels += it.value().size();
 
     if (bAborted) {
-        // 遍历完成提示：小目录时进度页一闪而过，用户需要明确的完成反馈。
-        emit sendStatusMessage(tr("遍历已取消：已完成的 %1 个目录已写入缓存，未完成的目录标记为不完整")
-                                   .arg(qLCompletedDirs.size()));
+        // 被用户停止：不立刻切回文件列表，停在进度页显示总结，
+        // 让用户能看到哪些目录完成/跳过/未完成；点【← 返回目录】再回去。
+        // 总结里的"完成/跳过/未完成"按进度树里看得见的行统计（根目录写入缓存的数量单独提示）
+        ui->pageProgressInfo->showTraversalStoppedSummary(qLCompletedDirs.size());
+        // 状态栏只给一句总体提示（具体统计在进度页里，避免两处数字不一致）
+        emit sendStatusMessage(tr("遍历已停止：未完成的目录已标记为不完整"));
         qInfo() << "遍历被取消: completedDirs=" << qLCompletedDirs.size()
+                << "skipped=" << qLSkippedDirs.size()
+                << "incomplete=" << qLIncompleteDirs.size()
                 << "files=" << nFiles << "labels=" << nLabels;
         return;
     }
 
+    // 正常跑完：和以前一样直接回文件列表，状态栏给完成提示
+    showFilesWidget();
+    ui->pageProgressInfo->clear();
     emit sendStatusMessage(tr("遍历完成：%1 个目录，%2 个文件，%3 个标签")
                                .arg(qLCompletedDirs.size()).arg(nFiles).arg(nLabels));
     qInfo() << "遍历完成: dirs=" << qLCompletedDirs.size() << "files=" << nFiles << "labels=" << nLabels;

@@ -104,6 +104,18 @@ FormPageProgressInfo::FormPageProgressInfo(QWidget *parent) :
     connect(m_stopShortcut, &QShortcut::activated, this, &FormPageProgressInfo::onBtnStopClicked);
     setRunning(false);
 
+    // 【← 返回目录】：只在任务被中断、停在总结页时显示
+    m_btnBack = new QToolButton(this);
+    m_btnBack->setObjectName(QStringLiteral("btnBackToDir"));
+    m_btnBack->setText(tr("← 返回目录"));
+    m_btnBack->setAutoRaise(true);
+    m_btnBack->setCursor(Qt::PointingHandCursor);
+    m_btnBack->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    m_btnBack->setFocusPolicy(Qt::NoFocus);
+    m_btnBack->hide();
+    connect(m_btnBack, &QToolButton::clicked, this, &FormPageProgressInfo::sendBackRequested);
+    ui->gridLayout_4->addWidget(m_btnBack, 1, 3);
+
     m_statusLabel = new QLabel(this);
     m_statusLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
     m_statusLabel->setTextFormat(Qt::PlainText);
@@ -159,6 +171,10 @@ void FormPageProgressInfo::initTree()
 
 void FormPageProgressInfo::resetProgress(const QStringList &qLSelDirs)
 {
+    m_bFinished = false;
+    m_sFinishSummary.clear();
+    if (m_btnBack != nullptr)
+        m_btnBack->hide();
     setRunning(true);   // 开始跑：显示【停止全部】、启用 Esc
     if (m_tree != nullptr)
         m_tree->setFocus();   // 键盘可达：进页就能用 Esc/回车
@@ -528,6 +544,13 @@ void FormPageProgressInfo::updateStatusLabel()
     if (m_statusLabel == nullptr)
         return;
 
+    if (m_bFinished) {
+        // 结束/中断后停在总结页：状态行只显示总结，不再显示计数和当前文件
+        m_statusLabel->setText(m_sFinishSummary);
+        m_statusLabel->setToolTip(m_sFinishSummary);
+        return;
+    }
+
     const QString sCounter = tr("已扫描 %1 个文件 · 命中 %2 个").arg(m_nScanned).arg(m_nMatched);
     QString sText = sCounter;
     QString sFullText = sCounter;
@@ -578,6 +601,10 @@ void FormPageProgressInfo::onBtnStopClicked()
 
 void FormPageProgressInfo::clear()
 {
+    m_bFinished = false;
+    m_sFinishSummary.clear();
+    if (m_btnBack != nullptr)
+        m_btnBack->hide();
     setRunning(false);  // 结束/离开：隐藏【停止全部】，避免"点了没反应"
     ui->plainTextEdit->clear();
     m_items.clear();
@@ -601,5 +628,46 @@ void FormPageProgressInfo::setRunning(bool bRunning)
         ui->lblStopHint->setVisible(bRunning);
     if (m_stopShortcut != nullptr)
         m_stopShortcut->setEnabled(bRunning);
+    updateStatusLabel();
+}
+
+
+/**
+ * 任务被中断/结束后停在进度页：隐藏【停止全部】、禁用 Esc，
+ * 状态行改成一句总结，并显示【← 返回目录】。
+ */
+void FormPageProgressInfo::showTraversalStoppedSummary(int nWrittenRoots)
+{
+    // 按进度树里**看得见的行**统计，避免出现"树上有 5 行完成、总结写 0 个"的错觉
+    int nComplete = 0;
+    int nSkipped = 0;
+    int nOther = 0;
+    for (auto it = m_items.constBegin(); it != m_items.constEnd(); ++it) {
+        QStandardItem *nameItem = it.value();
+        if (nameItem == nullptr)
+            continue;
+        QStandardItem *parentItem = nameItem->parent();
+        if (parentItem == nullptr)
+            parentItem = m_model->invisibleRootItem();
+        QStandardItem *actionItem = parentItem->child(nameItem->row(), 4);
+        if (actionItem == nullptr)
+            continue;
+        const int nState = actionItem->data(kRoleState).toInt();
+        if (nState == int(DirNodeState::Complete))
+            ++nComplete;
+        else if (nState == int(DirNodeState::Skipped))
+            ++nSkipped;
+        else
+            ++nOther;
+    }
+
+    m_bFinished = true;
+    m_sFinishSummary = tr("遍历已停止：完成 %1 个目录，跳过 %2 个，%3 个未完成"
+                          "（已写入缓存 %4 个根目录）")
+                           .arg(nComplete).arg(nSkipped).arg(nOther).arg(nWrittenRoots);
+    m_sCurrentFile.clear();
+    setRunning(false);          // 隐藏停止按钮、禁用 Esc
+    if (m_btnBack != nullptr)
+        m_btnBack->setVisible(true);
     updateStatusLabel();
 }

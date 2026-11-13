@@ -21,6 +21,7 @@ class FormPageProgressInfo;
 
 class QLabel;
 class QShortcut;
+class QToolButton;
 class QStandardItem;
 class QStandardItemModel;
 class QTreeView;
@@ -46,8 +47,15 @@ public:
     void setRunning(bool bRunning);
     bool isRunning() const { return m_bRunning; }
 
+    /**
+     * 任务被用户中断/结束后停在进度页：隐藏【停止全部】、禁用 Esc，
+     * 状态行显示一句总结，右上角出现【← 返回目录】按钮（点它才回文件列表）。
+     */
+    void showTraversalStoppedSummary(int nWrittenRoots);
+
 signals:
     void sendStop();                          // 全局停止（保留原来的停止按钮）
+    void sendBackRequested();                 // 进度页上的【← 返回目录】被点击
     void sendStopDir(const QString &sPath);   // 只停止这个文件夹（及其子树）
     void sendSkipDir(const QString &sPath);   // 跳过这个文件夹（及其子树）
 
@@ -89,7 +97,10 @@ private:
     QStandardItemModel       *m_model = nullptr;
     QLabel                   *m_statusLabel = nullptr;
     QShortcut                *m_stopShortcut = nullptr;   // Esc = 停止全部（仅在任务进行中启用）
+    QToolButton              *m_btnBack = nullptr;        // 【← 返回目录】（中断后显示）
     bool                      m_bRunning = false;
+    bool                      m_bFinished = false;        // 任务已结束、停在总结状态
+    QString                   m_sFinishSummary;
     QHash<QString, QStandardItem *> m_items;   // 目录路径 -> 树节点
     // 用户点过【停止】的目录：后续快照可能把该行报成"完成/等待"，
     // 这里强制保持"已停止"，否则界面看起来像"点了没反应"。
