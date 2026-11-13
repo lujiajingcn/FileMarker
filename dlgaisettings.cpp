@@ -18,6 +18,7 @@
 #include <QRadioButton>
 #include <QSpinBox>
 #include <QTimer>
+#include <QNetworkProxy>
 #include <QVBoxLayout>
 
 #include <utility>
@@ -71,6 +72,8 @@ DlgAiSettings::DlgAiSettings(QWidget *parent)
     m_apiKey = new QLineEdit(apiBox);
     m_apiKey->setEchoMode(QLineEdit::Password);
     m_apiKey->setPlaceholderText(tr("sk-…（本地 LM Studio 可留空）"));
+    m_apiProxy = new QLineEdit(apiBox);
+    m_apiProxy->setPlaceholderText(tr("可选：http://127.0.0.1:7890（网络访问不了 API 时填代理）"));
     auto *showKey = new QCheckBox(tr("显示"), apiBox);
     connect(showKey, &QCheckBox::toggled, this, [this](bool b) {
         m_apiKey->setEchoMode(b ? QLineEdit::Normal : QLineEdit::Password);
@@ -86,6 +89,7 @@ DlgAiSettings::DlgAiSettings(QWidget *parent)
     m_apiImageModel->setPlaceholderText(tr("视觉模型（可留空；图片打标需要）：qwen-vl-max / glm-4v …"));
     apiForm->addRow(tr("Base URL："), m_apiBase);
     apiForm->addRow(tr("API Key："), keyRow);
+    apiForm->addRow(tr("代理："), m_apiProxy);
     apiForm->addRow(tr("文本模型："), m_apiTextModel);
     apiForm->addRow(tr("视觉模型："), m_apiImageModel);
 
@@ -145,6 +149,7 @@ AiSettings DlgAiSettings::settings() const
     while (a.apiBase.endsWith(QLatin1Char('/')))
         a.apiBase.chop(1);
     a.apiKey = m_apiKey->text();
+    a.apiProxy = m_apiProxy->text().trimmed();
     a.timeoutSec = m_timeout->value();
     a.ollamaTextModel = m_ollamaTextModel->text().trimmed();
     a.ollamaImageModel = m_ollamaImageModel->text().trimmed();
@@ -159,6 +164,7 @@ void DlgAiSettings::loadFrom(const AiSettings &a)
     (a.isApi() ? m_rbApi : m_rbOllama)->setChecked(true);
     m_apiBase->setText(a.apiBase);
     m_apiKey->setText(a.apiKey);
+    m_apiProxy->setText(a.apiProxy);
     m_timeout->setValue(a.timeoutSec);
     m_ollamaTextModel->setText(a.ollamaTextModel);
     m_ollamaImageModel->setText(a.ollamaImageModel);
@@ -214,6 +220,19 @@ void DlgAiSettings::testConnection()
     m_testResult->setStyleSheet(QStringLiteral("color:#666;"));
 
     QNetworkAccessManager nam;
+    const QString sProxy = m_apiProxy->text().trimmed();
+    if (!sProxy.isEmpty()) {
+        const QUrl proxyUrl(sProxy);
+        if (proxyUrl.isValid() && !proxyUrl.host().isEmpty()) {
+            QNetworkProxy proxy(QNetworkProxy::HttpProxy, proxyUrl.host(),
+                                quint16(proxyUrl.port(8080)));
+            if (!proxyUrl.userName().isEmpty())
+                proxy.setUser(proxyUrl.userName());
+            if (!proxyUrl.password().isEmpty())
+                proxy.setPassword(proxyUrl.password());
+            nam.setProxy(proxy);
+        }
+    }
     QNetworkRequest req(QUrl(sBase + QStringLiteral("/chat/completions")));
     req.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
     const QString sKey = m_apiKey->text();
@@ -258,6 +277,11 @@ void DlgAiSettings::testConnection()
     QString sMsg;
     if (bTimedOut)
         sMsg = tr("连接超时（20 秒）");
+    else if (reply->error() == QNetworkReply::ConnectionRefusedError
+             || reply->error() == QNetworkReply::RemoteHostClosedError
+             || reply->error() == QNetworkReply::NetworkSessionFailedError)
+        sMsg = tr("连接不上 %1（连接被拒绝/重置，常见原因：网络或防火墙拦截；可尝试换网络或填代理）")
+                   .arg(QUrl(sBase).host());
     else if (nCode == 401 || nCode == 403)
         sMsg = tr("认证失败（HTTP %1）：API Key 无效或没有权限").arg(nCode);
     else if (nCode == 429)

@@ -40,6 +40,7 @@ private:
 
     QLineEdit *m_apiBase = nullptr;
     QLineEdit *m_apiKey = nullptr;
+    QLineEdit *m_apiProxy = nullptr;
     QLineEdit *m_apiTextModel = nullptr;
     QLineEdit *m_apiImageModel = nullptr;
 

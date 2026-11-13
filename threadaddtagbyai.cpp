@@ -253,6 +253,8 @@ bool ThreadAddTagByAI::addTag(const QFileInfo& info)
     if (m_ai.isApi()) {
         env.insert(QStringLiteral("FM_AI_API_BASE"), m_ai.apiBase);
         env.insert(QStringLiteral("FM_AI_API_KEY"), m_ai.apiKey);
+        if (!m_ai.apiProxy.isEmpty())
+            env.insert(QStringLiteral("FM_AI_API_PROXY"), m_ai.apiProxy);
     }
 
     // 先后尝试常见解释器名，避免环境里只有 python3 / py 而没有 python 时静默跳过。

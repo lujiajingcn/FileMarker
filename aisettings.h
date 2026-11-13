@@ -17,6 +17,7 @@ struct AiSettings
     QString provider = QStringLiteral("ollama");   // ollama | api
     QString apiBase;                                // 例如 https://api.deepseek.com/v1
     QString apiKey;
+    QString apiProxy;                               // 可选：http://127.0.0.1:7890
     int     timeoutSec = 120;
 
     QString ollamaTextModel  = QStringLiteral("qwen2.5:7b");

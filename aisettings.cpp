@@ -26,6 +26,7 @@ AiSettings AiSettings::load()
 
     a.apiBase = readTrimmed(settings, QStringLiteral("apiBase"), QString());
     a.apiKey = settings.value(QStringLiteral("apiKey"), QString()).toString();
+    a.apiProxy = readTrimmed(settings, QStringLiteral("apiProxy"), QString());
     a.timeoutSec = settings.value(QStringLiteral("timeout"), 120).toInt();
     a.timeoutSec = qBound(10, a.timeoutSec, 600);
 
@@ -54,6 +55,7 @@ void AiSettings::save() const
                                                         : QStringLiteral("ollama"));
     settings.setValue(QStringLiteral("apiBase"), apiBase);
     settings.setValue(QStringLiteral("apiKey"), apiKey);
+    settings.setValue(QStringLiteral("apiProxy"), apiProxy);
     settings.setValue(QStringLiteral("timeout"), timeoutSec);
     settings.setValue(QStringLiteral("ollamaTextModel"), ollamaTextModel);
     settings.setValue(QStringLiteral("ollamaImageModel"), ollamaImageModel);
@@ -68,6 +70,7 @@ bool AiSettings::operator==(const AiSettings &other) const
     return provider == other.provider
            && apiBase == other.apiBase
            && apiKey == other.apiKey
+           && apiProxy == other.apiProxy
            && timeoutSec == other.timeoutSec
            && ollamaTextModel == other.ollamaTextModel
            && ollamaImageModel == other.ollamaImageModel

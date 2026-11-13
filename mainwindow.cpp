@@ -416,11 +416,12 @@ void MainWindow::checkAIEnvironment()
         if (ai.isApi()) {
             const QString sMaskedKey = ai.apiKey.isEmpty() ? tr("未配置（本地 LM Studio 等可留空）")
                                                            : tr("已配置");
-            qLLines << tr("④ 云端 API：%1\n   文本模型：%2\n   视觉模型：%3\n   API Key：%4")
+            qLLines << tr("④ 云端 API：%1\n   文本模型：%2\n   视觉模型：%3\n   API Key：%4\n   代理：%5")
                            .arg(ai.apiBase.isEmpty() ? tr("（未配置 Base URL）") : ai.apiBase,
                                 ai.apiTextModel.isEmpty() ? tr("（未配置）") : ai.apiTextModel,
                                 ai.apiImageModel.isEmpty() ? tr("（未配置，图片会跳过）") : ai.apiImageModel,
-                                sMaskedKey);
+                                sMaskedKey,
+                                ai.apiProxy.isEmpty() ? tr("（未设置，直连）") : ai.apiProxy);
             qLLines << tr("提示：云端模式不会安装 Ollama / 本地模型；文本只上传前 4000 字，"
                           "图片会先缩放到 1024 像素内再压缩上传。");
         } else {

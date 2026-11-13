@@ -28,6 +28,7 @@ IMAGE_MODEL = os.environ.get("FM_AI_IMAGE_MODEL", "qwen2.5vl:7b")
 
 API_BASE = (os.environ.get("FM_AI_API_BASE") or "").strip().rstrip("/")
 API_KEY = os.environ.get("FM_AI_API_KEY") or ""
+API_PROXY = (os.environ.get("FM_AI_API_PROXY") or "").strip()
 
 try:
     TIMEOUT = max(10, min(600, int(os.environ.get("FM_AI_TIMEOUT", "120"))))
@@ -190,17 +191,48 @@ def cloud_headers():
     return headers
 
 
+def _cloud_host():
+    try:
+        from urllib.parse import urlparse
+        return urlparse(API_BASE).hostname or API_BASE
+    except Exception:
+        return API_BASE
+
+
+def _cloud_proxies():
+    # 设置里填了代理就用它；没填则沿用环境变量 HTTPS_PROXY / HTTP_PROXY
+    if API_PROXY:
+        return {"http": API_PROXY, "https": API_PROXY}
+    return None
+
+
+def _post_with_retry(url, payload):
+    """连接被重置这类瞬时错误重试一次；仍失败则给出可读原因。"""
+    last = None
+    for attempt in range(2):
+        try:
+            return requests.post(url, json=payload, headers=cloud_headers(),
+                                 timeout=TIMEOUT, proxies=_cloud_proxies())
+        except Timeout:
+            last = "timeout"
+        except ConnectionError as e:
+            last = str(e)
+        if attempt == 0:
+            time.sleep(1.0)
+    if last == "timeout":
+        raise CloudApiError(f"请求超时（{TIMEOUT} 秒）：{_cloud_host()}")
+    raise CloudApiError(
+        "连接不上服务器 %s（连接被重置/中断）。\n"
+        "常见原因：网络或防火墙拦截、需要代理、或 DNS 被劫持。\n"
+        "可尝试：换一个网络（如手机热点）；或在【文件 → AI 打标设置…】里填写代理后重试。" % _cloud_host())
+
+
 def _cloud_request(payload):
     if not API_BASE:
         raise CloudApiError("云端模式未配置 Base URL（请在【AI 打标设置】里填写）")
 
     url = API_BASE + "/chat/completions"
-    try:
-        r = requests.post(url, json=payload, headers=cloud_headers(), timeout=TIMEOUT)
-    except Timeout:
-        raise CloudApiError(f"请求超时（{TIMEOUT} 秒）")
-    except ConnectionError as e:
-        raise CloudApiError(f"连接不上服务器：{e}")
+    r = _post_with_retry(url, payload)
 
     if r.status_code == 401 or r.status_code == 403:
         raise CloudApiError(f"API Key 无效或没有权限（HTTP {r.status_code}）")
