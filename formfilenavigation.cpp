@@ -7,6 +7,9 @@ FormFileNavigation::FormFileNavigation(QWidget *parent) :
 {
     ui->setupUi(this);
 
+    // 允许 QSS 画背景/边框（主窗口里给面板加了浅色轮廓）
+    setAttribute(Qt::WA_StyledBackground, true);
+
     m_navigationTree = ui->tvNavigation;
     m_modelNavigation = new QFileSystemModel(this);
     m_navigationTree->setModel(m_modelNavigation);

@@ -33,6 +33,8 @@ FormLabels::FormLabels(QWidget *parent) :
     ui(new Ui::FormLabels)
 {
     ui->setupUi(this);
+    // 允许 QSS 画背景/边框（主窗口里给面板加了浅色轮廓）
+    setAttribute(Qt::WA_StyledBackground, true);
 
     // 标签库工具条的图标改成代码绘制（原来的 16x16 PNG 在高分屏上是锯齿）
     ui->actionAdd->setIcon(ToolIcons::make(ToolIcons::AddNode));

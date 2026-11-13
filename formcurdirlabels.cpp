@@ -8,6 +8,8 @@ FormCurDirLabels::FormCurDirLabels(QWidget *parent) :
     ui(new Ui::FormCurDirLabels)
 {
     ui->setupUi(this);
+    // 允许 QSS 画背景/边框（主窗口里给面板加了浅色轮廓）
+    setAttribute(Qt::WA_StyledBackground, true);
 
     m_modelLabels = new QStandardItemModel(this);
     ui->treeView->setModel(m_modelLabels);

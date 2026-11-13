@@ -33,6 +33,21 @@ MainWindow::MainWindow(QWidget *parent) :
 
     ui->setupUi(this);
 
+    // 面板浅色轮廓：
+    // 左侧导航 / 中间内容 / 右侧两个 dock 原来都是纯白，和窗口背景融成一片，
+    // 看不出面板边界。这里给每个面板加 1px 浅灰边，分隔条用更浅的底色。
+    setStyleSheet(QStringLiteral(
+        // 窗口底色略灰，面板纯白 + 浅灰边，边界就清楚了
+        "QMainWindow { background: #F2F4F7; }"
+        "QDockWidget { border: 1px solid #D7DCE2; background: #FFFFFF; }"
+        "QMainWindow::separator { background: #F2F4F7; width: 4px; height: 4px; }"
+        "QWidget#wFileNavigation { border: 1px solid #D7DCE2; background: #FFFFFF; }"
+        "QStackedWidget#stackedWidget { border: 1px solid #D7DCE2; background: #FFFFFF; }"
+        "QWidget#dwcLabels, QWidget#dwcCurDirLabels { border: 1px solid #D7DCE2; background: #FFFFFF; }"
+        // splitter 缝隙用窗口底色，视觉上就是两块面板之间的分隔线
+        "QSplitter::handle { background: #F2F4F7; }"
+    ));
+
     // 命令条图标改成代码绘制（原来的 16x16 PNG 在高分屏上放大后全是锯齿）
     applyVectorIcons();
 
