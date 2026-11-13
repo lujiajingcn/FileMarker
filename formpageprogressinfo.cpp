@@ -151,6 +151,7 @@ void FormPageProgressInfo::resetProgress(const QStringList &qLSelDirs)
 {
     m_items.clear();
     m_stoppedByUser.clear();
+    m_skippedByUser.clear();
     m_model->removeRows(0, m_model->rowCount());
     m_sCurrentFile.clear();
 
@@ -237,9 +238,12 @@ void FormPageProgressInfo::applyNode(const DirProgressNode &node)
     if (nameItem == nullptr)
         return;
 
-    // 用户点过【停止】的目录（或其子树）：即使线程后续报"完成/等待"，
-    // 也保持"已停止"，避免看起来像没停成功。
+    // 用户点过【停止】/【跳过】的目录（或其子树）：即使线程后续报"完成/等待"，
+    // 也保持用户点出来的状态，避免看起来像没生效。
+    // 停止优先（同时点过时显示"已停止"，语义更明确）。
     DirNodeState effectiveState = node.state;
+    if (isSkippedByUser(node.path))
+        effectiveState = DirNodeState::Skipped;
     if (isStoppedByUser(node.path))
         effectiveState = DirNodeState::Stopped;
 
@@ -378,6 +382,57 @@ void FormPageProgressInfo::markSubtreeStopped(const QString &sPath)
     }
 }
 
+/** 该路径（或它的祖先）是否被用户点过【跳过】。 */
+bool FormPageProgressInfo::isSkippedByUser(const QString &sPath) const
+{
+    const QString sKey = normalizedDirKey(sPath);
+    for (const QString &sSkipped : m_skippedByUser) {
+        const QString sSkippedKey = normalizedDirKey(sSkipped);
+        if (sKey.compare(sSkippedKey, Qt::CaseInsensitive) == 0)
+            return true;
+        if (sKey.startsWith(sSkippedKey + QLatin1Char('/'), Qt::CaseInsensitive))
+            return true;
+    }
+    return false;
+}
+
+/** 立刻把某行及其已建出来的子行标成"已跳过"（不等快照回来）。 */
+void FormPageProgressInfo::markSubtreeSkipped(const QString &sPath)
+{
+    const QString sKey = normalizedDirKey(sPath);
+    for (auto it = m_items.constBegin(); it != m_items.constEnd(); ++it) {
+        const QString sItemKey = normalizedDirKey(it.key());
+        if (sItemKey.compare(sKey, Qt::CaseInsensitive) != 0
+                && !sItemKey.startsWith(sKey + QLatin1Char('/'), Qt::CaseInsensitive)) {
+            continue;
+        }
+        // 已经点过"停止"的行保持"已停止"（语义更强，不降级成跳过）
+        if (isStoppedByUser(it.key()))
+            continue;
+
+        QStandardItem *nameItem = it.value();
+        if (nameItem == nullptr)
+            continue;
+        QStandardItem *parentItem = nameItem->parent();
+        if (parentItem == nullptr)
+            parentItem = m_model->invisibleRootItem();
+        QStandardItem *stateItem = parentItem->child(nameItem->row(), 1);
+        QStandardItem *actionItem = parentItem->child(nameItem->row(), 4);
+        if (stateItem != nullptr) {
+            stateItem->setText(stateText(DirNodeState::Skipped));
+            stateItem->setForeground(stateColor(DirNodeState::Skipped));
+            QFont font = stateItem->font();
+            font.setBold(false);
+            stateItem->setFont(font);
+        }
+        if (actionItem != nullptr) {
+            actionItem->setData(int(DirNodeState::Skipped), kRoleState);
+            actionItem->setText(QString());
+            updateActionButton(actionItem, DirNodeState::Skipped, it.key());
+        }
+    }
+}
+
 void FormPageProgressInfo::onActionClicked(const QString &sPath)
 {
     if (sPath.isEmpty())
@@ -409,7 +464,12 @@ void FormPageProgressInfo::onActionClicked(const QString &sPath)
         actionItem->setData(int(DirNodeState::Stopped), kRoleState);
         updateActionButton(actionItem, DirNodeState::Stopped, sPath);
     } else if (state == DirNodeState::Waiting || state == DirNodeState::Incomplete) {
+        if (!isSkippedByUser(sPath))
+            m_skippedByUser << sPath;
         emit sendSkipDir(sPath);
+        // 和"停止"一样：立刻把这一行（以及已建出来的子行）标成"已跳过"。
+        // 否则 150ms 后快照会把状态写回"等待"，用户看到的就是"点了没反应"。
+        markSubtreeSkipped(sPath);
         actionItem->setText(tr("已跳过"));
         actionItem->setData(int(DirNodeState::Skipped), kRoleState);
         updateActionButton(actionItem, DirNodeState::Skipped, sPath);
@@ -508,6 +568,7 @@ void FormPageProgressInfo::clear()
     ui->plainTextEdit->clear();
     m_items.clear();
     m_stoppedByUser.clear();
+    m_skippedByUser.clear();
     if (m_model != nullptr)
         m_model->removeRows(0, m_model->rowCount());
     m_sCurrentFile.clear();

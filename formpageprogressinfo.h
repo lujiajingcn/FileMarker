@@ -60,8 +60,12 @@ private:
     void onActionClicked(const QString &sPath);
     /** 该路径（或它的祖先）是否被用户点过"停止" */
     bool isStoppedByUser(const QString &sPath) const;
+    /** 该路径（或它的祖先）是否被用户点过"跳过" */
+    bool isSkippedByUser(const QString &sPath) const;
     /** 立刻把某行及其已建出来的子行标成"已停止" */
     void markSubtreeStopped(const QString &sPath);
+    /** 立刻把某行及其已建出来的子行标成"已跳过" */
+    void markSubtreeSkipped(const QString &sPath);
     void updateStatusLabel();
 
     // 停止按钮处理函数：构造函数中显式 connect，
@@ -78,6 +82,9 @@ private:
     // 用户点过【停止】的目录：后续快照可能把该行报成"完成/等待"，
     // 这里强制保持"已停止"，否则界面看起来像"点了没反应"。
     QStringList               m_stoppedByUser;
+    // 用户点过【跳过】的目录：和停止同理，快照会把状态写回"等待"，
+    // 这里强制保持"已跳过"，否则点击看起来像没生效。
+    QStringList               m_skippedByUser;
     QString                   m_sCurrentFile;
 
     int                       m_nScanned = 0;
