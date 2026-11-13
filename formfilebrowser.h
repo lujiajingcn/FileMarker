@@ -47,6 +47,9 @@ public:
     explicit FormFileBrowser(QWidget *parent = nullptr);
     ~FormFileBrowser();
 
+    /** 左侧目录树的显示/隐藏按钮：由主窗口取走放到菜单栏左侧 */
+    QToolButton *navToggleButton() const { return m_btnToggleNav; }
+
     // 设置样式，大部分样式已经在filebrowser.ui中设置完成，在此进行少量样式设置
     void setWindowStyleSheet();
 
@@ -155,13 +158,13 @@ private:
     Ui::FormFileBrowser *ui;
 
     // 左侧【文件导航】面板的收起/展开：
-    // 收起后整个面板只剩一条窄条（kNavRailWidth = 36px），按钮还在上面，点一下即可展开。
+    // 按钮已经移到主窗口菜单栏左侧；收起时整个导航面板直接隐藏，不再保留空窄条。
     void initNavPanelToggle();
     void setNavPanelVisible(bool bVisible, bool bSave = true);
     void saveNavPanelVisible(bool bVisible) const;
 
     QWidget             *m_navPanel = nullptr;      // 包住目录树的容器（含顶部收起按钮）
-    QToolButton         *m_btnToggleNav = nullptr;  // 收起/展开按钮
+    QToolButton         *m_btnToggleNav = nullptr;  // 收起/展开按钮（由主窗口放到菜单栏左侧）
     bool                 m_navPanelVisible = true;
     int                  m_navExpandedWidth = 200; // 展开时的宽度，收起再展开时按它恢复
 

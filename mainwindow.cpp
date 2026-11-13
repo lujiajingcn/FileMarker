@@ -18,6 +18,8 @@
 #include <QFileInfo>
 #include <QProcess>
 #include <QPushButton>
+#include <QToolBar>
+#include <QToolButton>
 #include "adsoperation.h"
 
 MainWindow::MainWindow(QWidget *parent) :
@@ -47,6 +49,25 @@ MainWindow::MainWindow(QWidget *parent) :
         // splitter 缝隙用窗口底色，视觉上就是两块面板之间的分隔线
         "QSplitter::handle { background: #F2F4F7; }"
     ));
+
+    // 左侧目录树的显示/隐藏按钮：从面板顶部挪到窗口最上面（菜单栏下沿的工具栏），
+    // 和 DeepSeek Harness 那种"贴顶工具按钮"一致；收起后不会留下一条空窄条。
+    if (QToolButton *btnNav = ui->wFileBrowser->navToggleButton()) {
+        btnNav->setFixedSize(24, 24);
+        btnNav->setIconSize(QSize(18, 18));
+
+        auto *tbTopNav = new QToolBar(tr("导航"), this);
+        tbTopNav->setObjectName(QStringLiteral("tbTopNav"));
+        tbTopNav->setMovable(false);
+        tbTopNav->setFloatable(false);
+        // 只要一行高度：按钮贴在最上面，别占太多纵向空间
+        tbTopNav->setFixedHeight(22);
+        tbTopNav->setStyleSheet(QStringLiteral(
+            "QToolBar{background:transparent;border:none;spacing:0;padding:0px 2px;}"));
+        btnNav->setFixedSize(20, 20);
+        tbTopNav->addWidget(btnNav);
+        addToolBar(Qt::TopToolBarArea, tbTopNav);
+    }
 
     // 命令条图标改成代码绘制（原来的 16x16 PNG 在高分屏上放大后全是锯齿）
     applyVectorIcons();

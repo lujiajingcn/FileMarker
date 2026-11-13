@@ -28,7 +28,7 @@
 
 namespace {
 // 左侧目录树收起后留下的窄条宽度（正好放下那个收起/展开按钮）
-const int kNavRailWidth = 36;
+
 // 展开时目录树的最小宽度，避免被 splitter 压成一条缝
 const int kNavExpandedMinWidth = 160;
 
@@ -216,15 +216,9 @@ void FormFileBrowser::initNavPanelToggle()
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
 
-    // 顶部条形控件：高度固定，收起后按钮仍然贴在最上面
-    auto *headerWidget = new QWidget(m_navPanel);
-    headerWidget->setObjectName(QStringLiteral("navHeader"));
-    headerWidget->setFixedHeight(36);
-    auto *header = new QHBoxLayout(headerWidget);
-    header->setContentsMargins(2, 2, 2, 2);
-    header->setSpacing(0);
-
-    m_btnToggleNav = new QToolButton(headerWidget);
+    // 按钮不再放在面板顶部：主窗口会把它搬到菜单栏左侧（贴在最上面），
+    // 这里只创建按钮和连接，父对象先给 this，随后被 setCornerWidget 重新挂到菜单栏。
+    m_btnToggleNav = new QToolButton(this);
     m_btnToggleNav->setObjectName(QStringLiteral("btnToggleNav"));
     m_btnToggleNav->setAutoRaise(true);
     m_btnToggleNav->setFixedSize(30, 30);
@@ -236,10 +230,6 @@ void FormFileBrowser::initNavPanelToggle()
     m_btnToggleNav->setStyleSheet(QStringLiteral(
         "QToolButton{border:1px solid transparent;border-radius:4px;padding:0;}"
         "QToolButton:hover{background:#e3e3e3;border-color:#d0d0d0;}"));
-    header->addWidget(m_btnToggleNav, 0, Qt::AlignLeft | Qt::AlignVCenter);
-    header->addStretch(1);
-    // 对齐到顶部：目录树收起后布局里只剩这一条，不加 AlignTop 会被垂直居中
-    layout->addWidget(headerWidget, 0, Qt::AlignTop);
 
     // 先占住 splitter 的第 0 个位置，再把原来的目录树搬进容器
     ui->splitter->insertWidget(0, m_navPanel);
@@ -283,6 +273,7 @@ void FormFileBrowser::setNavPanelVisible(bool bVisible, bool bSave)
     ui->wFileNavigation->setVisible(bVisible);
 
     if (bVisible) {
+        m_navPanel->setVisible(true);
         m_navPanel->setMinimumWidth(kNavExpandedMinWidth);
         m_navPanel->setMaximumWidth(QWIDGETSIZE_MAX);
         m_btnToggleNav->setToolTip(tr("隐藏目录树"));
@@ -297,9 +288,8 @@ void FormFileBrowser::setNavPanelVisible(bool bVisible, bool bSave)
             }
         }
     } else {
-        // 收起后只留一条窄条，按钮还在上面
-        m_navPanel->setMinimumWidth(kNavRailWidth);
-        m_navPanel->setMaximumWidth(kNavRailWidth);
+        // 按钮已经移到菜单栏，这里直接把整块导航隐藏（不再留空窄条）
+        m_navPanel->setVisible(false);
         m_btnToggleNav->setToolTip(tr("显示目录树"));
     }
 
