@@ -18,6 +18,9 @@
 #include <QFileInfo>
 #include <QProcess>
 #include <QPushButton>
+#include <QMenu>
+#include <QShortcut>
+#include <QMenuBar>
 #include <QToolBar>
 #include <QToolButton>
 #include "adsoperation.h"
@@ -50,23 +53,39 @@ MainWindow::MainWindow(QWidget *parent) :
         "QSplitter::handle { background: #F2F4F7; }"
     ));
 
-    // 左侧目录树的显示/隐藏按钮：从面板顶部挪到窗口最上面（菜单栏下沿的工具栏），
-    // 和 DeepSeek Harness 那种"贴顶工具按钮"一致；收起后不会留下一条空窄条。
+    // 顶部栏：目录树显示/隐藏 + 文件/帮助菜单，合并成一行（像 DSH 的顶栏）
     if (QToolButton *btnNav = ui->wFileBrowser->navToggleButton()) {
-        btnNav->setFixedSize(24, 24);
+        btnNav->setFixedSize(20, 20);
         btnNav->setIconSize(QSize(18, 18));
 
-        auto *tbTopNav = new QToolBar(tr("导航"), this);
+        auto *tbTopNav = new QToolBar(tr("顶部"), this);
         tbTopNav->setObjectName(QStringLiteral("tbTopNav"));
         tbTopNav->setMovable(false);
         tbTopNav->setFloatable(false);
-        // 只要一行高度：按钮贴在最上面，别占太多纵向空间
-        tbTopNav->setFixedHeight(22);
         tbTopNav->setStyleSheet(QStringLiteral(
-            "QToolBar{background:transparent;border:none;spacing:0;padding:0px 2px;}"));
-        btnNav->setFixedSize(20, 20);
+            "QToolBar{background:transparent;border:none;spacing:2px;padding:0px 4px;}"
+            "QMenuBar{background:transparent;border:none;}"));
         tbTopNav->addWidget(btnNav);
+
+        // 新建一个菜单栏塞进顶栏（原来的 ui->menuBar 隐藏不用）。
+        // 用真正的 QMenuBar 而不是 QToolButton，Alt+F / Alt+H 这类键盘习惯才保留。
+        auto *mbTop = new QMenuBar(tbTopNav);
+        mbTop->setNativeMenuBar(false);
+        ui->menuFileManage->setTitle(tr("文件(&F)"));
+        ui->menuHelp->setTitle(tr("帮助(&H)"));
+        mbTop->addMenu(ui->menuFileManage);
+        mbTop->addMenu(ui->menuHelp);
+        tbTopNav->addWidget(mbTop);
+
+        // 撑开剩余宽度，让按钮和菜单都贴左边
+        auto *spacer = new QWidget(tbTopNav);
+        spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+        tbTopNav->addWidget(spacer);
+
         addToolBar(Qt::TopToolBarArea, tbTopNav);
+
+        // 旧菜单栏里的两个菜单已经被移走，直接隐藏
+        ui->menuBar->hide();
     }
 
     // 命令条图标改成代码绘制（原来的 16x16 PNG 在高分屏上放大后全是锯齿）
