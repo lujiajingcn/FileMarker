@@ -548,9 +548,6 @@ void FormPageProgressInfo::updateStatusLabel()
         sFullText = sCounter + sPrefix + sPath;
     }
 
-    if (m_bRunning)
-        sText += tr("    （Esc 可停止）");
-
     m_statusLabel->setText(sText);
     // 省略掉的完整内容放 tooltip，鼠标悬停能看到
     m_statusLabel->setToolTip(sFullText);
@@ -600,6 +597,8 @@ void FormPageProgressInfo::setRunning(bool bRunning)
     m_bRunning = bRunning;
     if (ui->btnStop != nullptr)
         ui->btnStop->setVisible(bRunning);
+    if (ui->lblStopHint != nullptr)
+        ui->lblStopHint->setVisible(bRunning);
     if (m_stopShortcut != nullptr)
         m_stopShortcut->setEnabled(bRunning);
     updateStatusLabel();
