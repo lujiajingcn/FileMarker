@@ -60,6 +60,7 @@ void ThreadTraverseDirs::run()
         hooks.onDirEnter = [this](const QString &sPath) {
             QMutexLocker locker(&m_mutex);
             m_dirTracker.enterDir(sPath);
+            emitSnapshotIfDue();   // 目录状态变化要能立刻反映到进度树
         };
         QStringList qLSkippedThisRoot;        // 本轮被跳过的目录（记 excluded 行）
         bool bThisRootIncomplete = false;     // 有子树被停止/读不了 → 整个根的数据不完整
@@ -67,6 +68,7 @@ void ThreadTraverseDirs::run()
         hooks.onDirLeave = [&](const QString &sPath, DirOutcome outcome) {
             QMutexLocker locker(&m_mutex);
             m_dirTracker.leaveDir(sPath, outcome);
+            emitSnapshotIfDue();   // 同上：完成/跳过/停止都要刷新进度树
             switch (outcome) {
             case DirOutcome::Skipped:
                 qLSkippedThisRoot << sPath;
@@ -138,9 +140,14 @@ bool ThreadTraverseDirs::traverseDir(const QFileInfo& fileInfo)
     QSet<QString> setAdsNames = Utility::toSet(adsFileNames);
     m_tags.unite(setAdsNames);
 
-    emit sendProcessInfo(filePath);
-
-// QThread::msleep(1);//让出时间片，使得ui有时间响应
+    // 进度节流：最多每 150ms 发一次"当前文件 + 目录树快照"。
+    // 以前只有带标签的文件才发信号，整盘遍历时进度树会一直停在"等待"，
+    // 看起来像点了【遍历】没反应；现在普通文件也会刷新。
+    if (!m_snapshotTimer.isValid() || m_snapshotTimer.elapsed() >= 150) {
+        m_snapshotTimer.restart();
+        emit sendProcessInfo(filePath);
+        emit sendDirSnapshot(m_dirTracker.snapshot());
+    }
 
     return true;
 }
