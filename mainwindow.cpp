@@ -51,6 +51,16 @@ MainWindow::MainWindow(QWidget *parent) :
         "QWidget#dwcLabels, QWidget#dwcCurDirLabels { border: 1px solid #D7DCE2; background: #FFFFFF; }"
         // splitter 缝隙用窗口底色，视觉上就是两块面板之间的分隔线
         "QSplitter::handle { background: #F2F4F7; }"
+        // 选中行要醒目：浅蓝底 + 深蓝字（窗口失焦时略浅，但依然一眼能看出选中）
+        "QTreeView, QTableView, QListView {"
+        "  selection-background-color: #BFD9FF; selection-color: #0B2E55; }"
+        "QTreeView::item:selected, QTableView::item:selected, QListView::item:selected {"
+        "  background-color: #BFD9FF; color: #0B2E55; }"
+        "QTreeView::item:selected:!active, QTableView::item:selected:!active,"
+        " QListView::item:selected:!active {"
+        "  background-color: #D9E8FB; color: #0B2E55; }"
+        "QTreeView::item:hover:!selected, QTableView::item:hover:!selected {"
+        "  background-color: #EEF4FC; }"
     ));
 
     // 顶部栏：目录树显示/隐藏 + 文件/帮助菜单，合并成一行（像 DSH 的顶栏）
