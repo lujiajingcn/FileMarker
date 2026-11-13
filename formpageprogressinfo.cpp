@@ -114,7 +114,9 @@ FormPageProgressInfo::FormPageProgressInfo(QWidget *parent) :
     m_btnBack->setFocusPolicy(Qt::NoFocus);
     m_btnBack->hide();
     connect(m_btnBack, &QToolButton::clicked, this, &FormPageProgressInfo::sendBackRequested);
-    ui->gridLayout_4->addWidget(m_btnBack, 1, 3);
+    // 和【停止全部】放在同一个格子（左上）：任务结束后停止按钮隐藏，
+    // 【← 返回目录】就出现在左侧，位置与搜索结果的"返回目录"一致。
+    ui->gridLayout_4->addWidget(m_btnBack, 1, 0, Qt::AlignLeft);
 
     m_statusLabel = new QLabel(this);
     m_statusLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
