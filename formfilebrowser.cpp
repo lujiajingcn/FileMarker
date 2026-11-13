@@ -391,6 +391,10 @@ void FormFileBrowser::showFilteredFile(QStringList qLFilteredFiles, bool bComple
     emit sendShowFilteredFiles(qLFilteredFiles);
     ui->pageProgressInfo->clear();
 
+    // 状态栏给一句结果摘要（结果页里还有更详细的统计）
+    emit sendStatusMessage(bCompleted
+                               ? tr("查找完成：找到 %1 个文件").arg(qLFilteredFiles.size())
+                               : tr("查找已中断：找到 %1 个文件（结果不完整）").arg(qLFilteredFiles.size()));
     qInfo() << "搜索完成: results=" << qLFilteredFiles.size() << "completed=" << bCompleted;
 }
 

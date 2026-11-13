@@ -72,6 +72,11 @@ void FormFileBrowser::onActionAddLabelByAITriggered()
         return;
     }
 
+    const int nTargets = qLSelFiles.isEmpty() ? qLSelDirs.count() : int(qLSelFiles.count());
+    emit sendStatusMessage(qLSelFiles.isEmpty()
+                               ? tr("AI 正在分析 %1 个目录…").arg(nTargets)
+                               : tr("AI 正在分析 %1 个文件…").arg(nTargets));
+
     m_threadAddLabelByAI = new ThreadAddTagByAI(this);
 
     connect(m_threadAddLabelByAI, &ThreadAddTagByAI::sendProcessInfo, ui->pageProgressInfo, &FormPageProgressInfo::onRecvProgress);
@@ -102,6 +107,10 @@ void FormFileBrowser::onRecvAddLabelByAIFinish(int nSucceeded, int nFailed, cons
     showFilesWidget();
     setActionState(ADDTAGBYAI_FINISH);
     ui->pageProgressInfo->clear();
+    // 状态栏给一句结果摘要（失败时的详细原因仍用对话框说明）
+    emit sendStatusMessage(nFailed > 0
+                               ? tr("AI 打标结束：成功 %1 个文件，失败 %2 个").arg(nSucceeded).arg(nFailed)
+                               : tr("AI 打标完成：成功 %1 个文件").arg(nSucceeded));
     // AI 线程写 ADS 时 FileTimeGuard 保持 mtime 不变，模型不会自动感知标签变化；
     // 这里主动刷新并清空标签缓存，否则标签列会一直显示旧值。
     emit sendRefresh();

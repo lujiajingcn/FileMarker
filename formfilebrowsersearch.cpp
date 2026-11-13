@@ -175,6 +175,7 @@ void FormFileBrowser::onActionSearchFilesbyLabelsTriggered()
     }
 
     qInfo() << "[搜索] 启动磁盘扫描 dirs=" << qLSelDirs;
+    emit sendStatusMessage(tr("正在查找：%1 个目录…").arg(qLSelDirs.count()));
 
     // 若前一个搜索线程仍在运行，直接返回。正常流程下搜索按钮运行期间已被禁用，
     // 此检查仅为防御性编程，避免旧线程的 finished lambda（m_threadSearch = nullptr）
