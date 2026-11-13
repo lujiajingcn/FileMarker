@@ -20,6 +20,7 @@ class FormPageProgressInfo;
 }
 
 class QLabel;
+class QShortcut;
 class QStandardItem;
 class QStandardItemModel;
 class QTreeView;
@@ -35,6 +36,15 @@ public:
     /** 开始新一轮：清空进度树，并把要搜索的根目录建成顶层节点 */
     void resetProgress(const QStringList &qLSelDirs);
     void clear();
+
+    /**
+     * 任务是否在跑：
+     *  - 跑的时候才显示【停止全部】、才启用 Esc 快捷键；
+     *  - 空闲/完成时隐藏按钮，避免"点了没反应"。
+     * （resetProgress() 会自动置 true，clear() 置 false）
+     */
+    void setRunning(bool bRunning);
+    bool isRunning() const { return m_bRunning; }
 
 signals:
     void sendStop();                          // 全局停止（保留原来的停止按钮）
@@ -78,6 +88,8 @@ private:
     QTreeView                *m_tree = nullptr;
     QStandardItemModel       *m_model = nullptr;
     QLabel                   *m_statusLabel = nullptr;
+    QShortcut                *m_stopShortcut = nullptr;   // Esc = 停止全部（仅在任务进行中启用）
+    bool                      m_bRunning = false;
     QHash<QString, QStandardItem *> m_items;   // 目录路径 -> 树节点
     // 用户点过【停止】的目录：后续快照可能把该行报成"完成/等待"，
     // 这里强制保持"已停止"，否则界面看起来像"点了没反应"。

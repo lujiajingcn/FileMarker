@@ -1,6 +1,7 @@
 #include "formpageprogressinfo.h"
 #include "ui_formpageprogressinfo.h"
 
+#include <QShortcut>
 #include <QDir>
 #include <QFileInfo>
 #include <QFont>
@@ -94,6 +95,15 @@ FormPageProgressInfo::FormPageProgressInfo(QWidget *parent) :
     // 显式连接停止按钮（此前依赖 on_<对象名>_<信号名> 的自动连接）
     connect(ui->btnStop, &QPushButton::clicked, this, &FormPageProgressInfo::onBtnStopClicked);
 
+    // Esc = 停止全部：只在任务进行中启用。
+    // 用 WindowShortcut 而不是 WidgetWithChildren —— 搜索开始后键盘焦点可能还留在
+    // 文件列表/工具栏（进度页只是被切换显示），WidgetWithChildren 会收不到 Esc。
+    // 因为只在 running 时 enable，不会干扰其它页面的 Esc。
+    m_stopShortcut = new QShortcut(QKeySequence(Qt::Key_Escape), this);
+    m_stopShortcut->setContext(Qt::WindowShortcut);
+    connect(m_stopShortcut, &QShortcut::activated, this, &FormPageProgressInfo::onBtnStopClicked);
+    setRunning(false);
+
     m_statusLabel = new QLabel(this);
     m_statusLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
     m_statusLabel->setTextFormat(Qt::PlainText);
@@ -149,6 +159,9 @@ void FormPageProgressInfo::initTree()
 
 void FormPageProgressInfo::resetProgress(const QStringList &qLSelDirs)
 {
+    setRunning(true);   // 开始跑：显示【停止全部】、启用 Esc
+    if (m_tree != nullptr)
+        m_tree->setFocus();   // 键盘可达：进页就能用 Esc/回车
     m_items.clear();
     m_stoppedByUser.clear();
     m_skippedByUser.clear();
@@ -535,6 +548,9 @@ void FormPageProgressInfo::updateStatusLabel()
         sFullText = sCounter + sPrefix + sPath;
     }
 
+    if (m_bRunning)
+        sText += tr("    （Esc 可停止）");
+
     m_statusLabel->setText(sText);
     // 省略掉的完整内容放 tooltip，鼠标悬停能看到
     m_statusLabel->setToolTip(sFullText);
@@ -565,6 +581,7 @@ void FormPageProgressInfo::onBtnStopClicked()
 
 void FormPageProgressInfo::clear()
 {
+    setRunning(false);  // 结束/离开：隐藏【停止全部】，避免"点了没反应"
     ui->plainTextEdit->clear();
     m_items.clear();
     m_stoppedByUser.clear();
@@ -574,5 +591,16 @@ void FormPageProgressInfo::clear()
     m_sCurrentFile.clear();
     m_nScanned = 0;
     m_nMatched = 0;
+    updateStatusLabel();
+}
+
+/** 任务是否在跑：控制【停止全部】按钮与 Esc 的可用性。 */
+void FormPageProgressInfo::setRunning(bool bRunning)
+{
+    m_bRunning = bRunning;
+    if (ui->btnStop != nullptr)
+        ui->btnStop->setVisible(bRunning);
+    if (m_stopShortcut != nullptr)
+        m_stopShortcut->setEnabled(bRunning);
     updateStatusLabel();
 }
