@@ -123,8 +123,16 @@ void FormFileBrowser::onActionSearchFilesbyLabelsTriggered()
     // 结果页要能自己判断"这行还匹配不匹配"，条件在这里交给它
     const SearchConfig scMatcher = ConfigOperation::readSearchConfig(g_sAppDir + "/" + SEARCH_CONFIG_FILE);
     ui->pageFilteredFiles->setSearchMatcher(m_labelGroups, scMatcher.logic);
-    ui->pageFilteredFiles->setSearchCondition(
-        tr("标签：%1；目录：%2").arg(qLConditionTexts.join("、"), qLSearchDirs.join("；")));
+    // 搜索条件分两行：目录多的时候单行会被挤得很长，看不全
+    QString sConditionText;
+    if (!qLConditionTexts.isEmpty())
+        sConditionText = tr("标签：%1").arg(qLConditionTexts.join("、"));
+    if (!qLSearchDirs.isEmpty()) {
+        if (!sConditionText.isEmpty())
+            sConditionText += QLatin1Char('\n');
+        sConditionText += tr("目录：%1").arg(qLSearchDirs.join("；"));
+    }
+    ui->pageFilteredFiles->setSearchCondition(sConditionText);
 
     // 诊断日志：如果以后再次出现搜索界面卡住，可从日志判断搜索范围与是否走了缓存。
     qInfo() << "开始搜索: dirs=" << qLSelDirs << "labels=" << m_selectedLabels

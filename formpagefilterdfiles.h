@@ -50,6 +50,8 @@ public slots:
     void onFileTagsChanged(const QStringList &qLFilePaths);
     void onGotoFilePath();
     void setSearchCondition(const QString &sCondition);
+    /** 结果摘要（可能多行）：统一设置文字与完整 tooltip */
+    void updateResultCountLabel(const QString &sText);
 
     // 结果来源（缓存 / 磁盘扫描），显示在结果计数后面，让"缓存可能过期"这件事可见
     void setSearchSource(const QString &sSource);

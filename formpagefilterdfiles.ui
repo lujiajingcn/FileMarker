@@ -54,10 +54,32 @@
          <property name="text">
           <string>搜索结果 0 项</string>
          </property>
+         <property name="wordWrap">
+          <bool>true</bool>
+         </property>
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+           <horstretch>1</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
          <property name="styleSheet">
           <string notr="true">color:#555;</string>
          </property>
         </widget>
+       </item>
+       <item>
+        <spacer name="spacerResultLine">
+         <property name="orientation">
+          <enum>Qt::Horizontal</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>40</width>
+           <height>20</height>
+          </size>
+         </property>
+        </spacer>
        </item>
        <item>
         <widget class="QToolButton" name="btnRescan">
@@ -74,19 +96,6 @@
           <cursorShape>PointingHandCursor</cursorShape>
          </property>
         </widget>
-       </item>
-       <item>
-        <spacer name="spacerResultLine">
-         <property name="orientation">
-          <enum>Qt::Horizontal</enum>
-         </property>
-         <property name="sizeHint" stdset="0">
-          <size>
-           <width>40</width>
-           <height>20</height>
-          </size>
-         </property>
-        </spacer>
        </item>
       </layout>
      </item>

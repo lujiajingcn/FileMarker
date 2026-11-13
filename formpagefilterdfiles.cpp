@@ -36,6 +36,13 @@ FormPageFilterdFiles::FormPageFilterdFiles(QWidget *parent) :
     m_filteredFilesTree->setRootIsDecorated(false);
     m_filteredFilesTree->setAlternatingRowColors(true);
     m_filteredFilesTree->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    // 结果摘要可能有多行（计数/来源、标签、目录）：允许换行，"重新扫描"贴住第一行
+    ui->lblResultCount->setWordWrap(true);
+    // wordWrap 的 QLabel 默认 sizeHint 很窄，会被旁边的 spacer 挤成两三个字一行；
+    // 显式给 Expanding，让每行占满可用宽度、只在真的超宽时才折行。
+    ui->lblResultCount->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    ui->hBoxResultLine->setAlignment(ui->btnRescan, Qt::AlignTop);
+
     m_filteredFilesTree->setTextElideMode(Qt::ElideMiddle);
     m_filteredFilesTree->header()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
     m_filteredFilesTree->header()->setSectionResizeMode(1, QHeaderView::Stretch);
@@ -131,27 +138,31 @@ void FormPageFilterdFiles::onShowFilteredFiles(const QStringList &qLFilteredFile
     m_tagScanPaths = qLFilteredFiles;
     m_tagScanRow = 0;
 
-    // 路径列显示完整路径，避免同名文件难区分
-    m_resultCountText = tr("搜索结果 %1 项").arg(qLFilteredFiles.size());
+    // 结果摘要分多行：①计数+来源 ②中断提示（如有）③标签 ④目录
+    // 单行时目录一多就被挤得看不全（甚至把窗口撑宽），分行后可读性更好。
+    QString sCountLine = tr("搜索结果 %1 项").arg(qLFilteredFiles.size());
+    if (!m_searchSource.isEmpty())
+        sCountLine += QStringLiteral("  ") + m_searchSource;
+
+    QStringList qLSummaryLines;
+    qLSummaryLines << sCountLine;
     if (m_bInterrupted) {
         // 用户中途按了停止：结果只是"扫到的部分"，必须让人知道，
         // 否则很容易误判成"这些文件没有该标签"。
-        m_resultCountText += tr("（搜索已中断：结果不完整，可点【重新扫描】重搜）");
+        qLSummaryLines << tr("⚠ 搜索已中断：结果不完整，可点【重新扫描】重搜");
     }
     if (!m_searchCondition.isEmpty())
-        m_resultCountText += QStringLiteral("（") + m_searchCondition + QStringLiteral("）");
-    // 把结果来源写出来：缓存可能过期，用户至少要能看到这次是从哪查的
-    if (!m_searchSource.isEmpty())
-        m_resultCountText += QStringLiteral("  ") + m_searchSource;
+        qLSummaryLines << m_searchCondition;   // 内部已按"标签/目录"分好行
+    m_resultCountText = qLSummaryLines.join(QLatin1Char('\n'));
 
     if (qLFilteredFiles.isEmpty()) {
-        ui->lblResultCount->setText(m_resultCountText);
+        updateResultCountLabel(m_resultCountText);
         return;
     }
 
     // 填充期间先关掉"按内容自适应列宽"，否则每插入一行都要重算一次列宽
     m_filteredFilesTree->header()->setSectionResizeMode(0, QHeaderView::Interactive);
-    ui->lblResultCount->setText(tr("正在准备结果…（共 %1 项）").arg(qLFilteredFiles.size()));
+    updateResultCountLabel(tr("正在准备结果…（共 %1 项）").arg(qLFilteredFiles.size()));
 
     if (m_rowFillTimer != nullptr)
         m_rowFillTimer->start();
@@ -185,10 +196,19 @@ void FormPageFilterdFiles::continueAddRows()
 
     // 填完了：恢复"按内容自适应列宽"（只算一次），再补上计数文案
     m_filteredFilesTree->header()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
-    ui->lblResultCount->setText(m_resultCountText);
+    updateResultCountLabel(m_resultCountText);
 
     if (m_tagScanTimer != nullptr && !m_tagScanPaths.isEmpty())
         m_tagScanTimer->start();
+}
+
+/** 更新结果摘要文字：多行显示 + tooltip 放完整内容（防止被省略）。 */
+void FormPageFilterdFiles::updateResultCountLabel(const QString &sText)
+{
+    if (ui->lblResultCount == nullptr)
+        return;
+    ui->lblResultCount->setText(sText);
+    ui->lblResultCount->setToolTip(sText);
 }
 
 void FormPageFilterdFiles::setSearchCondition(const QString &sCondition)
