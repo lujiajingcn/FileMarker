@@ -12,6 +12,7 @@
 #include <QPushButton>
 #include <QStandardItemModel>
 #include <QToolButton>
+#include <QFontDatabase>
 #include <QTextCursor>
 #include <QTreeView>
 
@@ -90,8 +91,16 @@ FormPageProgressInfo::FormPageProgressInfo(QWidget *parent) :
     ui->setupUi(this);
 
     ui->plainTextEdit->setMaximumBlockCount(100);
+    // 日志区用等宽字体，进度条/命令行对得齐
+    QFont monoFont = QFontDatabase::systemFont(QFontDatabase::FixedFont);
+    monoFont.setPointSizeF(monoFont.pointSizeF() > 0 ? monoFont.pointSizeF() : 9.0);
+    ui->plainTextEdit->setFont(monoFont);
     // 原来那一路滚动的文件路径不再需要：进度用目录树表达，"当前文件"放在顶部一行
     ui->plainTextEdit->hide();
+    // 关键：日志区单独占第 3 行。它原来和状态行同在 gridLayout 的第 1 行，
+    // AI 环境准备时一旦显示出来，就会和状态文字重叠（用户截图里红框那一处）。
+    ui->gridLayout->removeWidget(ui->plainTextEdit);
+    ui->gridLayout->addWidget(ui->plainTextEdit, 3, 0);
 
     // 显式连接停止按钮（此前依赖 on_<对象名>_<信号名> 的自动连接）
     connect(ui->btnStop, &QPushButton::clicked, this, &FormPageProgressInfo::onBtnStopClicked);

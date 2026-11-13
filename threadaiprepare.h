@@ -63,6 +63,8 @@ private:
     void log(const QString &sLine);
 
     std::atomic_bool m_bStop{false};
+    QString     m_sLastLog;        // 上一条日志：连续重复的直接丢掉
+    QElapsedTimer m_logTimer;      // 进度类日志的节流计时（最多每 250ms 一条）
     bool        m_bNeedTextModel = true;
     bool        m_bNeedImageModel = true;
     QString     m_sTextModel;

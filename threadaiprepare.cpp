@@ -4,6 +4,7 @@
 #include <QDir>
 #include <QElapsedTimer>
 #include <QFileInfo>
+#include <QElapsedTimer>
 #include <QProcess>
 #include <QRegularExpression>
 #include <QStandardPaths>
@@ -66,8 +67,20 @@ void ThreadAIPrepare::requestStop()
 void ThreadAIPrepare::log(const QString &sLine)
 {
     const QString s = clampLine(sLine);
-    if (!s.isEmpty())
-        emit sendLog(s);
+    if (s.isEmpty() || s == m_sLastLog)
+        return;
+
+    // ollama pull 的进度条会飞快刷新；节流成最多每 250ms 一条，
+    // 否则日志区里全是同一行的百分比，用户根本看不清在干什么。
+    static const QRegularExpression progressRe(QStringLiteral("^pulling .*%"));
+    if (progressRe.match(s).hasMatch()) {
+        if (m_logTimer.isValid() && m_logTimer.elapsed() < 250)
+            return;
+        m_logTimer.restart();
+    }
+
+    m_sLastLog = s;
+    emit sendLog(s);
 }
 
 void ThreadAIPrepare::addToPath(const QString &sDir)
