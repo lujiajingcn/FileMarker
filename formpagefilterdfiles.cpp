@@ -137,26 +137,25 @@ void FormPageFilterdFiles::onShowFilteredFiles(const QStringList &qLFilteredFile
     m_rowSourceRow = 0;
     m_tagScanPaths = qLFilteredFiles;
     m_tagScanRow = 0;
+    m_staleCount = 0;
 
-    // 结果摘要分多行：①计数+来源 ②中断提示（如有）③标签 ④目录
-    // 单行时目录一多就被挤得看不全（甚至把窗口撑宽），分行后可读性更好。
+    // 摘要前几行：①计数+来源 ②中断提示（如有）；标签/目录由 rebuildSummaryText()
+    // 按当前宽度排版（目录只在条目之间换行，不会把路径从中间劈开）。
     QString sCountLine = tr("搜索结果 %1 项").arg(qLFilteredFiles.size());
     if (!m_searchSource.isEmpty())
         sCountLine += QStringLiteral("  ") + m_searchSource;
 
-    QStringList qLSummaryLines;
-    qLSummaryLines << sCountLine;
+    QStringList qLHeadLines;
+    qLHeadLines << sCountLine;
     if (m_bInterrupted) {
         // 用户中途按了停止：结果只是"扫到的部分"，必须让人知道，
         // 否则很容易误判成"这些文件没有该标签"。
-        qLSummaryLines << tr("⚠ 搜索已中断：结果不完整，可点【重新扫描】重搜");
+        qLHeadLines << tr("⚠ 搜索已中断：结果不完整，可点【重新扫描】重搜");
     }
-    if (!m_searchCondition.isEmpty())
-        qLSummaryLines << m_searchCondition;   // 内部已按"标签/目录"分好行
-    m_resultCountText = qLSummaryLines.join(QLatin1Char('\n'));
+    m_summaryHeadText = qLHeadLines.join(QLatin1Char('\n'));
 
     if (qLFilteredFiles.isEmpty()) {
-        updateResultCountLabel(m_resultCountText);
+        rebuildSummaryText();
         return;
     }
 
@@ -196,7 +195,7 @@ void FormPageFilterdFiles::continueAddRows()
 
     // 填完了：恢复"按内容自适应列宽"（只算一次），再补上计数文案
     m_filteredFilesTree->header()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
-    updateResultCountLabel(m_resultCountText);
+    rebuildSummaryText();
 
     if (m_tagScanTimer != nullptr && !m_tagScanPaths.isEmpty())
         m_tagScanTimer->start();
@@ -211,9 +210,87 @@ void FormPageFilterdFiles::updateResultCountLabel(const QString &sText)
     ui->lblResultCount->setToolTip(sText);
 }
 
-void FormPageFilterdFiles::setSearchCondition(const QString &sCondition)
+void FormPageFilterdFiles::setSearchCondition(const QStringList &qLConditionTexts,
+                                              const QStringList &qLSearchDirs)
 {
-    m_searchCondition = sCondition;
+    m_searchConditionTexts = qLConditionTexts;
+    m_searchDirs = qLSearchDirs;
+    rebuildSummaryText();
+}
+
+/** 按分隔符把条目排成多行：只在条目之间换行，不把 "E:\\路径" 从中间劈开。 */
+QString FormPageFilterdFiles::wrapItemsBySeparator(const QString &sPrefix,
+                                                   const QStringList &qLItems,
+                                                   const QString &sSeparator) const
+{
+    if (qLItems.isEmpty() || ui->lblResultCount == nullptr)
+        return QString();
+
+    const QFontMetrics fm(ui->lblResultCount->font());
+    // 留一点右侧余量，避免正好顶到滚动条/按钮
+    const int nAvailable = qMax(160, ui->lblResultCount->width() - 12);
+    // 换行后的缩进：和第一行"目录："同宽，看起来像续行
+    const int nSpaceWidth = qMax(1, fm.horizontalAdvance(QLatin1Char(' ')));
+    const QString sIndent(nSpaceWidth > 0 ? fm.horizontalAdvance(sPrefix) / nSpaceWidth : 0,
+                          QLatin1Char(' '));
+
+    QStringList qLLines;
+    QString sCurrent = sPrefix;
+    bool bLineHasItem = false;
+    for (const QString &sItem : qLItems) {
+        const QString sPiece = (bLineHasItem ? sSeparator : QString()) + sItem;
+        if (bLineHasItem && fm.horizontalAdvance(sCurrent + sPiece) > nAvailable) {
+            qLLines << sCurrent;          // 在条目之间换行
+            sCurrent = sIndent + sItem;
+            bLineHasItem = true;
+        } else {
+            sCurrent += sPiece;
+            bLineHasItem = true;
+        }
+    }
+    if (bLineHasItem)
+        qLLines << sCurrent;
+    return qLLines.join(QLatin1Char('\n'));
+}
+
+/** 按当前宽度重排摘要：计数/来源、标签、目录（目录只在"；"处换行）。 */
+void FormPageFilterdFiles::rebuildSummaryText()
+{
+    if (ui->lblResultCount == nullptr)
+        return;
+
+    QStringList qLLines;
+    if (!m_summaryHeadText.isEmpty())
+        qLLines << m_summaryHeadText;
+
+    if (!m_searchConditionTexts.isEmpty()) {
+        const QString sLabelLine = wrapItemsBySeparator(tr("标签："), m_searchConditionTexts,
+                                                        QStringLiteral("、"));
+        if (!sLabelLine.isEmpty())
+            qLLines << sLabelLine;
+    }
+    if (!m_searchDirs.isEmpty()) {
+        const QString sDirLine = wrapItemsBySeparator(tr("目录："), m_searchDirs,
+                                                      QStringLiteral("；"));
+        if (!sDirLine.isEmpty())
+            qLLines << sDirLine;
+    }
+
+    if (m_staleCount > 0) {
+        qLLines << tr("（其中 %1 项已不匹配当前条件，可点【重新扫描】刷新）")
+                       .arg(m_staleCount);
+    }
+
+    if (qLLines.isEmpty())
+        return;
+    updateResultCountLabel(qLLines.join(QLatin1Char('\n')));
+}
+
+/** 窗口宽度变了要重排，否则换行位置会停留在旧宽度上。 */
+void FormPageFilterdFiles::resizeEvent(QResizeEvent *event)
+{
+    QWidget::resizeEvent(event);
+    rebuildSummaryText();
 }
 
 void FormPageFilterdFiles::setSearchSource(const QString &sSource)
@@ -399,10 +476,8 @@ void FormPageFilterdFiles::updateStaleCountText()
         if (tagItem != nullptr && tagItem->data(Qt::UserRole + 1).toBool())
             ++nStale;
     }
-    QString sText = m_resultCountText;
-    if (nStale > 0)
-        sText += tr("（其中 %1 项已不匹配当前条件，可点【重新扫描】刷新）").arg(nStale);
-    ui->lblResultCount->setText(sText);
+    m_staleCount = nStale;
+    rebuildSummaryText();
 }
 
 void FormPageFilterdFiles::setSearchInterrupted(bool bInterrupted)

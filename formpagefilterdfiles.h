@@ -49,9 +49,12 @@ public slots:
     /** 外部（文件页/结果页右键）改了标签：刷新这些结果行的芯片并标注是否还匹配 */
     void onFileTagsChanged(const QStringList &qLFilePaths);
     void onGotoFilePath();
-    void setSearchCondition(const QString &sCondition);
+    /** 搜索条件：标签文本列表 + 搜索目录列表（分行显示，目录只在"；"处换行） */
+    void setSearchCondition(const QStringList &qLConditionTexts, const QStringList &qLSearchDirs);
     /** 结果摘要（可能多行）：统一设置文字与完整 tooltip */
     void updateResultCountLabel(const QString &sText);
+    /** 按当前宽度重排摘要（目录只在条目之间换行，不在路径内部断行） */
+    void rebuildSummaryText();
 
     // 结果来源（缓存 / 磁盘扫描），显示在结果计数后面，让"缓存可能过期"这件事可见
     void setSearchSource(const QString &sSource);
@@ -65,8 +68,13 @@ public slots:
 protected:
     void hideEvent(QHideEvent *event) override;
     void showEvent(QShowEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
 
 private:
+    // 按分隔符把条目排成多行：只在条目之间换行（不把 "E:\路径" 从中间劈开）
+    QString wrapItemsBySeparator(const QString &sPrefix, const QStringList &qLItems,
+                                 const QString &sSeparator) const;
+
     // 双击结果项：直接打开文件
     void onTvFilteredFilesDoubleClicked(const QModelIndex &index);
 
@@ -109,7 +117,7 @@ private:
     QTimer                  *m_rowFillTimer = nullptr;
     QStringList              m_rowSourcePaths;
     int                      m_rowSourceRow = 0;
-    QString                  m_resultCountText;   // 填完后再显示"搜索结果 N 项（…）"
+    QString                  m_summaryHeadText;   // 摘要的前几行：计数+来源（+中断提示）
     void continueAddRows();
     // 标签改动后就地刷新对应结果行（芯片 + 是否还匹配当前条件）
     void refreshRowForPath(const QString &sFilePath);
@@ -121,7 +129,9 @@ private:
     QStringList              m_tagScanPaths;
     QString                  m_searchSource;
     int                      m_tagScanRow;
-    QString                  m_searchCondition;
+    QStringList              m_searchConditionTexts;   // "标签：…" 里的标签文本
+    QStringList              m_searchDirs;             // 本次搜索的目录
+    int                      m_staleCount = 0;         // 结果页里已不匹配当前条件的行数
     bool                     m_bInterrupted = false;
 };
 
